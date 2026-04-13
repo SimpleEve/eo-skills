@@ -59,7 +59,6 @@ eo-doc/dev/
 | `eo-review` | 实施后的**代码**审查 | `review.md` | — |
 | `eo-archive` | 代码审查通过后归档 | Delta 合并回 `spec.md` + 更新 INDEX | — |
 | `eo-workflow` | 多 pane tmux 编排 | 自动派发 / 状态流转 | — |
-| ~~`eo-plan`~~ / ~~`eo-plan-review`~~ | **已废弃** | 仅保留重定向提示 | — |
 
 ### 三种 Review 的边界
 

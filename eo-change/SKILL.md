@@ -6,7 +6,7 @@ description: |
   USE FOR:
   - "新增" "加功能" "增强" "重构" "change" "feat" "/eo-change"
   - 任何对已有模块的业务能力变化（新增/增强/重构），产生 spec Delta 的请求
-  - 取代旧的 eo-plan：change 本身承载"spec 增量 + 技术方案 + TODO"，不再单独出 plan
+  - change 本身承载"spec 增量 + 技术方案 + TODO"，一次产出即开工载体
 
   NOT FOR:
   - 纯 bug 修复（change 的实施代码没按 spec 正确实现）——不产生 spec Delta，属于 eo-implement 的职责范围，在 implement/test/review 循环内解决，不要为 bug 新开 change

@@ -96,7 +96,7 @@ eo-doc/
 
 **dev/**：
 - 功能开发文档的集合，每个功能一个子目录（如 `dev/user-auth/`）
-- 子目录内由 eo-spec、eo-plan、eo-implement、eo-review 等技能按约定产出
+- 子目录内由 eo-module-init、eo-change、eo-implement、eo-review、eo-archive 等技能按约定产出
 - dev/ 不参与 sync/re-sync，由开发流程技能管理
 
 ## 代码优先原则
