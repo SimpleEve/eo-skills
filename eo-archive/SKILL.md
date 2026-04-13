@@ -34,11 +34,18 @@ description: |
 ### 第一步：读取并验证
 
 1. 读 `changes/<change-id>/change.md`，验证 `status: done`
-2. 读 `changes/<change-id>/review.md`，确认结论为通过
-3. 读 `changes/<change-id>/test.md`（若存在），确认通过
-4. 读模块 `spec.md`，定位所有 Delta 涉及的章节
+2. **从 frontmatter 读取 `change_type`**，确定归档模式：
+   - `bootstrap` → **实现范围模式**（跳过 Delta 合并，只更新元信息与索引）
+   - `feature` / `enhance` / `refactor` → **Delta 合并模式**（执行后续所有步骤）
+3. 读 `changes/<change-id>/review.md`，确认结论为通过
+4. 读 `changes/<change-id>/test.md`（若存在），确认通过
+5. 读模块 `spec.md`
+   - Delta 模式：定位所有 Delta 涉及的章节
+   - bootstrap 模式：仅用于第五步元信息更新和第八步汇报
 
-### 第二步：解析 Delta
+### 第二步：解析 Delta（仅 Delta 模式）
+
+> **bootstrap 模式跳过此步**，直接进入第五步。
 
 从 `change.md` 的 `## 3 Spec Delta` 提取三类条目：
 - **ADDED 列表**：每条含"能力名 + 描述 + spec 目标章节"
@@ -61,7 +68,11 @@ description: |
 >   3. 按依赖顺序分别归档
 > 详见 `eo-change/SKILL.md` 的"判断边界：单模块 vs 跨模块"。
 
-### 第三步：冲突预检
+**bootstrap 额外校验**：若 change_type = bootstrap 但 §3 写了 ADDED/MODIFIED/REMOVED → 停止归档，要求作者把类型改一致（或改为 feature/enhance），两者二选一。
+
+### 第三步：冲突预检（仅 Delta 模式）
+
+> **bootstrap 模式跳过此步**。
 
 **MODIFIED 项**：在 spec.md 对应章节搜索"旧描述"，若找不到（可能 spec 在这之间被其他 change 改过）→ 列出冲突项，让用户选择：
 - 跳过该条
@@ -72,7 +83,9 @@ description: |
 
 **ADDED 项**：确认目标章节存在；若目标章节不存在，提示用户先修 change.md 或允许追加到章节末尾。
 
-### 第四步：执行合并
+### 第四步：执行合并（仅 Delta 模式）
+
+> **bootstrap 模式跳过此步**，spec.md 内容保持不变。
 
 对 spec.md 逐条应用 Delta：
 - **ADDED**：在指定章节末尾追加新条目
@@ -83,15 +96,17 @@ description: |
 
 ### 第五步：更新 spec.md 元信息
 
+> **bootstrap 与 Delta 模式均执行此步**。bootstrap 模式下仅元信息变更，spec 正文不动。
+
 1. frontmatter `updated` 改为今天日期
 2. 在 `## 9 关联变更`（或 `## 关联变更`）表末尾追加一行：
    ```
    | [<change-id>](changes/<change-id>/change.md) | YYYY-MM-DD | <change summary> |
    ```
+   bootstrap 模式下 summary 前缀加 `[bootstrap]`，如 `[bootstrap] 实现 §3.1 / §3.3`
 3. 在 `## 10 变更记录` 追加一行：
-   ```
-   | YYYY-MM-DD | 归档 <change-id>: <一句话描述> | eo-archive |
-   ```
+   - Delta 模式：`| YYYY-MM-DD | 归档 <change-id>: <一句话描述> | eo-archive |`
+   - bootstrap 模式：`| YYYY-MM-DD | bootstrap 实现 <认领章节列表> (<change-id>) | eo-archive |`
 
 ### 第六步：更新 change.md
 
@@ -106,18 +121,27 @@ description: |
 ### 第八步：汇报结果 + 可选复检建议
 
 向用户汇报：
+
+**Delta 模式**：
 - 合并的 Delta 条数（ADDED N / MODIFIED N / REMOVED N）
 - spec.md 受影响的章节列表
 - 冲突处理记录（若有）
 - change 状态已改为 archived
 
-**spec 复检建议**：根据本次 Delta 的规模和类型，在汇报末尾追加建议：
+**bootstrap 模式**：
+- 实现的 spec 章节列表（来自 §3.B.1）
+- 该模块剩余未被任何 bootstrap 认领的 spec 章节（提示用户后续可继续拆 bootstrap change）
+- change 状态已改为 archived
+- spec.md 正文未变更，仅元信息更新
+
+**spec 复检建议**：根据本次归档对 spec 的影响给出建议：
 
 | 触发条件 | 建议文案 |
 |---------|---------|
 | MODIFIED ≥ 3 条 或 REMOVED ≥ 1 条 | 💡 本次 Delta 对 spec 做了 N 条 MODIFIED / M 条 REMOVED，建议跑一次 `/eo-spec-review <module-name>` 验证新基线仍然自洽 |
 | 涉及 spec 章节 ≥ 3 个 | 💡 本次 Delta 触及 spec 的 N 个章节，建议跑一次 `/eo-spec-review` 确认跨章节一致性 |
 | 仅少量 ADDED | 无需复检建议 |
+| bootstrap 模式（任何规模） | 无需复检（spec 未变） |
 
 **提示但不强制**：复检是可选的，用户决定是否跑。
 
@@ -151,6 +175,10 @@ description: |
 - **只做合并，不做二次澄清**：归档阶段不问业务问题，所有澄清应在 change 阶段完成
 - **冲突必须停下**：绝不自作主张解决冲突
 - **归档不可逆**：archived 状态的 change 不再修改；若需修正，发起新的 change 来覆盖
-- **Delta 完整性校验**：若 change.md 没写 Delta 或格式错误，直接拒绝归档
-- **单一目标 spec**：一个 change 只能合并到一份 `spec.md`。Delta 含跨模块条目 → 拒绝归档，要求拆 change（见第二步）
+- **§3 完整性校验**：
+  - Delta 模式：§3 没写 Delta 或格式错误 → 拒绝归档
+  - bootstrap 模式：§3.B.1 没写认领章节 → 拒绝归档
+- **类型内容一致**：change_type 与 §3 内容必须匹配（bootstrap 不能有 Delta，反之亦然），错配 → 拒绝归档
+- **单一目标 spec**：一个 change 只能归档到单一模块的 `spec.md`。Delta 含跨模块条目 → 拒绝归档，要求拆 change（见第二步）
+- **bootstrap 不动 spec 正文**：只更新元信息（§9 表、§10 表、frontmatter `updated`）
 - **保持 diff 可读**：用 Edit 逐条合并，不要 Write 整文件覆盖 spec.md

@@ -75,8 +75,14 @@ eo-doc/dev/
 ```
 新模块：    /eo-module-init       →  spec.md（含 spec-review 一次性）
             │                         status: confirmed
+            │                         （此时 spec 已就绪，code 未实现）
             ▼
-业务变更：  /eo-change            →  changes/NNN-xxx/change.md（status: draft）
+首批实现：  /eo-change (bootstrap)→  changes/NNN-xxx/change.md
+            │                         §3 写"实现范围"，认领 spec 章节
+            │                         （可拆多个 bootstrap 各自认领一部分）
+            │
+后续演化：  /eo-change (feature/  →  changes/NNN-xxx/change.md
+            enhance/refactor)        §3 写 Delta（ADDED/MODIFIED/REMOVED）
             │
             ▼  （可选）
 方案审查：  /eo-change-review     →  change-review.md
@@ -94,11 +100,12 @@ approve：  （用户改 status: approved）
 代码审查：  /eo-review            →  review.md
             │                         P0/P1 → 回 implement 修
             ▼
-归档：      /eo-archive           →  Delta 合并回 spec.md
+归档：      /eo-archive           →  bootstrap：仅元信息更新（spec 不动）
+            │                         其他类型：Delta 合并回 spec.md
             │                         status: archived
             ▼  （可选）
-spec 复检：/eo-spec-review        →  若 Delta 触及章节多 / MODIFIED-REMOVED 多
-                                     archive 会主动提示
+spec 复检：/eo-spec-review        →  仅 Delta 模式触发：章节多 / MODIFIED-REMOVED 多
+                                     bootstrap 归档不需要复检
 ```
 
 **实施期 bug：** 留在 `/eo-implement` 内循环修，不走归档、不开新 change。
@@ -112,11 +119,12 @@ spec 复检：/eo-spec-review        →  若 Delta 触及章节多 / MODIFIED-R
 | 约束 | 说明 |
 |------|------|
 | `change-id` 命名 | `NNN-kebab-name`（3 位数字前缀，按模块内递增）；**拒绝 `fix-` 前缀** |
-| `change_type` 枚举 | `feature` / `enhance` / `refactor`（**无 `fix`**） |
-| 每个 change 必须产出 Delta | §3 至少一条 ADDED / MODIFIED / REMOVED |
+| `change_type` 枚举 | `bootstrap` / `feature` / `enhance` / `refactor`（**无 `fix`**） |
+| §3 内容由 type 决定 | `bootstrap` 写"实现范围"（认领 spec 章节，不动 spec）；其余三类写 Delta（ADDED/MODIFIED/REMOVED） |
 | 单次聚焦 | 一个 change 只做一件事；混入多个改动请拆分 |
 | 状态流转 | `draft → approved → implementing → done → archived` |
-| spec 只由 archive 修改 | change 期间不直接改 `spec.md` |
+| spec 只由 archive 修改 | change 期间不直接改 `spec.md`；bootstrap 归档也不动 spec 正文 |
+| 跨模块 | 一个 change 只能归一个模块；跨模块需求拆多个 change，用 `depends_on` 串联 |
 
 ### `/eo-workflow` 多 Agent 编排
 

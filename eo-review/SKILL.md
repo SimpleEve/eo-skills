@@ -49,7 +49,10 @@ description: |
 ### 第一步：阅读上下文
 
 1. 阅读 `eo-doc/dev/<module-name>/spec.md`（模块活文档基线）
-2. 阅读 `eo-doc/dev/<module-name>/changes/<change-id>/change.md`（本次变更的 Delta、实施方案、TODO）
+2. 阅读 `eo-doc/dev/<module-name>/changes/<change-id>/change.md`（本次变更的 §3、实施方案、TODO、AC）
+   - 从 frontmatter 读取 `change_type`：
+     - `bootstrap` → §3 是认领的 spec 章节，审查时对照 spec 这些章节定义的能力检查代码实现
+     - `feature` / `enhance` / `refactor` → §3 是 Delta，审查时对照 Delta 声明检查代码改动
 3. 阅读项目级背景文档（如果存在）
 
 ### 第二步：模板发现与维度确定

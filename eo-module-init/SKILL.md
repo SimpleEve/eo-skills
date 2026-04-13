@@ -74,7 +74,17 @@ description: |
 ### 第八步：提示后续流程
 
 告知用户：
-> 模块 `<module-name>` 初始化完成。后续对该模块的任何修改请走 `/eo-change`，不要再跑 `/eo-module-init` 或单独 `/eo-spec`。
+> 模块 `<module-name>` 初始化完成（spec 已就绪、code 未实现）。
+>
+> **首批实现 — 用 `bootstrap` 类型 change**：
+> 1. 通读 `spec.md`，把"§3 核心行为"等能力章节按合理粒度拆成 1-N 个 bootstrap change（每个认领一部分章节，互不重叠）
+> 2. 对每个 bootstrap：`/eo-change`（选 `change_type: bootstrap`，§3 写"实现范围"而不是 Delta）→ `/eo-implement` → `/eo-test` → `/eo-review` → `/eo-archive`
+> 3. 全部 bootstrap 归档完毕 = spec 全量落地为代码
+>
+> **后续演化 — 用 `feature` / `enhance` / `refactor`**：
+> 当代码已存在、需要新增/修改/重构能力时，按对应类型发 change，§3 写 Delta（ADDED/MODIFIED/REMOVED）。
+>
+> 后续不要再跑 `/eo-module-init` 或单独 `/eo-spec`。
 
 ---
 

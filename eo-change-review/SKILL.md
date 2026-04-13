@@ -50,33 +50,58 @@ description: |
 
 ## 工作流程
 
-### 第一步：阅读上下文
+### 第一步：阅读上下文 + 识别审查模式
 
 1. 读 `eo-doc/dev/<module-name>/changes/<change-id>/change.md`（本次审查对象）
-2. 读 `eo-doc/dev/<module-name>/spec.md`（当前模块基线，用来核对 Delta 是否自洽）
-3. 读同模块最近 3 个已归档 change 的 change.md（避免重复 / 冲突）
-4. 若模块有 `doc/<module>.md`（玩法层业务文档）→ 读，理解业务背景
-5. **执行模板发现**（见上方）
+2. **从 frontmatter 读取 `change_type`**，确定审查模式：
+   - `bootstrap` → **实现范围模式**（不审 Delta，审"认领范围合规性"）
+   - `feature` / `enhance` / `refactor` → **Delta 模式**（审 ADDED/MODIFIED/REMOVED 合规性）
+3. 读 `eo-doc/dev/<module-name>/spec.md`（模块基线）
+4. 读同模块最近 3 个 change（包括 bootstrap 与 mutation 类，前者是为了核对认领边界，后者是为了避免冲突）
+5. 若模块有 `doc/<module>.md`（玩法层业务文档）→ 读，理解业务背景
+6. **执行模板发现**（见上方）
+
+> ⚠️ **不要主观追问审查模式**：`change_type` 是确定性字段，必须从 change.md 直接读取并据此分派。**禁止**向用户提问"这份 change 是在改 spec 还是只是拆实施批次"——若 change.md 没填 `change_type` 或填错，应作为 P0 问题报告（"frontmatter `change_type` 缺失/不匹配"），而不是反向追问。
 
 ### 第二步：系统审查
 
 按以下维度逐一审查：
 
-#### 维度 1：Delta 合规性（最关键）
+#### 维度 1：§3 合规性（最关键）
 
+> **按模式分派**：
+
+**Delta 模式（feature / enhance / refactor）**：
 - §3 Spec Delta 是否存在且非空？至少一条 ADDED / MODIFIED / REMOVED
 - 每条 Delta 是否定位到 spec 的具体章节（`§X.Y`）？
 - ADDED 条目是否真的是"新增"？（检查 spec.md 是否已有同名能力）
 - MODIFIED 条目的"旧描述"是否能在当前 spec.md 中找到？（否则归档时会冲突）
 - REMOVED 条目对应的能力是否真实存在于 spec.md 中？
 - **反模式检测**：是不是把整段 spec 抄了一遍当成 ADDED？Delta 应该是"增量"，不是"新 spec"
+  - ⚠️ 若 Delta 大段复述 spec 现有内容 → 也许根本不该是 Delta 模式，建议作者改为 `bootstrap` 类型
+- **跨模块拒绝**：所有 Delta 条目的 spec 路径必须指向**本模块**；指向其他模块 → P0（详见 eo-change "判断边界：单模块 vs 跨模块"）
 
-#### 维度 2：Delta 与实施方案一致性
+**实现范围模式（bootstrap）**：
+- §3.B.1 是否列出认领的 spec 章节？章节引用是否真实存在于 spec.md？
+- §3.B.2 是否声明了与其他 bootstrap change 的边界？
+  - 扫描该模块所有 bootstrap change（draft / approved / archived），检查是否有**重复认领**同一 spec 章节
+  - 若已有 bootstrap change 而本 change 的 §3.B.2 写"无" → P0
+- 是否误写了 ADDED/MODIFIED/REMOVED？bootstrap 不允许写 Delta → P0
+- **反模式抑制**：bootstrap 模式下"复述 spec" 是预期行为，**不报告**为反模式
 
+#### 维度 2：§3 与实施方案一致性
+
+**Delta 模式**：
 - §4 实施方案做的事是否**完整覆盖** §3 Delta 声明的每一条能力？
 - §4 是否**多做**了 Delta 未声明的事？（多做意味着有能力没进 spec，后续断层）
 - §4 是否**少做**了某条 Delta？（Delta 声明了但 TODO 没有对应任务）
 - 能力 ↔ TODO 映射是否清晰可追溯？
+
+**实现范围模式（bootstrap）**：
+- §4 TODO 是否完整覆盖 §3.B.1 认领的每个 spec 章节？
+- §4 是否**越界**做了认领范围外的事？（越界则可能踩到其他 bootstrap change 的边界）
+- 是否漏了 spec 中该章节的某些子能力？（核对 spec 该章节的全部条目）
+- TODO ↔ 认领章节映射是否可追溯？
 
 #### 维度 3：TODO 拆解完整性
 
@@ -102,6 +127,8 @@ description: |
 - **变更类型一致性**：`change_type` 与实际改动匹配吗？
   - 宣称 `refactor` 但 §3 Delta 大量 ADDED/MODIFIED → 应改为 `feature`/`enhance`
   - 宣称 `feature` 但 §3 全是 MODIFIED → 应改为 `enhance`
+  - 宣称 `feature`/`enhance` 但 Delta 在复述 spec 已有内容 → 应改为 `bootstrap`
+  - 宣称 `bootstrap` 但 §3 写了 ADDED/MODIFIED/REMOVED → P0，类型或内容二选一修正
 
 #### 维度 6：层级 Part 合规性（仅多层 Part 模式）
 
@@ -177,7 +204,11 @@ summary: >
 - **类型**：措辞优化 / 分类调整 / 文档链接补充
 - **描述**：建议内容
 
-## Delta 合规性检查
+## §3 合规性检查
+
+> 按 `change_type` 选一种表格填写：
+
+**Delta 模式表（feature / enhance / refactor）**
 
 | Delta 条目 | 类型 | spec 定位 | 状态 | 备注 |
 |-----------|------|-----------|------|------|
@@ -185,11 +216,19 @@ summary: >
 | <能力名2> | MODIFIED | §X.Y | ✅ / ⚠️ / ❌ | 旧描述在 spec 中是否存在 |
 | <能力名3> | REMOVED | §X.Y | ✅ / ⚠️ / ❌ | ... |
 
-## Delta ↔ TODO 映射检查
+**实现范围表（bootstrap）**
 
-| Delta 条目 | 对应 TODO | 覆盖状态 |
-|-----------|-----------|---------|
-| ADDED-1 | TODO-S1, TODO-C2 | ✅ 完整覆盖 / ⚠️ 部分覆盖 / ❌ 遗漏 |
+| 认领章节 | 认领范围 | 章节是否存在 | 是否被其他 bootstrap 认领 |
+|---------|---------|------------|-------------------------|
+| spec §3.1 | 完整 / 子集 | ✅ / ❌ | ✅ 无冲突 / ❌ 与 `NNN-xxx` 重叠 |
+
+## §3 ↔ TODO 映射检查
+
+> Delta 模式填"Delta 条目"；bootstrap 模式填"认领章节"。
+
+| §3 条目 | 对应 TODO | 覆盖状态 |
+|--------|-----------|---------|
+| ADDED-1 / §3.1 | TODO-S1, TODO-C2 | ✅ 完整覆盖 / ⚠️ 部分覆盖 / ❌ 遗漏 |
 
 ## AC 覆盖检查
 
@@ -219,4 +258,6 @@ summary: >
 - **P0 精准**：只有真正会阻塞 implement / 导致返工的问题才标 P0
 - **不重复 spec-review**：不审 spec 本身的业务合理性（那是 spec-review 的职责）；只审"本次变更是否合规"
 - **不审代码**：即使 change 附带了 spike 代码也不评价代码本身
+- **模式分派是确定性的**：`change_type` 是什么就按什么审，不向用户追问模式归属；`change_type` 缺失/错填 → P0 报告
+- **避免触发钩子噪声**：报告中避免使用"关键决策""critical decision"等字样（会触发上游 CLAUDE.md 的 decisions/ 捕获钩子），用"设计判断""模式选择"代替
 - **可操作**：每个问题的建议必须具体到用户能直接行动

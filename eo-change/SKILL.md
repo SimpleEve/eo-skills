@@ -54,7 +54,16 @@ description: |
 
 1. 阅读目标模块的 `spec.md`（了解"当前能力基线"）
 2. 阅读该模块 `changes/` 下最近的 3 个历史 change（了解演化方向，避免重复/冲突）
-3. 识别变更类型：`feature`（新增能力）/ `enhance`（增强已有能力）/ `refactor`（内部改造、对外能力不变）
+3. 识别变更类型，按以下矩阵判断：
+
+   | 问题 | change_type | 说明 |
+   |------|-------------|------|
+   | spec 有，代码**无** → 首次把 spec 实现出来 | `bootstrap` | module-init 后首批落地，或空能力首次实现 |
+   | spec **无**，代码无 → 加一个 spec 里不存在的新能力 | `feature` | 真正的"加 spec"（Delta ADDED） |
+   | spec 有，代码有 → 调整现有能力 | `enhance` | Delta MODIFIED 为主 |
+   | spec 有，代码有 → 内部重构、对外能力不变 | `refactor` | Delta 以内部章节的 MODIFIED 为主，对外能力表不动 |
+
+   - **`bootstrap` 的核心区别**：不改 spec，只把 spec 已声明的章节落成代码。§3 不写 Delta，改写"实现范围"（见 §3 模板的 bootstrap 分支）
    - **不接受 `fix` 作为类型**：若用户描述是"修 bug"——属于对某个已归档 change 的实施缺陷修复，不是新 change：
      - 若相关 change 尚未归档 → 让用户回到 `/eo-implement` 继续修
      - 若已归档但确实是"实现不符合 spec" → 仍走 eo-implement 开补丁式实施（不建新 change）
@@ -121,7 +130,7 @@ description: |
 title: <变更标题>
 module: <module-name>
 change_id: <NNN-change-id>
-change_type: feature | enhance | refactor
+change_type: bootstrap | feature | enhance | refactor
 tags: [标签1, 标签2]
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
@@ -134,7 +143,7 @@ summary: >
 
 > 所属模块：[<module-name>](../../spec.md)
 > 变更编号：<NNN-change-id>
-> 变更类型：feature / enhance / refactor
+> 变更类型：bootstrap / feature / enhance / refactor
 > 创建日期：YYYY-MM-DD
 
 ## 1. 变更意图（Why）
@@ -156,24 +165,57 @@ summary: >
 - `path/to/file1`
 - `path/to/file2`
 
-## 3. Spec Delta（对模块 spec.md 的增量修改）
+## 3. Spec Delta / 实现范围
 
-> 归档时由 eo-archive 机械合并回 `spec.md`。必须填写，即使是 fix 也要写一行 MODIFIED。
+> **按 `change_type` 选分支**：
+> - `bootstrap` → 使用"3.B 实现范围"分支（不写 Delta，声明认领的 spec 章节）
+> - `feature` / `enhance` / `refactor` → 使用"3.A Spec Delta"分支（写 ADDED / MODIFIED / REMOVED）
 
-### 3.1 ADDED（新增能力）
+---
+
+### 分支 A — Spec Delta（feature / enhance / refactor）
+
+> 归档时由 eo-archive 机械合并回 `spec.md`。至少一条 ADDED / MODIFIED / REMOVED。
+
+#### 3.A.1 ADDED（新增能力）
 - **<能力名>**：描述。定位到 spec 的章节（如 "§3.3 核心行为"）。
 - ...
 
-### 3.2 MODIFIED（修改能力）
+#### 3.A.2 MODIFIED（修改能力）
 - **<能力名>**：
   - 旧：<spec 原描述>
   - 新：<修改后描述>
   - 位置：spec §X.Y
 - ...
 
-### 3.3 REMOVED（移除能力）
+#### 3.A.3 REMOVED（移除能力）
 - **<能力名>**：移除原因。位置：spec §X.Y
 - ...
+
+---
+
+### 分支 B — 实现范围（bootstrap）
+
+> **bootstrap change 不改 spec，不产生 Delta**。spec 已经声明了能力，本 change 只是把它们落成代码。
+> 归档时 eo-archive 跳过 Delta 合并，仅更新 §9 关联变更 / §10 变更记录。
+
+#### 3.B.1 认领的 spec 章节
+
+列出本 change 要实现 spec 的哪些章节（**粒度到节级或能力级**）：
+
+- `spec.md §3.1 <章节名>` — 本 change 完整实现
+- `spec.md §3.3 <章节名>` — 本 change 仅实现子集（具体见 §4 TODO）
+- ...
+
+#### 3.B.2 与其他 bootstrap change 的边界
+
+若该模块已有其他 bootstrap change（无论 draft 还是 archived），**必须**列出相互间的划界：
+
+- 本 change 认领 §3.1 / §3.2
+- 已归档的 `001-xxx` 认领了 §4.1 / §4.2
+- **不得重复认领**同一 spec 章节；若粒度需要细分，精确到子节或条目
+
+若无其他 bootstrap change，写"无"。
 
 ## 4. 实施方案（How）
 
@@ -249,6 +291,8 @@ summary: >
   - Given <前置条件>
   - When <用户操作>
   - Then <期望结果>
+
+> **bootstrap 提示**：若 spec 本身已有 AC 章节（§5），bootstrap change 的 AC 应**直接引用**对应 spec AC（如 "AC-1 ≡ spec §5.AC-3"），避免复述。若认领的 spec 章节没有 AC，则补全。
 
 ## 6. 测试标准
 
@@ -349,7 +393,10 @@ summary: >
 ## 关键约束
 
 - **change-id 命名**：`NNN-kebab-name`，NNN 按模块内现有 change 最大编号 +1，3 位补零
-- **必须写 Delta**：所有 change 都必须在 `## 3` 写至少一条 Delta（ADDED/MODIFIED/REMOVED 任一）；若某个 change 产生不了 Delta，说明它不应该是 change（大概率是 bug fix，归 implement 循环处理）
+- **§3 必须填写**：
+  - `feature` / `enhance` / `refactor` → 必须写至少一条 Delta（ADDED/MODIFIED/REMOVED 任一）；产生不了 Delta 大概率是 bug fix，归 implement 循环
+  - `bootstrap` → 必须写"实现范围"（认领的 spec 章节列表）；不允许写 ADDED/MODIFIED/REMOVED
+- **bootstrap 不重复认领**：同一模块多个 bootstrap change 不能认领同一 spec 章节；§3.B.2 必须显式声明边界
 - **不写详细实现代码**：TODO 可描述接口签名 / 数据结构 / 模块职责，但不写具体函数体
 - **单次聚焦**：一个 change 只做一件事；若发现混入多个不相关改动，拆成多个 change
 - **状态流转**：draft → approved（用户确认）→ implementing（eo-implement 启动时改）→ done（审查通过）→ archived（eo-archive 完成）

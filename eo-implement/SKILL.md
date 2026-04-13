@@ -82,7 +82,7 @@ description: |
 3. 每修复一个问题，运行对应验证
 4. 修复完成后通知用户重新 `/eo-test` 或 `/eo-review`
 5. **不引入新 change**：fix 是 implement 的内嵌职责
-6. **不改 spec Delta**：fix 只调整代码，不改 change.md 的 Delta 章节
+6. **不改 change.md §3**：fix 只调整代码，不改 change.md 的 §3（Delta 模式下的 ADDED/MODIFIED/REMOVED，或 bootstrap 模式下的实现范围）
 
 ### 分层执行（仅 implement-layers.md 存在时）
 
@@ -152,4 +152,4 @@ summary: >
 - **不遗漏验证**：每个 TODO 的验收标准必须可验证
 - **勾选进度**：完成 TODO 后必须在 change.md 中勾选
 - **fix 不升格**：bug 修复是 implement 内嵌职责，**不以任何形式升格为新 change**
-- **不改 Delta**：即便 fix 期间发现 spec Delta 写错了，也不在 implement 阶段改 change.md 的 Delta——上报用户手工处理或开 enhance change
+- **不改 §3**：即便 fix 期间发现 §3 写错了（Delta 或实现范围），也不在 implement 阶段改——上报用户手工处理；若属"spec 本身错了"则改为开 enhance change 承接
