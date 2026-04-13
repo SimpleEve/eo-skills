@@ -39,12 +39,16 @@ description: |
 
 ## 工作流程
 
-### 第一步：识别模块
+### 第一步：识别模块（单模块 vs 跨模块判定）
 
 1. 阅读用户的变更描述
 2. **扫描 `eo-doc/dev/` 下所有模块的 `spec.md` frontmatter**（title / module_name / tags / summary）
-3. 语义匹配出最相关的模块，向用户确认
+3. 语义匹配出涉及的模块（可能多于 1 个），向用户确认
 4. 若无匹配：提示用户走 `/eo-module-init` 创建新模块，暂停本流程
+5. **关键决策：以"是否要动别人的 spec"为界**（详见下方"判断边界：单模块 vs 跨模块"）
+   - 只调用别的模块、不改对方 spec → **单 change**，归主模块
+   - 多个模块 spec 都需要 Delta → **拆多个 change**，每模块一个，用 `depends_on` 关联
+6. 若判定为跨模块拆分 → 向用户明确说明"会产出 N 个 change"，并按 `depends_on` 顺序依次产出
 
 ### 第二步：理解变更意图
 
@@ -305,6 +309,40 @@ summary: >
 | 是全新模块的首次落地 | ❌ | ✅ |
 
 当模块 spec 需要大规模结构性重写（Delta 占 spec 80% 以上）时，不要跳回 `eo-module-init`，而是用 `change_type: refactor` 发一个 change，逐步演化。
+
+---
+
+## 判断边界：单模块 vs 跨模块
+
+**核心准则：以"是否要动别人的 spec"为界。**
+一个 change 结构上只能归属一个模块，Delta 只能合并到一份 `spec.md`。跨模块需求按下表处理：
+
+| 场景 | 归属 | 做法 |
+|------|------|------|
+| **A. 只调用不改契约** — 新 change 只是调用对方模块已有的接口/能力，对方 spec 不动 | **单 change**，归主模块 | §2.3 或 §4.2 列出"依赖的外部模块"；对方 spec 不产生 Delta |
+| **B. 多模块 spec 都要动** — 新功能需要在多个模块的 spec 同时 ADDED/MODIFIED/REMOVED | **拆多个 change**，每模块一个 | 用 `depends_on` frontmatter 和共享命名关联 |
+| **C. 只动 Proto/Config，不改业务模块 spec** | 归调用方模块 | Proto/Config 不是一等模块，归属消费侧 |
+
+### 场景 B 的协调手段
+
+1. **命名共享后缀**：不同模块里的 change 用相同语义尾缀，数字前缀按各自模块内递增
+   - `dev/inventory/changes/007-crafting-system/`
+   - `dev/building/changes/012-crafting-system/`
+2. **frontmatter 加 `depends_on` / `related`**：
+   ```yaml
+   depends_on:
+     - inventory/007-crafting-system
+   related:
+     - building/012-crafting-system
+   ```
+3. **change.md 顶部加"跨模块关联"小节**：互相链接，说明依赖方向
+4. **实施时序**：被依赖方先 approve → implement → archive → 再 approve 依赖方。`/eo-workflow implement` 一次只跑一个 change，天然强制顺序
+
+### 反模式
+
+- ❌ **建 `dev/cross/` 虚拟模块**把跨模块需求塞进去 — 破坏"模块一等公民"，archive 无法定位目标 spec
+- ❌ **建 umbrella change 引用多个子 change** — 多一层没带来收益，Delta 合并该拆还是得拆
+- ❌ **单个 change 挂多个模块的 Delta** — `/eo-archive` 会拒绝（它只认单一目标 spec，见 eo-archive 的"拒绝跨模块 Delta"规则）
 
 ---
 

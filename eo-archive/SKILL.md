@@ -47,6 +47,20 @@ description: |
 
 若 Delta 章节为空或格式不符 → 提示用户修复 change.md 后重跑。
 
+**⚠️ 拒绝跨模块 Delta**：所有 Delta 条目的目标章节必须位于**本模块**的 `spec.md`。若出现以下任一信号，**停止归档**并要求用户拆 change：
+
+- 条目声明的 spec 路径指向其他模块（如 change 在 `inventory/` 下但 Delta 写"合并到 building/spec.md §3"）
+- 条目描述中出现"同时修改 X 模块的 spec"之类措辞
+- change frontmatter `module` 字段与目录路径中的模块名不一致
+
+反馈模板：
+> ⚠️ 本 change 的 Delta 含跨模块条目（`<条目名>` 指向 `<其他模块>/spec.md`）。
+> eo-archive 只能合并单一模块的 Delta。请按 `/eo-change` 的"单模块 vs 跨模块"规则：
+>   1. 将跨模块部分抽出为另一个 change（归属对方模块）
+>   2. 用 `depends_on` frontmatter 关联两个 change
+>   3. 按依赖顺序分别归档
+> 详见 `eo-change/SKILL.md` 的"判断边界：单模块 vs 跨模块"。
+
 ### 第三步：冲突预检
 
 **MODIFIED 项**：在 spec.md 对应章节搜索"旧描述"，若找不到（可能 spec 在这之间被其他 change 改过）→ 列出冲突项，让用户选择：
@@ -138,4 +152,5 @@ description: |
 - **冲突必须停下**：绝不自作主张解决冲突
 - **归档不可逆**：archived 状态的 change 不再修改；若需修正，发起新的 change 来覆盖
 - **Delta 完整性校验**：若 change.md 没写 Delta 或格式错误，直接拒绝归档
+- **单一目标 spec**：一个 change 只能合并到一份 `spec.md`。Delta 含跨模块条目 → 拒绝归档，要求拆 change（见第二步）
 - **保持 diff 可读**：用 Edit 逐条合并，不要 Write 整文件覆盖 spec.md
