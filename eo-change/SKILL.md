@@ -104,22 +104,43 @@ description: |
 
 ### 第八步：提示后续流程
 
-根据 change 的规模和风险判断是否建议走 change-review：
+**关键分派**：先判断"这是首次产出还是返工修订"，两种场景提示完全不同。
 
-- **高风险 / 大规模 / 多层协作 change**（Delta ≥ 5 条，或跨 2 个以上层，或含 MODIFIED/REMOVED）：**建议**用户先跑 `/eo-change-review`
+#### 场景 A — 首次产出 change（本轮是作者第一次让它落地）
+
+根据规模和风险判断是否建议走 change-review：
+
+- **高风险 / 大规模 / 多层协作 change**（Delta ≥ 5 条，或跨 2 个以上层，或含 MODIFIED/REMOVED，或 change_type = bootstrap 认领章节 ≥ 3 个）：**建议**用户先跑 `/eo-change-review`
 - **小型 / 低风险 change**（Delta ≤ 2 条，单层，全是 ADDED）：可直接 approved 进入 implement
 
 统一提示模板：
 > change 文档已就绪（`status: draft`）。后续流程：
 >
-> 🟡 **（可选，建议）** `/eo-change-review <change-path>` — 方案级审查（Delta 合规、TODO 完整、AC 覆盖），通过后再 approve
+> 🟡 **（可选，建议）** `/eo-change-review <change-path>` — 方案级审查（§3 合规、TODO 完整、AC 覆盖），通过后再 approve
 > 1. 将 change.md `status` 改为 `approved`
 > 2. `/eo-implement <change-path>` — 按 TODO 实施代码
 > 3. `/eo-test <change-path>` — 测试与验证
-> 4. `/eo-review <change-path>` — 实施后代码审查
-> 5. `/eo-archive <module-name> <change-id>` — 审查通过后归档，Delta 合并回 spec
+> 4. `/eo-review <change-path>` — **实施后代码审查**（仅当 implement 已跑过）
+> 5. `/eo-archive <module-name> <change-id>` — 代码审查通过后归档
+
+#### 场景 B — 返工修订（作者根据 change-review 的 P0/P1 回来改 change.md）
+
+⚠️ **关键：此时代码尚未实施，必须走 `/eo-change-review` 复审，不要走 `/eo-review`。**
+
+`/eo-review` 是实施后的代码审查，需要代码已经写出来；此时根本没代码，路径走错会让 reviewer 空审。
+
+统一提示模板（场景 B）：
+> change 重写完成（`status: draft`）。既然前一轮 change-review 发现了问题，修订后请**再跑一次** `/eo-change-review <change-path>` 确认问题已收敛。
 >
-> 说明：change-review 为可选环节。高风险 / 跨层 / 大规模 change 建议走；小改动可跳过直接 approve。
+> 🔁 `/eo-change-review <change-path>` — 复审方案（**不是 /eo-review**；代码还没写，没东西给 /eo-review 审）
+> 🔁 直到 change-review 无 P0/P1 → 用户改 `status: approved` → 进入 `/eo-implement`
+>
+> **禁止**此时直接改 `status: approved` 跳过复审，也**禁止**跳到 `/eo-implement` 或 `/eo-review`。
+
+#### 如何判断是 A 还是 B
+
+- 本 change 目录下存在 `change-review.md` 且含未解决的 P0/P1 → **场景 B**
+- 否则 → **场景 A**
 
 ---
 

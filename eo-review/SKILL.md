@@ -42,7 +42,26 @@ description: |
 ## 前置条件
 
 - 模块活文档 `eo-doc/dev/<module-name>/spec.md` 和 change 文档 `eo-doc/dev/<module-name>/changes/<change-id>/change.md` 必须已存在
-- 相关代码已实现（至少部分实现）
+- **相关代码已实现**（即 `/eo-implement` 已经跑过至少一轮，change.md 的 TODO 至少部分被勾选）
+- change.md `status` 应为 `implementing` 或 `done`（不应是 `draft` / `approved`）
+
+### 前置拦截（硬性）
+
+若启动时发现以下任一信号，**立即停止并纠偏**，不要开始审查：
+
+| 信号 | 含义 | 正确路径 |
+|------|------|---------|
+| change.md `status: draft` | change 还没 approve，更没 implement | 走 `/eo-change-review` |
+| change.md `status: approved` 但所有 TODO 未勾选 | 代码还没开工 | 走 `/eo-implement` 先实施 |
+| 用户描述是"审查 change 方案" / "审方案" / "implement 之前再看看" | 用户想要的是方案审查 | 走 `/eo-change-review`（**不是本 skill**） |
+| 用户描述是"change 重写后再看看有没有新问题" | 代码未变，只是 change.md 改了 | 走 `/eo-change-review` |
+
+纠偏反馈模板：
+> ⚠️ `/eo-review` 是**实施后的代码审查**，需要代码已经写出来。
+> 你当前的情况是 `<信号描述>`——这一步应该走 `/eo-change-review`（方案审查）。
+> 两者区别：
+> - `/eo-change-review` 审 `change.md` 本身（Delta / TODO / AC 是否合规） — **implement 之前**
+> - `/eo-review`（本 skill）审**代码** — implement / test 之后
 
 ## 工作流程
 

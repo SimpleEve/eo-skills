@@ -146,11 +146,20 @@ description: |
 
 ### 第四步：汇报结论
 
-向用户汇报：
-- 审查结论（✅ 可进入 implement / ⚠️ 小幅修订 / ❌ 需重写）
-- P0/P1/P2 问题数量
-- 如需修订：建议用户回到 `/eo-change` 修订 change.md 后可再跑一次 `/eo-change-review`
-- 如通过：用户可将 change.md `status` 从 `draft` 改为 `approved`，进入 `/eo-implement`
+向用户汇报，**严格按下面两种终态二选一措辞**（避免含糊指向 `/eo-review`）：
+
+**终态 1 — 通过（无 P0/P1）**：
+> ✅ change-review 通过（P0=0, P1=0, P2=N）。
+> 下一步：用户将 `change.md` 的 `status` 从 `draft` 改为 `approved`，然后跑 `/eo-implement <change-path>`。
+> （注意：`/eo-review` 是**代码**审查，要在 `/eo-implement` 之后跑，现在还不轮到它。）
+
+**终态 2 — 需修订（有 P0/P1）**：
+> ⚠️ change-review 发现 P0=N / P1=M 个问题，不能进入 implement。
+> 下一步：用户回到 `/eo-change <change-path>` 按本报告 P0/P1 逐条修订，修订完成后**再跑一次** `/eo-change-review <change-path>` 复审。
+> 🚫 **不要**直接改 `status: approved`，**不要**跑 `/eo-review`（代码还没写），**不要**跑 `/eo-implement` 跳过复审。
+> 循环直到本报告 P0=0 且 P1=0。
+
+**严禁**在终态 2 的措辞里出现"下一步跑 /eo-review" 或"可进入 implement"——这是高频踩坑点，agent 会把 `/eo-review`（代码审查）和 `/eo-change-review`（方案审查）串线，导致用户走错路径。
 
 ---
 
