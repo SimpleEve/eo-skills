@@ -106,7 +106,18 @@ codex 按合约会回 `[tmux-bridge from:... ] done: ...` 到本 pane。**必须
 
 - **自动甩回去修**（发 `/eo-flow fix`）：明确 P0 bug、测试失败、AC 未覆盖、规范违反——客观、有标准答案的。
 - **暂停问用户**：架构取舍、接口命名、跨模块影响、需要改 spec / change §3、同一问题反复 2 轮没收敛。
-- **通过可合**：零 P0/P1 或仅 P2 → 告知用户可进入下一环节（如 `/eo-archive`）。
+- **通过可合**：零 P0/P1 或仅 P2 → 告知用户进入**对应 action 的下一步**（见下表，**不要无脑建议 `/eo-archive`**）：
+
+  | 刚跑完的 action | 通过后的下一步（提示给用户） |
+  |----------------|------------------------------|
+  | `spec-review` | 用户把 `spec.md` 的 `status` 改为 `confirmed` → 进入 `/eo-change` 或 `/eo-module-init` 后续流程 |
+  | `change-review` | 用户把 `change.md` 的 `status` 改为 `approved` → `/eo-flow implement`（或直接 `/eo-implement`） |
+  | `implement` | `/eo-flow test`（或 `/eo-test`） |
+  | `test` | `/eo-flow review`（或 `/eo-review`） |
+  | `review` | `/eo-archive <module> <change-id>` ← **只有这里才是归档入口** |
+  | `fix` | 按 fix 前的上下文回到原 action 复审（例：review 触发的 fix → 再跑 `/eo-flow review`） |
+
+  关键区分：`eo-archive` 只消费"实施后代码审查（`review.md`）通过"的 change，不消费 `change-review.md`。change-review 是方案级审查，通过后代码还没写，不能归档。
 
 超时未回包（≥10 分钟）：`tmux-bridge read <codex-pane> 40` 看状态——进程还在就继续等；已 idle 但文件落稿了说明 codex 漏发 message，手动读产出决策并告知用户。
 
