@@ -1,11 +1,6 @@
 ---
 name: eo-archive
-description: |
-  变更归档技能。将已通过 review 的 change 的 Spec Delta 合并回模块 spec.md，完成变更闭环。
-
-  USE FOR:
-  - "归档 change" "archive" "合并 delta" "归档变更" "/eo-archive"
-  - 任何需要把已实施、已审查通过的 change 合并回模块活文档的请求
+description: 将已审查通过的 change 的 Spec Delta 合并回模块 spec.md，完成变更闭环。触发：归档 change / archive / 合并 delta / /eo-archive。
 ---
 
 # eo-archive — 变更归档
@@ -21,6 +16,7 @@ description: |
 
 ## 前置条件
 
+- **必须能找到 `.eo-project.json`**（cwd 或父目录）。找不到 → 报错退出，提示运行 `/eo-project-init`。所有 `eo-doc/` 路径通过 `.eo-project.json` 的 `doc_root` 字段解析
 - 用户给定 `<module-name>` 和 `<change-id>`（如 `/eo-archive inventory 015-add-sort`）
 - `eo-doc/dev/<module-name>/spec.md` 存在
 - `eo-doc/dev/<module-name>/changes/<change-id>/change.md` 存在且 `status: done`

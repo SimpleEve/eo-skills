@@ -1,62 +1,52 @@
 ---
 name: eo-project-lesson
-description: "捕获项目经验教训，写入 _lessons/ 集中存放。全局 skill，可在代码仓库中通过 .eo-project.json 定位项目目录。当用户说'踩坑了'、'记录经验'、'教训'、'lesson learned'时触发。"
+description: "捕获项目经验教训（踩坑、最佳实践、意外收获），写入当前项目的 lessons/ 目录。通过 .eo-project.json 定位。触发：踩坑了 / 记录经验 / 教训 / lesson learned / /eo-project-lesson。"
 ---
 
 # eo-project-lesson
 
 ## 功能
 
-捕获项目中的经验教训（踩坑、最佳实践、意外收获），写入 `30-我的项目/_lessons/` 集中存放，并更新项目看板的经验教训计数。
+捕获项目经验教训，写入**项目级** `lessons/` 目录（每个项目独立，不再有全局 `_lessons/`）。若项目有看板，同步更新经验教训计数。
+
+配置与目录约定见 [eo-project-init/references/config.md](../eo-project-init/references/config.md)。
+
+## 前置
+
+必须能找到 `.eo-project.json`。找不到 → 报错退出，提示运行 `/eo-project-init`。
 
 ## 输入
 
-用户提供：
 - **经验内容**：发生了什么、学到了什么
-- **项目名称**（可选）：如在代码仓库中，通过 `.eo-project.json` 自动关联
+- 类别（可选，能推断就推断）：`pitfall` / `best-practice` / `surprise`
 
-## 定位项目目录
+## 路径解析
 
-### 场景 A：在 vault 目录内
+从 `.eo-project.json` 读取：
+- `project_root` — 项目管理侧根
+- `project_name` — 填入文件 frontmatter
+- `kanban_path` — 更新经验教训计数（`null` 时跳过）
 
-直接访问 `30-我的项目/<项目名>/`。
-
-### 场景 B：在代码仓库内
-
-读取当前目录或父目录的 `.eo-project.json`：
-
-```json
-{
-  "project_name": "项目名",
-  "project_vault": "/absolute/path/to/vault/30-我的项目/项目名"
-}
-```
-
-如果找不到 `.eo-project.json`，提示用户：
-1. 指定项目名（如果能确认是哪个项目）
-2. 或运行 `eo-project-init` 生成配置
+lessons 目录：`<project_root>/lessons/`（**lazy 创建**，本 skill 首次运行时建）。
 
 ## 执行步骤
 
 ### 1. 定位项目
 
-- 在 vault 内：用户指定或从上下文推断
-- 在代码仓库：读取 `.eo-project.json` 获取 `project_name` 和 `project_vault`
+读取 `.eo-project.json`，获取 `project_root` / `project_name` / `kanban_path`。
 
 ### 2. 提炼经验教训
 
-从用户输入中提取：
+从用户输入提取：
 - **标题**：一句话概括
-- **类别**：`pitfall`（踩坑）/ `best-practice`（最佳实践）/ `surprise`（意外发现）
-- **项目**：关联项目名
-- **阶段**：当前活跃 phase（自动读取）
+- **类别**：`pitfall` / `best-practice` / `surprise`
+- **阶段**：从活跃 phase 文件读取（若有）
 - **内容**：发生了什么 + 学到了什么 + 下次怎么做
 
 ### 3. 创建经验文件
 
-在 `30-我的项目/_lessons/` 创建文件：
-
-命名：`{YYYY-MM-DD}-{项目名}-{简述}.md`
+- 首次运行时 lazy 建 `<project_root>/lessons/` 目录
+- 文件命名：`{YYYY-MM-DD}-{简述}.md`（不再需要 `{项目名}` 前缀，因为已按项目隔离）
 
 ```markdown
 ---
@@ -83,32 +73,31 @@ tags: []
 {可操作的改进方案}
 ```
 
-### 4. 更新项目看板
+### 4. 更新项目看板（仅 `kanban_path` 非空）
 
-在 `00-Wiki/项目看板.md` 对应项目条目中，更新经验教训计数。
+更新对应项目条目的经验教训计数（读当前 `<project_root>/lessons/` 条目数）。
 
 ### 5. 追加项目日志
 
-在项目的 `log.md` 追加记录。
+在 `<project_root>/log.md` 追加一条记录。
 
 ### 6. 输出摘要
 
-展示：
 - 经验文件路径
 - 经验摘要
 - 当前项目累计经验数
 
 ## 输出
 
-- 经验文件：`30-我的项目/_lessons/{date}-{project}-{slug}.md`
-- 看板更新：经验教训计数
+- 经验文件：`<project_root>/lessons/{date}-{slug}.md`
+- 看板更新（可选）：经验教训计数
 - 项目日志：追加记录
 
 ## 约束
 
 - 经验文件一旦创建不可修改，只能新建补充
-- 所有经验集中在 `_lessons/` 目录，通过 `project` 字段关联项目
-- 所有链接使用最短路径 `[[文件名]]`
-- 能推断的字段自动填充，不强制用户提供所有信息
-- 在代码仓库侧操作时，必须通过 `.eo-project.json` 定位，不猜路径
-- 如果 `project_vault` 路径不可达，报错并提示检查配置
+- 经验按项目隔离，不再有全局 `_lessons/`
+- 首次运行时 lazy 建 `lessons/` 目录
+- 能推断的字段自动填充
+- 路径通过 `.eo-project.json` 解析，不硬编码
+- `kanban_path: null` 时不更新看板

@@ -1,119 +1,114 @@
 ---
 name: eo-project-init
-description: "从 PRD/MVP 文档或口头描述启动一个新项目，生成项目目录骨架、路线图、阶段模板，并注册到项目看板。支持在代码仓库侧运行，自动建立与 vault 的软链和 agent 配置注入。当用户说'启动项目'、'初始化项目'、'新建项目'时触发。"
+description: "eo-skills 在当前仓库的总入口：生成 .eo-project.json、初始化项目管理侧（roadmap/log/backlog）和代码侧最小骨架（eo-doc/），按需建 vault 软链和 agent 配置注入。触发：启动项目 / 初始化项目 / 新建项目 / /eo-project-init。"
 ---
 
 # eo-project-init
 
-## 功能
+## 定位
 
-将项目想法（PRD、MVP 文档、口头描述）转化为结构化的项目目录，并注册到项目看板。支持两种场景：在 vault 内创建项目、或在代码仓库中关联已有项目。
+**所有 eo-* skill 的总入口**。其它 skill（eo-change / eo-implement / eo-doc-manager / …）都依赖 `.eo-project.json`；未运行过本 skill 的项目无法使用其它 eo-* skill。
+
+一次 init 完成三件事：
+1. 生成 `.eo-project.json`（项目级配置，所有 skill 读它）
+2. 初始化**项目管理侧**（vault 或 local 模式）——最小骨架
+3. 初始化**代码侧** `eo-doc/` 最小骨架（内部调用 `eo-doc-manager init` 的子流程）
+
+配置与目录约定详见 [references/config.md](references/config.md)。
 
 ## 输入
 
 用户提供以下之一：
-- **PRD/MVP 文档路径**：已有的需求或 MVP 文档
+- **PRD/MVP 文档路径**
 - **口头描述**：项目名称 + 要做什么 + 大致阶段
+- **仅项目名**：快速创建空骨架（后续再补充）
 
-可选补充：
-- 项目状态（默认 `active`，可选 `researching`）
-- 代码仓库路径（双向关联）
-
-## 模板与引用
-
-**模板**（输出格式）：
-- `templates/roadmap.md` — 路线图格式
-- `templates/phase.md` — 阶段计划格式
-- `templates/log.md` — 项目日志格式
-
-**引用**（按需加载）：
-- `references/roadmap-breakdown.md` — roadmap 拆解方法论。仅在需要拆解 roadmap/phase 时读取，已有 roadmap 时不加载。
+可选：
+- 代码仓库路径（当前 cwd 不是代码仓库时）
+- 运行模式偏好（vault / local），不指定则按用户级配置推断
 
 ## 执行步骤
 
-### 1. 判断运行环境
+### 1. 解析配置来源
 
-检查当前工作目录：
+1. **旧路径自动迁移**（静默，执行一次）：若 `~/.eo-skills.json` 存在且 `~/.eo/config.json` 不存在，执行：
+   ```bash
+   mkdir -p ~/.eo
+   mv ~/.eo-skills.json ~/.eo/config.json
+   ```
+   迁移后打印一行提示：`已将旧配置 ~/.eo-skills.json 迁移至 ~/.eo/config.json`。之后不再检查旧路径。
 
-**场景 A：在 vault 目录内**
-→ 直接创建项目目录，如用户提供了代码仓库路径则建立关联
+2. **检查 cwd 是否已有 `.eo-project.json`**：
+   - 已有 → 走「更新/修复」分支（见 §6）
+   - 未有 → 继续 §3
 
-**场景 B：在代码仓库内**
-→ 读取 `.eo-project.json` 获取 `project_vault` 路径
-→ 如果不存在，引导用户提供 vault 路径并创建 `.eo-project.json`
+3. **读取 `~/.eo/config.json`**（用户级默认，可能不存在）：
+   - 存在 → 取 `default_mode` / `vault_root` 等作为推荐值进入 §2（节号指下文的"询问运行模式"）
+   - 不存在 → 进入 §2 时推荐值为空
 
-### 2. 检测已有项目
+### 2. 询问运行模式（必须问，不默认）
 
-检查 vault 侧是否已有该项目目录：
+**不要直接默认到 local**。向用户展示两种模式的区别，让其选择：
 
-**项目目录已存在 + 有 roadmap.md**：
-→ 提供三个选项：
-1. **跳过拆解**：只建立代码侧关联（.eo-project.json + 软链 + agent 配置注入）
-2. **更新 roadmap**：基于新输入刷新 roadmap（保留已有进度标记）
-3. **重建**：确认后覆盖重写
+```
+这个项目的"项目管理侧"（roadmap / log / backlog / decisions / lessons 等）放在哪里？
 
-**项目目录已存在 + 无 roadmap.md**：
-→ 异常状态，提示补全，进入拆解流程
+A) vault 模式 —— 集中到 Obsidian/文档 vault，跨项目统一浏览
+   • project_root = <vault_root>/<projects_subdir>/<项目名>/
+   • 默认把整个 vault 项目目录软链挂到代码侧 eo-doc/vault/（单点整挂，vault 侧新增子目录代码侧自动可见）
+   • 可选挂到全局项目看板（kanban_path）统一追踪进度
+   • 适合：多个项目并行、用 Obsidian 做 PKM、想在一处看所有项目状态
 
-**项目目录不存在**：
-→ 正常 init，进入拆解流程
+B) local 模式 —— 放在仓库自己的 .eo-project/ 下，跟代码走
+   • project_root = <repo>/.eo-project/
+   • 默认进 .gitignore（不提交），也可选随仓库提交
+   • 不建软链、不挂看板
+   • 适合：单个项目、没有统一 vault、不想跨目录跳转
+```
+
+用户回答后：
+- 若选 vault 但用户级配置无 `vault_root` → 当场询问 `vault_root` 路径（以及可选的 `projects_subdir` / `kanban_path` / `create_symlink`），写入 `~/.eo/config.json`（必要时先 `mkdir -p ~/.eo`）
+- 若用户级已有推荐值，展示并让用户确认或覆盖
+
+最终落定 `mode = "vault" | "local"` 进入 §3。
 
 ### 3. 解析项目信息
 
 从输入中提取：
-- **项目名称**：用于目录命名
+- **项目名称**（`project_name`）
 - **项目目标**：一句话描述
 - **初始状态**：`active` / `researching`
 
-阶段划分不在此步完成——交给步骤 5 的拆解流程。
+### 4. 计算 `project_root`
 
-### 4. 检查活跃项目数
+- **vault 模式**：`<vault_root>/<projects_subdir>/<project_name>/`
+- **local 模式**：`<repo>/.eo-project/`
 
-读取 `00-Wiki/项目看板.md`，如果「进行中」已有 3 个项目，提醒用户考虑搁置或归档。
+检查 `project_root` 是否已存在：
+- 存在且含 `roadmap.md` → 询问：1) 只建代码侧关联 2) 更新 roadmap 3) 重建（需确认）
+- 存在但无 `roadmap.md` → 异常，提示补全后进入拆解
+- 不存在 → 正常创建
 
-### 5. 创建项目目录（vault 侧）
+### 5. 检查活跃项目数（仅 vault + 有看板）
+
+若 `kanban_path` 已配置，读取看板，「进行中」已有 3 个项目时提醒用户考虑搁置或归档。
+
+### 6. 创建项目管理侧骨架（最小）
 
 ```
-<vault>/30-我的项目/<项目名>/
-├── roadmap.md
-├── phases/
-│   ├── phase-1-<阶段名>.md
-│   └── phase-2-<阶段名>.md
-├── decisions/
-│   └── .gitkeep
-├── docs/
-│   └── <原始PRD>.md       ← 如有，复制存档
-├── todo/
-│   └── backlog.md         ← 待办池
-└── log.md
+<project_root>/
+├── roadmap.md     # 必建
+├── log.md         # 必建
+└── backlog.md     # 必建
 ```
 
-### 6. Roadmap 拆解
+**按需目录一律不预建**（phases / decisions / lessons / brainstorm / docs），等对应 skill 首次写入时由那个 skill 创建。
 
-如果需要拆解 roadmap（项目目录不存在或无 roadmap.md），读取 `references/roadmap-breakdown.md` 获取拆解方法论，然后与用户对话：
+写入 `roadmap.md`（读 [templates/roadmap.md](templates/roadmap.md)），填充项目名、目标、阶段概览占位。
 
-1. **确认终态**（1 轮）：项目做完，用户能做到什么之前做不到的事？
-2. **逆推里程碑**（1-2 轮）：从终态往回推必经中间状态
-3. **展示 Phase 划分**（1 轮）：里程碑 → Phase 表格，用户确认
-4. **拆任务**（1 轮）：逐个 Phase 展开任务清单
-5. **用户确认** → 写入文件
+写入 `log.md`（读 [templates/log.md](templates/log.md)）。
 
-⚠️ 不可静默拆解——必须展示给用户确认后再写入。整个过程不超过 5 轮对话。
-
-如果用户已提供完整的 PRD/MVP 文档且阶段划分清晰，可以直接提取后展示确认，不走完整对话流程。
-
-### 7. 生成 roadmap.md
-
-读取 `templates/roadmap.md`，填充项目名、目标、阶段概览表。第一个阶段标记 🟢 active，其余 ⏳ planned。
-
-### 8. 生成 phase 文件
-
-读取 `templates/phase.md`，每个阶段生成一个文件到 `phases/` 目录：
-- 命名：`phase-{N}-{阶段名}.md`
-- 第一个阶段 `status: active`，其余 `planned`
-- 任务清单用 `- [ ]` 格式
-
-### 9. 生成 todo/backlog.md
+写入 `backlog.md`：
 
 ```markdown
 ---
@@ -122,132 +117,181 @@ project: "{{project_name}}"
 updated: "{{date}}"
 ---
 
-# {{project_name}} 待办池
+# {{project_name}} Backlog
 
-> 不属于任何 phase 的待办、灵感、以后要做的事。
+> 待办池 + 未接入的未来规划（如将来想接入 research、knowledgebase skill 时的 placeholder）。
 
 ## 待办
 
 ## 灵感 & 以后再说
+
+## 未接入（等 skill 支持再接入）
 ```
 
-### 10. 生成 log.md
+### 7. Roadmap 拆解（可选）
 
-读取 `templates/log.md`，填充项目名、来源、阶段数、初始状态。
+如果用户提供了 PRD/MVP 或愿意拆解：
+1. 读取 [references/roadmap-breakdown.md](references/roadmap-breakdown.md) 方法论
+2. 与用户对话（不超过 5 轮）：终态 → 里程碑 → Phase → 任务
+3. 用户确认后，**lazy 创建** `phases/` 目录，每个阶段一个文件（读 [templates/phase.md](templates/phase.md)）
+4. 更新 `roadmap.md` 的阶段概览表
 
-### 11. 注册到项目看板
+仅"快速创建空骨架"时可跳过此步。
 
-在 `00-Wiki/项目看板.md` 对应状态分区添加：
+### 8. 初始化代码侧 `eo-doc/`（内部调用 eo-doc-manager init 子流程）
 
-```markdown
-### <项目名>
-- 状态：`active`
-- 当前阶段：[[phase-1-<阶段名>]]
-- 下一步：<第一个任务>
-- 阻塞：无
-- 决策记录：无
-- 经验教训：0 条
+在代码仓库根目录创建**最小骨架**：
+
+```
+eo-doc/
+├── agent-handbook/INDEX.md   # 骨架
+├── dev/INDEX.md              # 骨架
+└── templates/                # 空目录
 ```
 
-### 12. 生成 .eo-project.json（代码仓库侧）
+**不创建** `state/`（首次 `/eo-doc-manager sync` 时按需建）。
+**不创建** `design/ / research/ / knowledgebase/`（已移除）。
 
-在**代码仓库根目录**生成：
+额外：
+- 初始化 `eo-doc/.sync-cursor`（当前 HEAD 作为首次基线）
+- 将 `eo-doc/.sync-cursor` 追加到 `.gitignore`
+- CLAUDE.md 注入（详见 `eo-doc-manager/references/claude-injection.md`）
+
+**注意**：如果用户本次只想要项目管理侧（例如纯规划项目，没代码），可用 `--skip-code-side` 跳过 §8。此时 `doc_root` 字段仍写入配置，留待将来补建。
+
+### 9. 生成 `.eo-project.json`
+
+在**代码仓库根目录**写入：
 
 ```json
 {
-  "project_name": "<项目名>",
-  "project_vault": "<vault绝对路径>/30-我的项目/<项目名>"
+  "project_name": "{{project_name}}",
+  "mode": "vault" | "local",
+  "project_root": "{{absolute_path_to_project_root}}",
+  "doc_root": "eo-doc",
+  "kanban_path": "{{absolute_kanban_path_or_null}}"
 }
 ```
 
-### 13. 建立软链（代码仓库 → vault）
+`kanban_path` 填入规则：
+- vault 模式 + 用户级 `kanban_path` 有值 → 拼接为绝对路径 `<vault_root>/<kanban_path>`
+- 否则 → `null`
 
-在代码仓库的 `eo-doc/` 目录下创建一条软链，指向 vault 项目根目录：
+### 10. 建立软链（vault 模式 + `create_symlink: true`）
+
+Obsidian 侧（vault）是**源**。把整个 vault 项目目录作为一个软链挂进代码侧：
 
 ```bash
-ln -s <project_vault> eo-doc/vault
+ln -s <project_root> <repo>/<doc_root>/vault
 ```
 
-这样 vault 下所有子目录（roadmap.md、phases/、todo/、decisions/、docs/ 等）都可以通过 `eo-doc/vault/` 访问，无需逐个建链。
+**整目录单点软链**，不按子目录分别软链——这样 vault 侧日后新增 `docs/` / `phases/` / `decisions/` 等子目录，代码侧自动能看到，不用回来补软链。
 
-如果 `eo-doc/` 不存在，先创建该目录（`mkdir -p eo-doc`）。
+在 `.gitignore` 追加：
 
-在 `.gitignore` 中追加：
 ```
 # eo-project vault link
-eo-doc/vault
+<doc_root>/vault
 ```
 
-### 14. Agent 配置注入（代码仓库侧）
+local 模式**不建软链**。
 
-自动检测代码仓库使用的 agent 配置文件：
+### 11. 处理 `.eo-project/`（仅 local 模式）
 
-**检测顺序**：
-1. `CLAUDE.md` — Claude Code
-2. `AGENTS.md` — OpenAI Codex
-3. `COPILOT.md` — GitHub Copilot
-4. `CURSOR.md` — Cursor
-5. 如果都不存在，问用户用哪个工具，创建对应文件
+`.eo-project/` 即 `project_root`。默认追加到 `.gitignore`：
 
-**注入方式**：使用标记段落，支持幂等更新。
+```
+# eo-project local management side
+.eo-project/
+```
 
-查找 `<!-- eo-project:start -->` 和 `<!-- eo-project:end -->`：
-- 标记存在 → 原地替换
-- 标记不存在 → 末尾追加
+若用户明确想让管理侧随仓库提交，当场询问后跳过 gitignore 追加。
 
-**注入内容**：
+### 12. Agent 配置注入
+
+检测代码仓库使用的 agent 配置文件（顺序）：
+1. `CLAUDE.md`
+2. `AGENTS.md`
+3. `COPILOT.md`
+4. `CURSOR.md`
+5. 都不存在 → 询问用户创建哪个
+
+使用 `<!-- eo-project:start -->` / `<!-- eo-project:end -->` 标记段落幂等注入：
 
 ```markdown
 <!-- eo-project:start -->
 ## EO-Project
 
-本项目通过 `.eo-project.json` 关联到项目 vault：`<project_vault>`
+本项目通过 `.eo-project.json` 关联到项目管理侧：`{{project_root}}`
+
+- 模式：`{{mode}}`
+- 项目管理侧（roadmap / backlog / decisions / lessons 等）：`{{project_root}}`
+- 代码侧文档：`{{doc_root}}/`
 
 ### 待办提醒
 
-当对话中出现以下信号时，主动提醒用户是否要加入 vault todo：
-- 提到"以后要做"、"下次再说"、"TODO"、"先跳过"、"回头处理"
-- 发现技术债务或待优化项
-- 用户做了临时方案（workaround）
+当对话中出现"以后要做"、"TODO"、"先跳过"、"回头处理"等信号，或用户做了 workaround 时，主动提示：
 
-提醒格式：
-> 💡 检测到待办事项：「{内容}」。要加入项目 todo 吗？
+> 💡 检测到待办事项：「{内容}」。要加入项目 backlog 吗？
 
-用户确认后，追加到 `<project_vault>/todo/backlog.md` 的「待办」部分。
+用户确认后追加到 `{{project_root}}/backlog.md`。
 
 ### 决策同步
 
-当对话中出现关键技术决策时（选型、架构、方案取舍），提醒用户：
-> 💡 这是一个关键决策。要记录到项目 decisions/ 吗？
+当对话中出现关键技术决策（选型、架构、方案取舍），提示：
 
-用户确认后，在 `<project_vault>/decisions/` 创建决策记录。
+> 💡 这是一个关键决策。要记录到 decisions/ 吗？
+
+用户确认后，在 `{{project_root}}/decisions/` 创建决策记录（首次时 lazy 建目录）。
+
+### 经验教训
+
+当用户提到"踩坑"、"下次不这么干"、"学到了"时，提示：
+
+> 💡 要记录到 lessons/ 吗？
+
+用户确认后，在 `{{project_root}}/lessons/` 创建经验记录（首次时 lazy 建目录）。
 <!-- eo-project:end -->
 ```
 
-### 15. 输出摘要
+### 13. 注册到项目看板（仅 `kanban_path` 非空时）
+
+在 `kanban_path` 指向的看板对应状态分区添加：
+
+```markdown
+### {{project_name}}
+- 状态：`active`
+- 当前阶段：[[phase-1-<阶段名>]]（若已拆解）
+- 下一步：<第一个任务或"待拆解">
+- 阻塞：无
+- 决策记录：无
+- 经验教训：0 条
+```
+
+`kanban_path: null` 时跳过整步。
+
+### 14. 输出摘要
 
 展示：
-- 项目目录结构
-- 路线图概览
-- 第一阶段任务清单
-- 看板已更新
-- 代码仓库关联状态（.eo-project.json + `eo-doc/vault` 软链 + agent 配置注入）
+- 运行模式
+- `.eo-project.json` 路径和内容
+- 项目管理侧骨架结构
+- 代码侧骨架结构
+- 软链 / gitignore / agent 配置 / 看板 状态
 
 ## 输出
 
-- 项目目录：`<vault>/30-我的项目/<项目名>/`（含 todo/）
-- 看板更新：`00-Wiki/项目看板.md`
-- 代码仓库：`.eo-project.json` + `eo-doc/vault` 软链 + agent 配置注入
+- **代码仓库**：`.eo-project.json` + `eo-doc/` 最小骨架 + agent 配置注入（+ 可选软链）
+- **项目管理侧**：`<project_root>/` 含 `roadmap.md` / `log.md` / `backlog.md`（+ 可选 `phases/`）
+- **看板**（可选）：`{{kanban_path}}` 对应条目
 
 ## 约束
 
+- **`.eo-project.json` 是所有 eo-* skill 的启动前置**。本 skill 的核心产出
+- 按需目录（phases / decisions / lessons / brainstorm / docs）**init 时不预建**，由对应 skill 首次写入时 lazy 创建
 - 项目名用用户给的原始名称，不转换
-- 原始文档复制到 `docs/` 存档，不修改原文件
-- **`docs/` 不是 `raw/`**——`raw/` 保留给知识图谱 ingest
-- 阶段数 2-5 个，过多则建议合并
-- roadmap 和 phase 是活文档，后续由 `eo-project-update` 更新
-- 所有链接使用最短路径 `[[文件名]]`
-- 活跃项目上限 3 个
-- 软链为单条 `eo-doc/vault` → vault 项目根目录
+- 原始 PRD/MVP 若提供，存到 `<project_root>/docs/`（lazy 建）
+- 活跃项目上限 3 个（仅看板维护时检查）
+- 软链仅 vault 模式 + `create_symlink: true` 才建
+- `.eo-project/` 默认进 `.gitignore`；用户可当场覆盖
 - agent 配置注入使用 `<!-- eo-project:start/end -->` 标记，幂等可重复执行
-- 注入内容中的 vault 路径使用绝对路径

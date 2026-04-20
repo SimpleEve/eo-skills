@@ -1,17 +1,8 @@
 ---
 name: eo-change-review
 description: |
-  Change 方案审查技能。在 change 进入 implement 前，对 change.md 的 Delta 正确性、实施方案可行性、TODO 完整性做质量把关。
-
-  USE FOR:
-  - "审查 change" "review change" "change 审查" "审方案" "/eo-change-review"
-  - change.md 写完 draft 后，用户希望在 implement 前做一次方案级 review
-  - 发现 Delta 抄了整篇 spec、方案和 Delta 不匹配、TODO 遗漏、AC 覆盖不全等问题
-
-  NOT FOR:
-  - 代码审查 → `/eo-review`
-  - spec 初次质量把关 → `/eo-spec-review`
-  - bug 修复循环内的回归审查 → 留在 `/eo-implement` 内解决
+  对 change.md 做方案级审查（Delta 正确性、TODO 完整性、AC 覆盖）。触发：审查 change / change 审查 / 审方案 / /eo-change-review。
+  NOT FOR: 代码审查（/eo-review）、spec 审查（/eo-spec-review）、implement 内的回归审查。
 ---
 
 # eo-change-review — Change 方案审查
@@ -37,6 +28,7 @@ description: |
 
 ## 前置条件
 
+- **必须能找到 `.eo-project.json`**。找不到 → 报错退出，提示运行 `/eo-project-init`。`eo-doc/` 路径通过 `doc_root` 字段解析
 - change.md 存在于 `eo-doc/dev/<module-name>/changes/<change-id>/`
 - change.md frontmatter `status` 为 `draft`（若已 approved 也允许，但提示用户通常无需再审）
 - 对应模块 `eo-doc/dev/<module-name>/spec.md` 存在（审查 Delta 需要对照 spec 当前状态）

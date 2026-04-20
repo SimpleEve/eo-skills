@@ -5,7 +5,7 @@
 ```markdown
 ---
 title: [简明描述性标题]
-type: design | doc | agent | research | knowledgebase
+type: agent | state
 tags: [tag1, tag2, tag3]
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
@@ -68,48 +68,12 @@ conclusions:
 | [file2.md](file2.md) | 标题 | `tag` | YYYY-MM-DD | 摘要 |
 ```
 
-### 顶级 INDEX.md
-
-```markdown
-# eo-doc Index
-
-> Last updated: YYYY-MM-DD
-
-## design/ — 源设计
-
-| File | Title | impl_coverage | Updated | Summary |
-|------|-------|---------------|---------|---------|
-| [spec.md](design/spec.md) | 功能规格 | 2/3 | YYYY-MM-DD | 摘要 |
-
-## doc/ — 当前实现
-
-| File | Title | Tags | Updated | Summary |
-|------|-------|------|---------|---------|
-| [feature.md](doc/feature.md) | 标题 | `tag` | YYYY-MM-DD | 摘要 |
-
-## agent-handbook/ — 代码架构
-
-| File | Title | Tags | Updated | Summary |
-|------|-------|------|---------|---------|
-| [module.md](agent-handbook/module.md) | 标题 | `tag` | YYYY-MM-DD | 摘要 |
-
-## research/ — 调研资料
-
-| File | Title | Tags | Updated | Summary |
-|------|-------|------|---------|---------|
-
-## knowledgebase/ — 知识库
-
-| File | Title | Tags | Updated | Summary |
-|------|-------|------|---------|---------|
-```
-
 ## Frontmatter 字段规则
 
 | 字段 | 必填 | 说明 |
 |------|------|------|
 | title | 是 | 简明、描述性、同分类内唯一 |
-| type | 是 | `design`、`doc`、`agent`、`research` 或 `knowledgebase` |
+| type | 是 | `agent` 或 `state` |
 | tags | 是 | 2-5 个标签，小写，多词用连字符 |
 | created | 是 | YYYY-MM-DD，首次创建日期 |
 | updated | 是 | YYYY-MM-DD，最近修改日期 |
@@ -118,7 +82,6 @@ conclusions:
 | source | 是 | 原始 URL（优先）或项目内部路径 |
 | summary | 是 | 1-2 句，足以做分流判断 |
 | conclusions | 推荐 | 2-5 条关键要点，列表形式 |
-| impl_coverage | design 必填 | `已实现数/总数`，如 `2/5` |
 
 ## 内容编写规则
 
@@ -128,39 +91,11 @@ conclusions:
 4. **对比用表格**：功能/竞品对比 → Markdown 表格
 5. **层级上限**：`##` 为章节，`###` 仅在必要时使用，禁止 `####`
 6. **行数预算**：目标 100-300 行/篇，硬上限 500 行
-7. **交叉引用**：同目录用 `[标题](./file.md)`，跨目录用 `[标题](../doc/file.md)`
+7. **交叉引用**：同目录用 `[标题](./file.md)`，跨目录用 `[标题](../state/file.md)`
 
 ## 按类型的模板差异
 
-### Design（源设计文档）
-
-侧重规划、决策、功能定义。描述"我们想要怎么做"，可包含未实现的内容。
-
-```yaml
-conclusions:
-  - [关键设计决策]
-  - [核心约束或要求]
-  - [集成依赖]
-impl_coverage: 2/5
-```
-
-典型章节：概述、功能需求、架构设计、接口定义、约束条件、**实现状态**
-
-**实现状态章节**（design 文档必须包含）：
-
-```markdown
-## 实现状态
-
-| Feature | 状态 | 关联文档 | 备注 |
-|---------|------|----------|------|
-| 用户认证 | ✅ implemented | [auth](../doc/auth.md) | |
-| SSO 集成 | 📋 planned | | v2.0 规划 |
-| 权限管理 | 🔶 partial | [auth](../doc/auth.md) | 仅基础 RBAC |
-```
-
-状态值：`✅ implemented` / `🔶 partial` / `📋 planned`
-
-### Doc（当前实现文档）
+### State（当前实现文档）
 
 侧重描述系统当前的实际行为。给人阅读，用业务语言。**必须与代码一致**。
 
@@ -173,8 +108,8 @@ conclusions:
 
 典型章节：概述、业务规则、状态流转、配置说明、边界条件、来源
 
-**Doc 关键规则**：
-- 只描述已实现的功能，不写规划或设计意图
+**State 关键规则**：
+- 只描述已实现的功能，不写规划或设计意图（规划/设计属于项目管理侧）
 - 用业务语言而非代码语言
 - 描述"什么"和"为什么"，不描述"怎么实现的"
 - sync/re-sync 可自动生成和更新
@@ -253,29 +188,3 @@ const result = await runTask({
 - 依赖关系明确写"依赖谁"和"被谁依赖"
 - 每个模块一篇，文件名与模块名对应
 - 精确到文件路径，有意义时精确到行号
-
-### Research（调研文档）
-
-侧重发现、分析、对比。描述"外部现状是什么"，不包含项目决策。
-
-```yaml
-conclusions:
-  - [带数据点的发现]
-  - [可执行的洞察]
-  - [对产品/策略的影响]
-```
-
-典型章节：背景、方法论（简要）、发现、影响/建议、来源
-
-### Knowledgebase（知识库）
-
-侧重规范事实、操作流程、参考资料。
-
-```yaml
-conclusions:
-  - [核心事实或原则]
-  - [关键操作步骤]
-  - [常见陷阱/注意事项]
-```
-
-典型章节：概述、详情/规范、使用/流程、常见问题、来源

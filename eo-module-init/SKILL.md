@@ -1,12 +1,8 @@
 ---
 name: eo-module-init
 description: |
-  模块初始化技能。为全新模块建立 spec 活文档并完成首次 spec-review，为后续所有 change 打好基线。
-
-  USE FOR:
-  - "新建模块" "module init" "初始化模块" "新模块" "/eo-module-init"
-  - 任何需要为一个**尚未存在的模块**创建活文档基线的请求
-  - 不用于修改已有模块（走 /eo-change）
+  为全新模块建立 spec 活文档并完成首次 spec-review，打好后续所有 change 的基线。触发：新建模块 / module init / 新模块 / /eo-module-init。
+  NOT FOR: 修改已有模块（走 /eo-change）。
 ---
 
 # eo-module-init — 模块初始化
@@ -21,6 +17,7 @@ description: |
 
 ## 前置条件
 
+- **必须能找到 `.eo-project.json`**。找不到 → 报错退出，提示运行 `/eo-project-init`。`eo-doc/` 路径通过 `doc_root` 字段解析
 - 用户给定 `module-name`（小写 kebab-case，如 `inventory` / `transport-queue`）
 - `eo-doc/dev/<module-name>/` 目录**不存在**（若存在则提示冲突，建议走 `/eo-change`）
 

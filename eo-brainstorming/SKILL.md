@@ -1,17 +1,17 @@
 ---
 name: eo-brainstorming
 description: |
-  头脑风暴技能。帮助用户对不成形的想法进行发散、对抗、拆解和方向决策。
-
-  USE FOR:
-  - "帮我想想" "我们对一下想法" "头脑风暴" "brainstorming" "/eo-brainstorming"
-  - 用户抛出模糊想法、方向性困惑、多方案犹豫时
-  - 注意：不要对普通的技术讨论或具体实现问题触发，仅在用户明确想"想想方向"时触发
+  对不成形的想法做发散、对抗、拆解和方向决策。触发：帮我想想 / 头脑风暴 / brainstorming / /eo-brainstorming。
+  NOT FOR: 普通技术讨论或具体实现问题（只在用户明确"想想方向"时触发）。
 ---
 
 # eo-brainstorming — 头脑风暴
 
 帮助用户对不成形的想法进行发散、对抗、拆解和方向决策。定方向，不卡细节。
+
+## 前置
+
+必须能找到 `.eo-project.json`（cwd 或父目录）。找不到 → 报错退出，提示运行 `/eo-project-init`。产出记录写入 `<project_root>/brainstorm/`（从配置解析）。
 
 ## 角色定位
 
@@ -147,9 +147,9 @@ description: |
 
 在开口讨论之前，先默读项目现状：
 
-1. 扫描 `eo-doc/` 结构（design/、doc/、dev/ 的 frontmatter），理解项目阶段和已有设计
-2. 阅读 CLAUDE.md / README，理解项目定位和技术栈
-3. 如果存在商业化文档或路线图，阅读理解
+1. 读 `.eo-project.json`，扫描项目管理侧 `<project_root>/`（roadmap.md、phases/、docs/ 等）理解项目阶段和已有规划
+2. 扫描代码侧 `eo-doc/`（agent-handbook/、state/、dev/ 的 frontmatter）理解现状
+3. 阅读 CLAUDE.md / README，理解项目定位和技术栈
 
 不要跳过这一步。没有上下文的头脑风暴是空谈。**也不要把这一步的内容直接复述给用户——你读完了就行，用来指导后续提问。**
 
@@ -192,12 +192,13 @@ description: |
 
 ### 第四步：产出会话记录
 
-将讨论结果写入 `eo-doc/dev/_brainstorm/`。
+将讨论结果写入**项目管理侧** `<project_root>/brainstorm/`（从 `.eo-project.json` 解析 `project_root`）。
 
-1. 确定文件名：`YYYY-MM-DD-<主题>.md`（如 `2026-04-02-growth-direction.md`）
-2. 创建 `eo-doc/dev/_brainstorm/` 目录（如不存在）
-3. 按照下方模板撰写
-4. 更新 `eo-doc/dev/INDEX.md`
+1. 前置检查：读 `.eo-project.json`，找不到 → 报错提示先跑 `/eo-project-init`
+2. 确定文件名：`YYYY-MM-DD-<主题>.md`（如 `2026-04-02-growth-direction.md`）
+3. 首次运行时 lazy 建 `<project_root>/brainstorm/` 目录
+4. 按照下方模板撰写
+5. （可选）若 `<project_root>/brainstorm/INDEX.md` 已存在则更新；首次创建时可跳过 INDEX
 
 ## 固定模板
 

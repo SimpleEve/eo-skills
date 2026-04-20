@@ -1,17 +1,15 @@
 ---
 name: eo-workflow
-description: |
-  多 Agent 编排工作流技能。在 tmux 多窗格中自动编排 eo-* 技能流水线（module-init / change / implement / archive）。
-
-  USE FOR:
-  - "eo-workflow" "启动工作流" "workflow" "全流程" "/eo-workflow"
-  - 需要跨 tmux pane 编排 module-init → spec-review、implement → test → review、archive 流水线时
-  - 用户想要自动化多 agent 协作开发流程时
+description: 在 tmux 多窗格中编排 eo-* 技能流水线（module-init / change / implement / archive），跨 pane 自动派发和状态轮询。触发：eo-workflow / 启动工作流 / 全流程 / /eo-workflow。
 ---
 
 # eo-workflow — 多 Agent 编排工作流
 
 在 tmux 多窗格中编排新工作流的 skill 流水线。通过 tmux-bridge 跨 pane 通信，配合 CronCreate 做定时轮询，实现 module-init / change / implement / archive 的自动派发、状态监控和结果流转。
+
+## 前置
+
+**必须能找到 `.eo-project.json`**。找不到 → 报错退出，提示运行 `/eo-project-init`。子 pane 中执行的每个 eo-* skill 自己也会检查，但本 skill 启动时先校验以快速失败。
 
 ## 新工作流速览
 

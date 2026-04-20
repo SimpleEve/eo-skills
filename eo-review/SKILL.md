@@ -1,16 +1,8 @@
 ---
 name: eo-review
 description: |
-  代码审查技能。根据模块 spec 和 change 文档对**已实施的代码**进行审查，产出结构化审查报告。
-
-  USE FOR:
-  - "review" "代码审查" "代码检查" "review 代码" "/eo-review"
-  - implement + test 完成后对某个 change 的代码做最终审查
-  - 任何关于代码质量、bug 排查、架构合规检查的请求
-
-  NOT FOR:
-  - 审查 spec 本身的业务合理性 → `/eo-spec-review`
-  - 审查 change 方案 / Delta 合规性（代码还没写）→ `/eo-change-review`
+  对已实施的代码做审查，产出 P0/P1/P2 分级报告（前提：代码已实现）。触发：review / 代码审查 / /eo-review。
+  NOT FOR: spec 审查（/eo-spec-review）、change 方案审查（/eo-change-review，代码还没写时用）。
 ---
 
 # eo-review — 代码审查
@@ -34,13 +26,11 @@ description: |
 
 ## 模板发现
 
-启动时检查 `eo-doc/templates/`：
-- 若 `eo-doc/templates/project-profile.md` 存在 → 读取，了解项目类型和层级结构
-- 若 `eo-doc/templates/plan-layers.md` 存在 → 读取，作为维度 6 "跨层一致性"的审查依据（知道层定义和层间边界，才能判断跨层接口是否匹配）
-- 若上述文件不存在 → 跳过维度 6（现有默认行为）
+启动时读 `eo-doc/templates/project-profile.md` 和 `plan-layers.md`（存在则启用维度 6「跨层一致性」，否则跳过）。
 
 ## 前置条件
 
+- **必须能找到 `.eo-project.json`**。找不到 → 报错退出，提示运行 `/eo-project-init`。`eo-doc/` 路径通过 `doc_root` 字段解析
 - 模块活文档 `eo-doc/dev/<module-name>/spec.md` 和 change 文档 `eo-doc/dev/<module-name>/changes/<change-id>/change.md` 必须已存在
 - **相关代码已实现**（即 `/eo-implement` 已经跑过至少一轮，change.md 的 TODO 至少部分被勾选）
 - change.md `status` 应为 `implementing` 或 `done`（不应是 `draft` / `approved`）
@@ -126,78 +116,9 @@ description: |
 
 按照下方固定模板撰写，写入 `eo-doc/dev/<module-name>/changes/<change-id>/review.md`。
 
-### 第五步：更新索引
-
-更新 `eo-doc/dev/INDEX.md`。
-
 ## 固定模板
 
-```markdown
----
-title: <功能名称>代码审查报告
-module: <module-name>
-change_id: <NNN-change-id>
-tags: [标签1, 标签2]
-created: YYYY-MM-DD
-updated: YYYY-MM-DD
-status: active
-summary: >
-  一句话概述审查结论。
----
-
-# <功能名称> 代码审查报告
-
-> 模块 spec：[spec.md](../../spec.md)
-> 关联 Change：[change.md](change.md)
-> 审查日期：YYYY-MM-DD
-> 审查范围：列出审查涉及的文件或模块
-
-## 审查总结
-
-一段话概述代码整体质量，是否达到可合入标准。
-
-## P0 - 必须修复（阻塞性问题）
-
-影响核心功能、数据安全或导致崩溃的问题。
-
-### [P0-1] <问题标题>
-- **类型**：Bug / 安全漏洞 / 逻辑错误 / 功能缺失
-- **位置**：`文件路径:行号`
-- **描述**：问题的具体描述
-- **影响**：该问题会导致什么后果
-- **建议**：修复方向（不写代码）
-
-## P1 - 建议修复（重要但不阻塞）
-
-影响代码质量、可维护性或存在潜在风险的问题。
-
-### [P1-1] <问题标题>
-- **类型**：架构问题 / 规范违反 / 潜在 Bug / 性能问题
-- **位置**：`文件路径:行号`
-- **描述**：问题的具体描述
-- **建议**：改进方向
-
-## P2 - 可选优化（锦上添花）
-
-代码风格、命名优化、文档补充等非功能性建议。
-
-### [P2-1] <问题标题>
-- **类型**：命名优化 / 风格建议 / 文档补充
-- **位置**：`文件路径:行号`
-- **描述**：建议内容
-
-## 验收标准覆盖检查
-
-| AC 编号 | 描述 | 状态 |
-|---------|------|------|
-| AC-1 | ... | ✅ 通过 / ❌ 未通过 / ⚠️ 部分通过 |
-
-## TODO 完成度检查
-
-| TODO | 描述 | 状态 |
-|------|------|------|
-| TODO-S1 | ... | ✅ 完成 / ❌ 未完成 / ⚠️ 部分完成 |
-```
+见 [references/review-template.md](references/review-template.md)。
 
 ## 关键约束
 

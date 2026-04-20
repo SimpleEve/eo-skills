@@ -1,77 +1,67 @@
 ---
 name: eo-project-update
-description: "更新项目进度、阶段状态、记录决策，同步刷新项目看板。全局 skill，可在代码仓库中通过 .eo-project.json 定位项目目录。当用户说'更新项目'、'同步进展'、'记录决策'、'阶段完成'时触发。"
+description: "更新项目进度、阶段状态、决策记录，并同步项目看板（若配置）。通过 .eo-project.json 定位项目。触发：更新项目 / 同步进展 / 记录决策 / 阶段完成 / /eo-project-update。"
 ---
 
 # eo-project-update
 
 ## 功能
 
-更新项目的进度、阶段状态、决策记录，并同步刷新 `00-Wiki/项目看板.md`。支持从代码仓库远程更新。
+更新项目的进度、阶段状态、决策记录，同步刷新项目日志；若 `.eo-project.json` 配了 `kanban_path`，同步看板。
+
+配置与目录约定见 [eo-project-init/references/config.md](../eo-project-init/references/config.md)。
+
+## 前置
+
+**必须**能找到 `.eo-project.json`（cwd 或父目录）。找不到时报错退出，提示运行 `/eo-project-init`。
 
 ## 输入
 
-用户提供以下之一或组合：
 - **进度更新**："D6 完成了"、"任务 X 搞定"
 - **阶段切换**："phase 1 完成，进入 phase 2"
 - **决策记录**："决定用 Vue 而不是 React"
 - **阻塞标记**："被 XX 卡住了"
-- **项目名称**（可选）：多项目时指定哪个
+- **自由更新**：其它情况追加 log
 
-## 定位项目目录
+## 路径解析
 
-### 场景 A：在 EveOS 目录内
+从 `.eo-project.json` 读取：
+- `project_root` — 项目管理侧绝对路径，所有项目侧文件均在此目录下
+- `kanban_path` — 看板绝对路径；为 `null` 时全程不碰看板
 
-直接访问 `30-我的项目/<项目名>/`。
-
-### 场景 B：在代码仓库内
-
-读取当前目录或父目录的 `.eo-project.json`：
-
-```json
-{
-  "project_name": "项目名",
-  "project_vault": "/absolute/path/to/EveOS/30-我的项目/项目名"
-}
-```
-
-如果找不到 `.eo-project.json`，提示用户：
-1. 指定项目名（如果能确认是哪个项目）
-2. 或运行 `eo-project-init` 生成配置
+所有 skill 内部操作一律通过这两个字段定位，不硬编码。
 
 ## 执行步骤
 
 ### 1. 解析更新类型
 
-从用户输入判断：
-
 | 类型 | 信号词 | 操作 |
 |------|--------|------|
 | 任务完成 | "完成"、"搞定"、"done" | 勾选 phase 中的任务 |
 | 阶段切换 | "阶段完成"、"进入下一阶段" | 切换 phase status |
-| 决策记录 | "决定"、"选择"、"决策" | 创建 decisions/ 文件 |
-| 阻塞标记 | "卡住"、"blocked"、"阻塞" | 更新看板阻塞字段 |
-| 自由更新 | 其他 | 追加 log，更新看板 |
+| 决策记录 | "决定"、"选择"、"决策" | 创建 `decisions/` 文件（目录不存在时 lazy 建） |
+| 阻塞标记 | "卡住"、"blocked"、"阻塞" | 更新看板阻塞字段（若有看板） |
+| 自由更新 | 其他 | 追加 log |
 
 ### 2. 执行对应操作
 
 #### 任务完成
 
-1. 读取当前活跃 phase 文件（`phases/phase-N-*.md`，`status: active`）
-2. 找到匹配的 `- [ ]` 任务，改为 `- [x]`
-3. 更新 phase frontmatter 的 `updated` 日期
+1. 读取当前活跃 phase（`<project_root>/phases/phase-N-*.md` 中 `status: active`）
+2. 找到匹配的 `- [ ]` 改为 `- [x]`
+3. 更新 phase frontmatter 的 `updated`
 
 #### 阶段切换
 
-1. 将当前 phase 的 `status` 改为 `done`
-2. 将下一个 phase 的 `status` 改为 `active`
-3. 更新 `roadmap.md` 阶段概览表中的状态标记
-4. 如果全部阶段完成，提示用户是否要归档（`eo-project-archive`）
+1. 当前 phase `status: done`
+2. 下一个 phase `status: active`
+3. 更新 `<project_root>/roadmap.md` 阶段概览
+4. 若全部完成，提示是否归档
 
 #### 决策记录
 
-1. 确定决策编号：读取 `decisions/` 目录，取最大编号 +1
-2. 创建文件 `decisions/{NNN}-{决策简述}.md`：
+1. `<project_root>/decisions/` 若不存在则创建
+2. 读取最大编号 +1，创建 `decisions/{NNN}-{决策简述}.md`：
 
 ```markdown
 ---
@@ -101,24 +91,24 @@ status: accepted
 {预期影响}
 ```
 
-3. 从用户输入和当前上下文提炼填充（不强制用户提供所有字段，能推断的就推断，推断不了的标注"待补充"）
+3. 从用户输入提炼填充，推断不了的标 "待补充"
 
 #### 阻塞标记
 
-记录阻塞原因，更新看板。
+记录阻塞原因，更新看板（若有）。
 
 ### 3. 追加项目日志
 
-在项目的 `log.md` 顶部（标题下方）追加：
+在 `<project_root>/log.md` 顶部追加：
 
 ```markdown
 ## [YYYY-MM-DD] {update_type} | {简述}
 - {具体变更}
 ```
 
-### 4. 刷新项目看板
+### 4. 刷新项目看板（仅 `kanban_path` 非空）
 
-读取 `00-Wiki/项目看板.md`，更新对应项目条目：
+读取 `kanban_path`，更新对应项目条目：
 
 ```markdown
 ### 项目名
@@ -131,28 +121,31 @@ status: accepted
 ```
 
 字段更新规则：
-- **当前阶段**：读活跃 phase 的完成比例（`[x]` 数 / 总数）
-- **下一步**：活跃 phase 中第一个 `- [ ]` 任务
-- **决策记录**：链接最近一条决策（如有多条用 `等 N 条` 标注）
-- **经验教训**：读 `30-我的项目/_lessons/` 中属于该项目的条数
+- **当前阶段**：活跃 phase 完成比例（`[x]` 数 / 总数）
+- **下一步**：活跃 phase 第一个 `- [ ]`
+- **决策记录**：最近一条（多条用 `等 N 条`）
+- **经验教训**：读 `<project_root>/lessons/` 中条目数
+
+`kanban_path: null` 时跳过本步。
 
 ### 5. 输出摘要
 
 向用户展示：
 - 更新了什么
-- 当前项目状态快照（阶段 + 进度 + 下一步）
+- 当前项目状态（阶段 + 进度 + 下一步）
 
 ## 输出
 
-- Phase 文件更新：`phases/phase-N-*.md`
-- 决策文件：`decisions/NNN-*.md`（如有）
-- 项目日志：`log.md`
-- 看板刷新：`00-Wiki/项目看板.md`
+- Phase 文件更新：`<project_root>/phases/phase-N-*.md`
+- 决策文件（按需）：`<project_root>/decisions/NNN-*.md`
+- 项目日志：`<project_root>/log.md`
+- 看板刷新（可选）：`kanban_path` 指向文件
 
 ## 约束
 
 - 不修改 `roadmap.md` 的目标和阶段划分（只更新状态标记）
-- 决策记录一旦 `accepted` 不可修改内容，只能新建覆盖决策
-- 所有链接使用最短路径 `[[文件名]]`
-- 在代码仓库侧操作时，必须通过 `.eo-project.json` 定位，不猜路径
-- 如果 `project_vault` 路径不可达，报错并提示检查配置
+- 决策记录一旦 `accepted` 不可修改内容，只能新建覆盖
+- 所有路径通过 `.eo-project.json` 解析，不硬编码
+- `project_root` 不可达 → 报错提示检查配置
+- `kanban_path: null` 时全程不碰看板
+- lazy 创建 `decisions/`（本 skill 首次写决策时建）

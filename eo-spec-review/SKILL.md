@@ -1,14 +1,8 @@
 ---
 name: eo-spec-review
 description: |
-  模块 spec 审查技能。对模块 spec.md 做系统性质量审查，把牢需求层基线质量。
-
-  USE FOR:
-  - "审查 spec" "review spec" "spec 审查" "检查需求" "/eo-spec-review"
-  - **必须**：模块初始化阶段由 /eo-module-init 触发一次
-  - **可选**：archive 后 Delta 含较多 MODIFIED/REMOVED 时，验证新 spec 基线仍然自洽
-  - **可选**：spec 发生结构性 refactor（大规模章节重写）后
-  - 不审 change / 不审代码（那是 /eo-change-review / /eo-review 的职责）
+  对模块 spec.md 做系统性质量审查。必需场景：module-init 阶段（由 /eo-module-init 触发一次）。可选场景：archive 后含大量 MODIFIED/REMOVED 时复检。触发：审查 spec / review spec / 检查需求 / /eo-spec-review。
+  NOT FOR: 审代码（/eo-review）或 change 方案（/eo-change-review）。
 ---
 
 # eo-spec-review — 模块 spec 审查
@@ -37,6 +31,7 @@ description: |
 
 ## 前置条件
 
+- **必须能找到 `.eo-project.json`**。找不到 → 报错退出，提示运行 `/eo-project-init`。`eo-doc/` 路径通过 `doc_root` 字段解析
 - 对应模块的 `eo-doc/dev/<module-name>/spec.md` 必须已存在
 - 如果 spec 不存在，提示用户先执行 `/eo-module-init <module-name>`（或独立 `/eo-spec`）
 

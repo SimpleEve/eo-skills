@@ -1,183 +1,129 @@
 # eo-skills
 
-个人维护的 Claude Code / Codex skill 集合。本仓库按**用途分类**管理多个 eo- 前缀的 skill，每类独立演化、互不耦合。
+一套面向 **Claude Code / Codex** 的开发工作流 skill 集合。围绕"模块活文档 + change Delta"机制，把从模块设计、方案、实施、测试、审查到归档的全流程拆成可独立调用的 skill，并支持跨 agent（Claude ↔ Codex）协作。
 
-## 分类总览
-
-| 分类 | 用途 | 代表 skill |
-|------|------|-----------|
-| **开发工作流**（Development Workflow） | 驱动"模块活文档 + change Delta"的端到端开发流程 | `eo-module-init` / `eo-change` / `eo-change-review` / `eo-implement` / `eo-test` / `eo-review` / `eo-archive` / `eo-workflow` |
-| **构思与选品**（Ideation） | 帮助用户从模糊想法收敛到可落地的方向 | `eo-brainstorming` / `eo-miniapp-ideation` |
-| **项目管理**（Project Ops） | 项目看板、阶段、经验教训维护 | `eo-project-init` / `eo-project-update` / `eo-project-lesson` |
-| **文档体系**（Docs） | 项目 `eo-doc/` 的统一维护入口 | `eo-doc-manager` |
-
-> 本 README 重点讲 **开发工作流**。其它分类各自在自己的 skill 目录里说明，本页仅索引。
+> 想直接看每个 skill 的详细用法、典型流程、设计权衡？请看 [docs/GUIDE.md](docs/GUIDE.md)。
 
 ---
 
-## 🛠 开发工作流（Development Workflow）
+## 依赖
 
-一套基于 **OpenSpec 风格 Delta 机制**的开发流水线：**模块（module）是一等公民**，每个模块都有一份活文档 `spec.md`；每次业务变更以 `change.md` 的形式独立归档，归档时由 `eo-archive` 把 change 的 Delta 机械合并回 spec。
+| 依赖 | 用途 | 安装 |
+|------|------|------|
+| [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) | skill 运行时 | 官方 CLI |
+| `tmux` | 跨 agent 协作底座（`eo-flow` 必需） | `brew install tmux` |
+| [smux](https://github.com/ShawnPana/smux) | tmux pane 间通信桥（`tmux-bridge`） | 见上游仓库 README |
 
-### 设计理念
-
-1. **模块是一等公民** — 所有开发产物都归属到 `eo-doc/dev/<module-name>/` 下
-2. **spec 是活文档** — 不重写，只增量演化（ADDED / MODIFIED / REMOVED）
-3. **change = proposal + plan** — 一份文档同时承载需求澄清、技术方案、TODO 拆解
-4. **fix ≠ change** — bug 修复是 `eo-implement` 的内嵌职责，不开新 change、不产生 Delta
-5. **change 无独立 review** — 作者自澄清即可发起；实施后的 `/eo-review` 是唯一正式审查
-
-### 产物目录结构
-
-```
-eo-doc/dev/
-└── <module-name>/              ← 一个业务模块 = 一个目录
-    ├── spec.md                 ← 活文档：模块当前能力快照（工程视角）
-    ├── spec-review.md          ← 仅模块初始化时一次性审查（可选）
-    └── changes/
-        ├── INDEX.md            ← 模块内 change 时间线
-        └── <NNN-change-id>/    ← 数字前缀 + kebab-case（无 fix- 前缀）
-            ├── change.md       ← Spec Delta + 技术方案 + TODO + AC
-            ├── implement.md    ← 偏差记录（可选）
-            ├── test.md         ← 测试报告
-            └── review.md       ← 代码审查结论
-```
-
-> 玩法层业务文档仍放在 `eo-doc/doc/<module>.md`，`spec.md` 以薄引用方式指向它；`spec.md` 只承载工程视角（多层协作边界、跨模块依赖、change 时间线）。
-
-### Skill 职责速查
-
-| Skill | 触发时机 | 产出 | 可选 |
-|-------|---------|------|------|
-| `eo-module-init` | 新模块首次落地 | `spec.md` + `spec-review.md`（一次性） | — |
-| `eo-spec` | 模块内部：撰写 spec | 被 `eo-module-init` 调用 | — |
-| `eo-spec-review` | 模块初始化时**必须**；archive 后 Delta 大改时**可选** | `spec-review.md` | 复检可选 |
-| `eo-change` | 已有模块的业务变更 | `changes/<NNN-xxx>/change.md` | — |
-| `eo-change-review` | change draft 完成后，implement 前方案审查 | `change-review.md` | **✅ 可选** |
-| `eo-implement` | 按 change.md TODO 实施（含 bug 修复循环） | 代码 + 可选 `implement.md` | — |
-| `eo-test` | 运行测试 / 场景验证 | `test.md` | — |
-| `eo-review` | 实施后的**代码**审查 | `review.md` | — |
-| `eo-archive` | 代码审查通过后归档 | Delta 合并回 `spec.md` + 更新 INDEX | — |
-| `eo-workflow` | 多 pane tmux 编排 | 自动派发 / 状态流转 | — |
-
-### 三种 Review 的边界
-
-| Skill | 审查对象 | 问的核心问题 | 强制 / 可选 |
-|-------|---------|-------------|------------|
-| `/eo-spec-review` | 模块 `spec.md`（活文档基线） | **需求**对不对？业务自洽吗？ | module-init 时强制；后续可选 |
-| `/eo-change-review` | 某个 change 的 `change.md` | **方案**对不对？Delta 和实施方案一致吗？ | 全程可选（高风险建议走） |
-| `/eo-review` | change 实施后的代码 | **代码**对不对？实现 vs AC？ | 每个 change 强制 |
-
-关注点、上下文、回退动作完全不同，**不要混用**。
-
-### 典型流程
-
-```
-新模块：    /eo-module-init       →  spec.md（含 spec-review 一次性）
-            │                         status: confirmed
-            │                         （此时 spec 已就绪，code 未实现）
-            ▼
-首批实现：  /eo-change (bootstrap)→  changes/NNN-xxx/change.md
-            │                         §3 写"实现范围"，认领 spec 章节
-            │                         （可拆多个 bootstrap 各自认领一部分）
-            │
-后续演化：  /eo-change (feature/  →  changes/NNN-xxx/change.md
-            enhance/refactor)        §3 写 Delta（ADDED/MODIFIED/REMOVED）
-            │
-            ▼  （可选）
-方案审查：  /eo-change-review     →  change-review.md
-            │                         P0/P1 → 回 eo-change 修
-            ▼
-approve：  （用户改 status: approved）
-            │
-            ▼
-实施：      /eo-implement         →  代码 + 勾选 TODO
-            │                         （bug 修复循环在此完成，不开新 change）
-            ▼
-测试：      /eo-test              →  test.md
-            │
-            ▼  （失败 → 回 implement）
-代码审查：  /eo-review            →  review.md
-            │                         P0/P1 → 回 implement 修
-            ▼
-归档：      /eo-archive           →  bootstrap：仅元信息更新（spec 不动）
-            │                         其他类型：Delta 合并回 spec.md
-            │                         status: archived
-            ▼  （可选）
-spec 复检：/eo-spec-review        →  仅 Delta 模式触发：章节多 / MODIFIED-REMOVED 多
-                                     bootstrap 归档不需要复检
-```
-
-**实施期 bug：** 留在 `/eo-implement` 内循环修，不走归档、不开新 change。
-
-**归档后发现缺陷：**
-- "实现不符合 spec" → 继续走 `/eo-implement` 补丁式实施
-- "spec 本身要改" → 开新的 `enhance` 类型 change
-
-### 关键约束
-
-| 约束 | 说明 |
-|------|------|
-| `change-id` 命名 | `NNN-kebab-name`（3 位数字前缀，按模块内递增）；**拒绝 `fix-` 前缀** |
-| `change_type` 枚举 | `bootstrap` / `feature` / `enhance` / `refactor`（**无 `fix`**） |
-| §3 内容由 type 决定 | `bootstrap` 写"实现范围"（认领 spec 章节，不动 spec）；其余三类写 Delta（ADDED/MODIFIED/REMOVED） |
-| 单次聚焦 | 一个 change 只做一件事；混入多个改动请拆分 |
-| 状态流转 | `draft → approved → implementing → done → archived` |
-| spec 只由 archive 修改 | change 期间不直接改 `spec.md`；bootstrap 归档也不动 spec 正文 |
-| 跨模块 | 一个 change 只能归一个模块；跨模块需求拆多个 change，用 `depends_on` 串联 |
-
-### `/eo-workflow` 多 Agent 编排
-
-面向 tmux 多窗格自动化：
-
-```
-/eo-workflow <phase> <module-name> [change-id] [loop-interval] [--with-review]
-```
-
-| Phase | 所需 pane | 行为 |
-|-------|-----------|------|
-| `module-init` | spec, review | 用户编写 spec → 自动派发 spec-review → P0/P1 则暂停待修 |
-| `change` | change（默认）或 change + review（`--with-review`） | 用户与 `/eo-change` 交互澄清；启用 `--with-review` 时 draft 完成后自动派发 `/eo-change-review` |
-| `implement` | implement, test, review | 全自动 implement→test→review 循环，失败回 implement 修复 |
-| `archive` | （无） | 主 pane 直接执行 `/eo-archive` |
-| `full` | 全部 | 上述阶段按顺序串联；`--with-review` 同样作用于 change 子阶段 |
-
-`--with-review` 开关：在 `change` / `full` phase 插入 change-review 子阶段，让 change draft 完成后先过一轮方案审查再进 implement。默认关闭。
-
-详情见 `eo-workflow/SKILL.md`。
+> `eo-flow` 依赖 smux 提供的 `tmux-bridge` CLI 与另一 pane 里的 codex agent 通信。如果你只用单 agent 流（不跨 pane handoff），可以不装 tmux/smux。
 
 ---
 
-## 📚 其它分类（索引）
+## 安装
 
-以下 skill 各自独立演化，不属于开发流水线：
+```bash
+# 1. clone 本仓库到任意位置
+git clone https://github.com/SimpleEve/eo-skills.git ~/code/eo-skills
 
-- **`eo-brainstorming`** — 发散 / 对抗 / 拆解 / 方向决策
-- **`eo-miniapp-ideation`** — 微信小程序需求挖掘与 MVP 构思
-- **`eo-project-init` / `eo-project-update` / `eo-project-lesson`** — 项目看板与阶段管理（基于 `.eo-project.json` 关联 vault）
-- **`eo-doc-manager`** — `eo-doc/` 文档体系的统一维护入口
+# 2a. 软链到 Claude Code skill 目录
+mkdir -p ~/.claude/skills
+for d in ~/code/eo-skills/eo-*; do
+  ln -sfn "$d" ~/.claude/skills/$(basename "$d")
+done
+
+# 2b. 软链到 Codex skill 目录（如果你也用 codex，eo-flow 跨 agent 必装）
+mkdir -p ~/.agents/skills
+for d in ~/code/eo-skills/eo-*; do
+  ln -sfn "$d" ~/.agents/skills/$(basename "$d")
+done
+```
+
+软链而非复制：本仓库更新后所有 skill 立刻生效。
+
+> **关于 `eo-flow` 的对端 agent**：当前实现**写死调用 codex**（在另一个 tmux pane 里跑 codex CLI）。如果你想换成 Claude Code 作为对端，需要自行改 `eo-flow/SKILL.md` 里的派发指令。
 
 ---
 
-## 安装与使用
+## 第一次使用
 
-所有 skill 遵循 Claude Code skill 规范：
-
-```
-<skill-name>/
-└── SKILL.md    ← frontmatter 声明 name / description，正文为执行说明
-```
-
-全局安装位置：`~/.claude/skills/<skill-name>/`（也可通过软链到本仓库管理）。
-
-在 Claude Code 中通过 `/<skill-name>` 触发，例如：
+进入任意项目目录，在 Claude Code 里跑：
 
 ```
-/eo-change           # 发起一次模块变更
-/eo-implement <change-path>
-/eo-workflow implement my-module 001-add-queue
+/eo-project-init
 ```
+
+它会生成 `.eo-project.json`（项目级配置）+ 双侧最小骨架（代码侧 `eo-doc/` + 项目管理侧）。**所有其它 eo-* skill 都依赖它**，没跑过会直接报错。
+
+---
+
+## 流程一图流
+
+```mermaid
+flowchart TD
+    Init["/eo-project-init<br/>(必跑一次)"]:::entry --> ModInit["/eo-module-init<br/>新模块 spec.md"]
+    ModInit --> Change["/eo-change<br/>change.md (Delta + TODO)"]
+    Change -.可选.-> CR["/eo-change-review<br/>方案审查"]
+    CR -.P0/P1.-> Change
+    Change --> Imp["/eo-implement<br/>写代码 + 勾 TODO"]
+    Imp --> Test["/eo-test<br/>test.md"]
+    Test -.失败.-> Imp
+    Test --> Rev["/eo-review<br/>review.md"]
+    Rev -.P0/P1.-> Imp
+    Rev --> Arch["/eo-archive<br/>Delta 合并回 spec"]
+
+    Imp -.甩给 codex pane.-> Flow["/eo-flow &lt;action&gt;<br/>(需 tmux + smux)"]
+    Test -.同上.-> Flow
+    Rev -.同上.-> Flow
+
+    Init --> Doc["/eo-doc-manager<br/>维护 eo-doc/"]
+    Init --> PU["/eo-project-update<br/>项目进度 / 决策"]
+    Init --> PL["/eo-project-lesson<br/>项目经验"]
+    Init --> Mini["/eo-miniapp-ideation<br/>(可选)"]
+
+    Brain["/eo-brainstorming 🚧"]:::wip
+    Wf["/eo-workflow 🚧"]:::wip
+    Init -.-> Brain
+    Flow -.-> Wf
+
+    classDef entry fill:#fef3c7,stroke:#f59e0b,stroke-width:2px
+    classDef wip stroke-dasharray: 5 5,opacity:0.55
+```
+
+> 🚧 = 实验中，未稳定，**暂不推荐使用**。`eo-brainstorming` 与 `eo-workflow` 仍在调试，正式分发前请勿依赖。
+
+---
+
+## 我该用哪个？
+
+| 场景 | 用 | 备注 |
+|------|---|------|
+| 第一次在项目里用 eo-skills | `/eo-project-init` | **必跑** |
+| 新建一个模块 | `/eo-module-init` | 自带一次性 spec-review |
+| 已有模块发起业务变更 | `/eo-change` | 产出 `change.md` |
+| 按 change 写代码 | `/eo-implement` | 含 bug 修复循环 |
+| 跑测试 / 写测试报告 | `/eo-test` | — |
+| 实施后代码审查 | `/eo-review` | 强制，每个 change 都要 |
+| 审查通过后归档 | `/eo-archive` | Delta 自动合回 spec |
+| 把一步甩给另一个 pane 的 codex | `/eo-flow <action>` | 需 tmux + smux |
+| 维护 `eo-doc/` 文档体系 | `/eo-doc-manager` | sync / re-sync |
+| 项目进度 / 决策 / 经验 | `/eo-project-update` `/eo-project-lesson` | 项目管理侧 |
+| 微信小程序构思 | `/eo-miniapp-ideation` | 可选 |
+
+不在表里的 skill（`eo-spec` / `eo-spec-review` / `eo-change-review`）是被上面这些 skill 内部触发或作为可选增强，详见 [GUIDE](docs/GUIDE.md)。
+
+---
+
+## 三种 review 别混用
+
+| Skill | 审什么 | 核心问题 | 强制？ |
+|-------|-------|---------|-------|
+| `/eo-spec-review` | 模块 `spec.md` | **需求**对吗？业务自洽？ | module-init 时强制 |
+| `/eo-change-review` | 某个 change 的方案 | **方案**对吗？Delta 合理？ | 可选（高风险建议走） |
+| `/eo-review` | change 实施后的代码 | **代码**对吗？符合 AC？ | 每个 change 强制 |
+
+详细边界见 [GUIDE](docs/GUIDE.md#三种-review-的边界)。
+
+---
 
 ## License
 
-See [LICENSE](LICENSE).
+[MIT](LICENSE)

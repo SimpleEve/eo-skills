@@ -1,12 +1,6 @@
 ---
 name: eo-implement
-description: |
-  代码实现技能。根据 change.md 的"实施方案"执行代码实现；也负责 change 生命周期内的所有 bug 修复。
-
-  USE FOR:
-  - "实现" "写代码" "开发" "implement" "fix" "修 bug" "/eo-implement"
-  - 按 change 文档的 TODO 落地代码
-  - 根据 test.md / review.md 的反馈修复实施缺陷（**fix 是 implement 的职责，不是新 change**）
+description: 根据 change.md 的 TODO 落地代码；也负责 change 生命周期内所有 bug 修复（fix 是 implement 的职责，不开新 change）。触发：实现 / 写代码 / implement / fix / 修 bug / /eo-implement。
 ---
 
 # eo-implement — 代码实现
@@ -22,13 +16,11 @@ description: |
 
 ## 模板发现
 
-启动时检查 `eo-doc/templates/`：
-- 若 `project-profile.md` 存在 → 读取
-- 若 `implement-layers.md` 存在 → 启用分层执行模式（层切换检查、各层约束、执行顺序）
-- 若无 → 全量执行所有 TODO
+启动时读 `eo-doc/templates/project-profile.md` 和 `implement-layers.md`（存在则启用分层执行，否则全量执行）。
 
 ## 前置条件
 
+- **必须能找到 `.eo-project.json`**。找不到 → 报错退出，提示运行 `/eo-project-init`。`eo-doc/` 路径通过 `doc_root` 字段解析
 - 目标 `eo-doc/dev/<module-name>/changes/<change-id>/change.md` 存在且 `status: approved` 或 `implementing`
 - 对应模块的 `eo-doc/dev/<module-name>/spec.md` 可访问（作为基线参考）
 - 若 change 不存在 → 提示用户先执行 `/eo-change`
@@ -99,51 +91,7 @@ description: |
 
 ## 偏差记录模板
 
-仅在出现偏差时创建 `changes/<change-id>/implement.md`：
-
-```markdown
----
-title: <change-id> 实施偏差记录
-module: <module-name>
-change_id: <change-id>
-tags: [偏差]
-created: YYYY-MM-DD
-updated: YYYY-MM-DD
-status: active
-summary: >
-  记录实施过程中偏离 change 方案的决策。
----
-
-# <change-id> 实施偏差记录
-
-> 关联 change：[change.md](change.md)
-
-## 偏差项
-
-### [D-1] <偏差标题>
-- **相关 TODO**：TODO-XX
-- **原计划**：change 中的描述
-- **实际做法**：实际采取的方案
-- **原因**：为什么偏离
-- **影响**：对其他 TODO 或后续工作的影响
-```
-
-## 编码规范
-
-### 架构遵循
-- **核心逻辑与表现层分离**：领域逻辑不应直接依赖 UI、CLI、Editor 扩展或其他表现层实现
-- **通过明确边界解耦**：状态变化优先通过事件、消息、接口、回调或项目既有机制传递
-- **统一扩展点**：外部系统、第三方工具、平台接口或引擎能力接入应遵循统一抽象
-
-### 代码质量
-- 遵循项目已有的命名规范和代码风格
-- 类型系统尽量严格，避免不必要的弱类型绕过
-- 错误处理完整，不吞异常
-- 对外暴露的公共 API 补充必要注释或文档说明
-
-### 文件组织
-- 新文件放置在 change 中指定的路径
-- 如果 change 未指定，遵循项目既有目录组织惯例
+见 [references/implement-deviation-template.md](references/implement-deviation-template.md)。
 
 ## 关键约束
 
