@@ -79,6 +79,8 @@ flowchart TD
     Init --> PL["/eo-project-lesson<br/>项目经验"]
     Init --> Mini["/eo-miniapp-ideation<br/>(可选)"]
 
+    Imp -.clear 前快照.-> Hand["/eo-handoff<br/>tmp/&lt;topic&gt;-handoff.md"]:::cross
+
     Brain["/eo-brainstorming 🚧"]:::wip
     Wf["/eo-workflow 🚧"]:::wip
     Init -.-> Brain
@@ -86,9 +88,12 @@ flowchart TD
 
     classDef entry fill:#fef3c7,stroke:#f59e0b,stroke-width:2px
     classDef wip stroke-dasharray: 5 5,opacity:0.55
+    classDef cross fill:#dbeafe,stroke:#3b82f6,stroke-dasharray: 3 3
 ```
 
 > 🚧 = 实验中，未稳定，**暂不推荐使用**。`eo-brainstorming` 与 `eo-workflow` 仍在调试，正式分发前请勿依赖。
+>
+> `/eo-handoff` 横切整个流程：clear 前在**任意节点**都可触发，把当前状态写到 `tmp/<topic>-handoff.md` 供下个会话载入。图中仅以 implement 阶段示意。
 
 ---
 
@@ -104,6 +109,7 @@ flowchart TD
 | 实施后代码审查 | `/eo-review` | 强制，每个 change 都要 |
 | 审查通过后归档 | `/eo-archive` | Delta 自动合回 spec |
 | 把一步甩给另一个 pane 的 codex | `/eo-flow <action>` | 需 tmux + smux |
+| 即将 `/clear` 但要保留进度 | `/eo-handoff` | 写到 `tmp/<topic>-handoff.md`，下个会话载入即续 |
 | 维护 `eo-doc/` 文档体系 | `/eo-doc-manager` | sync / re-sync |
 | 项目进度 / 决策 / 经验 | `/eo-project-update` `/eo-project-lesson` | 项目管理侧 |
 | 微信小程序构思 | `/eo-miniapp-ideation` | 可选 |
