@@ -29,6 +29,8 @@ description: |
 | `change-review` | `$eo-change-review` | high | `review-$P` |
 | `fix` | `$eo-implement`（附反馈） | high | `impl-$P` |
 
+⚠️ **`fix` 只用于 `review → 代码修订` 这一条路径**。`spec-review` / `change-review` 的修订是文档修订（改 `spec.md` / `change.md`），不派发 codex，本 pane 内联改（见第 4 步分叉）。
+
 `$P` = 项目短名，从 `git rev-parse --show-toplevel` 或 CWD basename 取，超 12 字符截断，且只保留 `[a-zA-Z0-9_-]`（避免特殊字符破坏 tmux-bridge 解析）。多项目挂同 tmux session 时，label 带作用域（`review-rabbit` vs `review-kitten`）自然不冲突。
 
 ## Codex 调用关键事实
@@ -102,9 +104,21 @@ codex 按合约会回 `[tmux-bridge from:... ] done: ...` 到本 pane。**必须
 | test | `test.md` |
 | implement / fix | `git diff` + change.md 的 TODO 勾选 + 可选 `implement.md` |
 
-**分叉判据**：
+**分叉判据**（先按上游 action 选路径，再按问题性质选档位）：
 
-- **自动甩回去修**（发 `/eo-flow fix`）：明确 P0 bug、测试失败、AC 未覆盖、规范违反——客观、有标准答案的。
+**路径选择**（fix 的载体取决于上游 action）：
+
+| 上游 action | 客观修订走哪 | 为什么 |
+|------------|-------------|-------|
+| `review` | 甩 `$eo-implement`（`/eo-flow fix`，异步 codex） | 改代码，量大、需执行环境 |
+| `change-review` | **本 pane 内联改 `change.md`** | 文档修订，量小；且 `$eo-implement` 不消费 `change-review.md` |
+| `spec-review` | **本 pane 内联改 `spec.md`** | 同上；`$eo-spec` 是新建流程，不适合小幅修订 |
+
+内联改之前，先标出有决策空间的条目（命名、抽象粒度、策略选择）给用户确认，纯字面/规范校订直接改。改完告知用户"已内联修订 X 条，另 Y 条待你定"。
+
+**档位选择**（在上游路径之上，决定自动 or 停手）：
+
+- **自动修**（按上面路径走）：明确 P0 bug、测试失败、AC 未覆盖、规范违反——客观、有标准答案的。
 - **暂停问用户**：架构取舍、接口命名、跨模块影响、需要改 spec / change §3、同一问题反复 2 轮没收敛。
 - **通过可合**：零 P0/P1 或仅 P2 → 告知用户进入**对应 action 的下一步**（见下表，**不要无脑建议 `/eo-archive`**）：
 
@@ -141,6 +155,7 @@ codex 按合约会回 `[tmux-bridge from:... ] done: ...` 到本 pane。**必须
 | 回包合约必注入 | 每次派发附言末尾带**三步**回包：`read` → `message` → `keys Enter`。**漏 Enter 就卡在对方输入框**。`CALLBACK` 从 `tmux-bridge id` 取，**不硬编码 `"claude"`** |
 | 合约在 eo-flow 不在 eo-* | 不改 `~/.claude/skills/eo-*/SKILL.md` 加回包逻辑，eo-* 要能脱离 smux 独立跑 |
 | fix 不开新 change | 这是 `$eo-implement` 自己的硬规则 |
+| fix 载体随上游 | `review → fix` 甩 `$eo-implement`（代码）；`spec-review` / `change-review` 的修订**本 pane 内联改**文档，不派 codex。默认行为，别反向派发 |
 | 读产出再决策 | 不光看 tmux 回包字面，必须读 `review.md` / `test.md` |
 | 争议停手 | 架构/接口/跨模块/反复修不过 → 停下问用户 |
 
