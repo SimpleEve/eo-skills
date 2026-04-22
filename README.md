@@ -20,24 +20,43 @@
 
 ## 安装
 
+macOS / Linux:
+
 ```bash
 # 1. clone 本仓库到任意位置
 git clone https://github.com/SimpleEve/eo-skills.git ~/code/eo-skills
 
-# 2a. 软链到 Claude Code skill 目录
-mkdir -p ~/.claude/skills
-for d in ~/code/eo-skills/eo-*; do
-  ln -sfn "$d" ~/.claude/skills/$(basename "$d")
-done
-
-# 2b. 软链到 Codex skill 目录（如果你也用 codex，eo-flow 跨 agent 必装）
-mkdir -p ~/.agents/skills
-for d in ~/code/eo-skills/eo-*; do
-  ln -sfn "$d" ~/.agents/skills/$(basename "$d")
-done
+# 2. 执行安装脚本（默认同时安装到 Claude Code + Codex）
+cd ~/code/eo-skills
+sh install.sh
 ```
 
-软链而非复制：本仓库更新后所有 skill 立刻生效。
+如果你只想装单侧：
+
+```bash
+sh install.sh --claude-only
+sh install.sh --codex-only
+```
+
+Windows:
+
+```bat
+REM 1. clone 本仓库到任意位置
+git clone https://github.com/SimpleEve/eo-skills.git %USERPROFILE%\code\eo-skills
+
+REM 2. 执行安装脚本（默认同时安装到 Claude Code + Codex）
+cd /d %USERPROFILE%\code\eo-skills
+install.bat
+```
+
+如果你只想装单侧：
+
+```bat
+install.bat --claude-only
+install.bat --codex-only
+```
+
+脚本会把当前仓库下所有 `eo-*` 目录逐个链接到对应的 skill 目录；如果目标里已经有同名 skill，会直接跳过，不会覆盖。链接而非复制：本仓库更新后所有 skill 立刻生效。
 
 > **关于 `eo-flow` 的对端 agent**：当前实现**写死调用 codex**（在另一个 tmux pane 里跑 codex CLI）。如果你想换成 Claude Code 作为对端，需要自行改 `eo-flow/SKILL.md` 里的派发指令。
 
