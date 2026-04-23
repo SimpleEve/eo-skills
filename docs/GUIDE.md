@@ -107,6 +107,7 @@ eo-doc/dev/
 | `/eo-change` | 已有模块的业务变更 | `changes/<NNN-xxx>/change.md` | 支持 bootstrap / feature / enhance / refactor |
 | `/eo-change-review` | change draft 完成后、implement 前的方案审查 | `change-review.md` | ✅ 可选 |
 | `/eo-implement` | 按 change.md TODO 实施（含 bug 修复循环） | 代码 + 可选 `implement.md` | — |
+| `/eo-fix` | 发现 bug 但不确定是实现错、方案错还是 spec 错 | 诊断报告 + 下一步建议 | 只诊断，不改文件 |
 | `/eo-test` | 运行测试 / 场景验证 | `test.md` | 失败 → 回 implement |
 | `/eo-review` | 实施后的**代码**审查 | `review.md` | 强制 |
 | `/eo-archive` | 代码审查通过后归档 | Delta 合并回 `spec.md` + 更新 INDEX | bootstrap 仅元信息更新 |

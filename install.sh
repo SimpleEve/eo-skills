@@ -8,24 +8,33 @@ usage() {
   sh install.sh
   sh install.sh --claude-only
   sh install.sh --codex-only
+  sh install.sh --antigravity-only
 
 说明:
   默认同时把当前仓库下所有 eo-* skill 软链到:
-  - ~/.claude/skills
-  - ~/.agents/skills
+  - ~/.claude/skills          (Claude Code)
+  - ~/.agents/skills          (Codex)
+  - ~/.gemini/antigravity/skills  (Antigravity)
 EOF
 }
 
 install_claude=1
 install_codex=1
+install_antigravity=1
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --claude-only)
       install_codex=0
+      install_antigravity=0
       ;;
     --codex-only)
       install_claude=0
+      install_antigravity=0
+      ;;
+    --antigravity-only)
+      install_claude=0
+      install_codex=0
       ;;
     -h|--help)
       usage
@@ -78,6 +87,10 @@ fi
 
 if [ "$install_codex" -eq 1 ]; then
   link_skills "$HOME/.agents/skills" "Codex"
+fi
+
+if [ "$install_antigravity" -eq 1 ]; then
+  link_skills "$HOME/.gemini/antigravity/skills" "Antigravity"
 fi
 
 echo "安装完成。"

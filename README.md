@@ -11,6 +11,7 @@
 | 依赖 | 用途 | 安装 |
 |------|------|------|
 | [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) | skill 运行时 | 官方 CLI |
+| [Antigravity](https://antigravity.dev) | skill 运行时（可选） | 官方 CLI |
 | `tmux` | 跨 agent 协作底座（`eo-flow` 必需） | `brew install tmux` |
 | [smux](https://github.com/ShawnPana/smux) | tmux pane 间通信桥（`tmux-bridge`） | 见上游仓库 README |
 
@@ -26,16 +27,25 @@ macOS / Linux:
 # 1. clone 本仓库到任意位置
 git clone https://github.com/SimpleEve/eo-skills.git ~/code/eo-skills
 
-# 2. 执行安装脚本（默认同时安装到 Claude Code + Codex）
+# 2. 执行安装脚本（默认同时安装到 Claude Code + Codex + Antigravity）
 cd ~/code/eo-skills
 sh install.sh
 ```
 
-如果你只想装单侧：
+脚本会把仓库中所有 `eo-*` 目录**直接软链**到各 agent 的 skills 目录，无中间层：
+
+| Agent | 目标目录 |
+|-------|----------|
+| Claude Code | `~/.claude/skills/` |
+| Codex | `~/.agents/skills/` |
+| Antigravity | `~/.gemini/antigravity/skills/` |
+
+如果你只想装某一侧：
 
 ```bash
 sh install.sh --claude-only
 sh install.sh --codex-only
+sh install.sh --antigravity-only
 ```
 
 Windows:
@@ -44,16 +54,17 @@ Windows:
 REM 1. clone 本仓库到任意位置
 git clone https://github.com/SimpleEve/eo-skills.git %USERPROFILE%\code\eo-skills
 
-REM 2. 执行安装脚本（默认同时安装到 Claude Code + Codex）
+REM 2. 执行安装脚本（默认同时安装到 Claude Code + Codex + Antigravity）
 cd /d %USERPROFILE%\code\eo-skills
 install.bat
 ```
 
-如果你只想装单侧：
+如果你只想装某一侧：
 
 ```bat
 install.bat --claude-only
 install.bat --codex-only
+install.bat --antigravity-only
 ```
 
 脚本会把当前仓库下所有 `eo-*` 目录逐个链接到对应的 skill 目录；如果目标里已经有同名 skill，会直接跳过，不会覆盖。链接而非复制：本仓库更新后所有 skill 立刻生效。
@@ -124,6 +135,7 @@ flowchart TD
 | 新建一个模块 | `/eo-module-init` | 自带一次性 spec-review |
 | 已有模块发起业务变更 | `/eo-change` | 产出 `change.md` |
 | 按 change 写代码 | `/eo-implement` | 含 bug 修复循环 |
+| 发现 bug 但不确定是实现错还是方案错 | `/eo-fix` | 诊断路由：分叉到 implement / change |
 | 跑测试 / 写测试报告 | `/eo-test` | — |
 | 实施后代码审查 | `/eo-review` | 强制，每个 change 都要 |
 | 审查通过后归档 | `/eo-archive` | Delta 自动合回 spec |
@@ -131,6 +143,7 @@ flowchart TD
 | 即将 `/clear` 但要保留进度 | `/eo-handoff` | 写到 `tmp/<topic>-handoff.md`，下个会话载入即续 |
 | 维护 `eo-doc/` 文档体系 | `/eo-doc-manager` | sync / re-sync |
 | 项目进度 / 决策 / 经验 | `/eo-project-update` `/eo-project-lesson` | 项目管理侧 |
+| 加一条 backlog 待办 / 灵感 | `/eo-backlog` | 仅追加到 `backlog.md` |
 | 微信小程序构思 | `/eo-miniapp-ideation` | 可选 |
 
 不在表里的 skill（`eo-spec` / `eo-spec-review` / `eo-change-review`）是被上面这些 skill 内部触发或作为可选增强，详见 [GUIDE](docs/GUIDE.md)。

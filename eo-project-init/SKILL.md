@@ -234,7 +234,7 @@ local 模式**不建软链**。
 
 > 💡 检测到待办事项：「{内容}」。要加入项目 backlog 吗？
 
-用户确认后追加到 `{{project_root}}/backlog.md`。
+用户确认后调用 `/eo-backlog` 追加到 `{{project_root}}/backlog.md`。
 
 ### 决策同步
 
