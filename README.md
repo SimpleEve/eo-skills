@@ -24,6 +24,10 @@
 macOS / Linux:
 
 ```bash
+# 方式一：远程安装（自动 clone/update 到 ~/.eo-skills/repo）
+curl -fsSL https://raw.githubusercontent.com/SimpleEve/eo-skills/main/install.sh | sh
+
+# 方式二：clone 后安装
 # 1. clone 本仓库到任意位置
 git clone https://github.com/SimpleEve/eo-skills.git ~/code/eo-skills
 
