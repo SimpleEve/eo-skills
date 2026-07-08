@@ -66,7 +66,7 @@ description: |
 ### 第四步：报告与速报
 
 1. 按 [references/review-template.md](references/review-template.md) 写入 `eo-doc/changes/<change-id>/review.md`
-2. 无 P0/P1 → 将 change.md `status` 置 `done`
+2. 无 P0/P1 → 将 change.md `status` 置 `done`；联动钩子刷新 stub（[../eo-shared/board-github.md](../eo-shared/board-github.md)，未开启跳过）
 3. **对话速报（硬性——缺速报 = 流程未完成）**：
 
 ```

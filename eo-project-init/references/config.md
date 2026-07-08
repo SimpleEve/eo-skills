@@ -62,7 +62,9 @@ mv ~/.eo-skills.json ~/.eo/config.json
   "mode": "vault",
   "project_root": "/Users/xxx/EveOS/30-我的项目/my-project",
   "doc_root": "eo-doc",
-  "kanban_path": "/Users/xxx/EveOS/00-Wiki/项目看板.md"
+  "kanban_path": "/Users/xxx/EveOS/00-Wiki/项目看板.md",
+  "board": { "enabled": false },
+  "github": { "issue": false, "pr": "never" }
 }
 ```
 
@@ -73,6 +75,12 @@ mv ~/.eo-skills.json ~/.eo/config.json
 | `project_root` | string（绝对路径） | ✅ | **项目管理侧根**。vault 模式=vault 项目目录；local 模式=`<repo>/.eo-project` |
 | `doc_root` | string（相对 repo root） | ✅ | **代码侧根**，默认 `"eo-doc"` |
 | `kanban_path` | string（绝对路径） \| null | ❌ | 看板绝对路径；缺省/`null` = 不维护看板 |
+| `board.enabled` | bool | ❌（默认 `false`） | change 看板 stub 联动开关（vault 模式才有意义）。开启后状态流转时向 `<project_root>/board/` upsert stub 卡片，见 `eo-shared/board-github.md` |
+| `board.stub_dir` | string | ❌（默认 `"board"`） | stub 目录名（相对 `project_root`） |
+| `github.issue` | bool | ❌（默认 `false`） | change ↔ GitHub issue 联动开关 |
+| `github.pr` | `"auto"` \| `"always"` \| `"never"` | ❌（默认 `"never"`） | archive 时的 PR 策略：`auto` = 在非默认分支且有 remote 时自动建 PR |
+
+缺省 `board` / `github` 字段 = 全部关闭（向后兼容 v1 生成的配置）。
 
 **设计约束**：
 - `project_root` 永远是绝对路径。vault 模式不依赖软链——软链只是给用户查看方便，skill 一律走 `project_root`。
@@ -115,7 +123,7 @@ mv ~/.eo-skills.json ~/.eo/config.json
 ```
 eo-doc/
 ├── agent-handbook/   # 必建，代码架构（AI）
-├── dev/              # 必建，spec/change/review 流
+├── changes/          # 必建，change 工件流
 ├── templates/        # 必建（空），eo-* 扩展点
 └── state/            # 按需，系统当前状态描述（sync 时首建）
 ```
@@ -135,6 +143,7 @@ eo-doc/
 ├── decisions/     # 按需，首次记录决策时建
 ├── lessons/       # 按需，首次记录经验时建（**项目级**，替代全局 _lessons/）
 ├── brainstorm/    # 按需，eo-brainstorming 首次产出时建
+├── board/         # 按需，change 看板 stub（board.enabled 时由各流程 skill 维护）
 └── docs/          # 按需，原始 PRD / 设计 / 规划
 ```
 

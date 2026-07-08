@@ -66,6 +66,7 @@ description: |
 2. 按 [references/change-template.md](references/change-template.md) 写入 `eo-doc/changes/<NNN-id>/change.md`（`status: draft`）；已钉决策落 §1，条件节按触发条件取舍
 3. 交付用户确认，按反馈修订
 4. **用户在对话中确认后，skill 自动置 `status: confirmed`**——不要求用户手改 frontmatter
+5. 联动钩子：按 [../eo-shared/board-github.md](../eo-shared/board-github.md) 执行 stub upsert 与 issue 创建（对应开关未开启则跳过）
 
 ### 第八步：更新索引 + 提示后续
 

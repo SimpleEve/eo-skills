@@ -53,9 +53,10 @@ cursor 基于 commit，sync 只能看见已提交内容，因此先结算：
 - 同步范围覆盖第二/三层的提交与期间累积的直改提交，一并吸收
 - 若 sync 中途失败：change 已冻结、cursor 未推进——直接手动重跑 `/eo-doc-manager sync` 续上，不需要回滚归档
 
-### 第五层：收尾速报
+### 第五层：收尾
 
-对话中输出（不写额外文件）：
+1. 联动钩子：按 [../eo-shared/board-github.md](../eo-shared/board-github.md) 执行——stub 置 archived、issue 兜底关闭、PR 创建（按 `github.pr` 策略；对应开关未开启则跳过）
+2. 对话速报（不写额外文件）：
 
 ```
 归档完成：<change-id>

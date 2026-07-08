@@ -58,7 +58,7 @@ description: |
 1. 修改代码，最小变更
 2. **验证**：用户给的复现步骤转成回归验证，跑通；相关 AC（若有）重新核对
 3. **落点**：
-   - 有相关**活跃 change** → 修复计入该 change：勾选涉及的 TODO/AC，commit 带 `[<change-id>]` 前缀
+   - 有相关**活跃 change** → 修复计入该 change：勾选涉及的 TODO/AC，commit 带 `[<change-id>]` 前缀；联动钩子刷新 stub（[../eo-shared/board-github.md](../eo-shared/board-github.md)，未开启跳过）
    - 无活跃 change → 直改落地：commit 带 `fix:` 前缀（见 [../eo-shared/conventions.md](../eo-shared/conventions.md)），由 doc-manager 的下次 sync 兜底归档；顺带报告 cursor 落后量，超过 10 个 commit 建议顺手跑 `/eo-doc-manager sync`
 
 ### 第六步：深挖模式（自动升级）

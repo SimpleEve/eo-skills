@@ -177,6 +177,12 @@ eo-doc/
 - vault 模式 + 用户级 `kanban_path` 有值 → 拼接为绝对路径 `<vault_root>/<kanban_path>`
 - 否则 → `null`
 
+**board / github 段**（联动开关，规范见 [../eo-shared/board-github.md](../eo-shared/board-github.md)）：用 AskUserQuestion 各问一次——
+- `board.enabled`（仅 vault 模式提供此问；推荐开启）：开启则写 `{"enabled": true}` 并**立即做历史同步**——扫描 `eo-doc/changes/` 全部 change，按 board-github.md 的 stub 写法批量 upsert 到 `<project_root>/board/`（幂等，可随时重跑）；同时提示用户按 [references/board-setup.md](references/board-setup.md) 在 Obsidian 配置看板视图（一次性）
+- `github.issue` + `github.pr`（检测到 git remote 指向 GitHub 时才问；pr 推荐 `auto`）
+
+用户跳过 → 写显式关闭值（`false` / `"never"`），后续 skill 不再询问。**后开场景**：对已初始化项目重跑本 skill（更新/修复分支）时同样提供这两问，开启 board 即触发历史同步。
+
 ### 10. 建立软链（vault 模式 + `create_symlink: true`）
 
 Obsidian 侧（vault）是**源**。把整个 vault 项目目录作为一个软链挂进代码侧：

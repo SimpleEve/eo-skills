@@ -18,6 +18,7 @@
 - [会话交接（eo-handoff）](#会话交接eo-handoff)
 - [项目管理 skill](#项目管理-skill)
 - [文档体系（eo-doc-manager）](#文档体系eo-doc-manager)
+- [看板与 GitHub 联动（opt-in）](#看板与-github-联动opt-in)
 - [Skill 安装结构](#skill-安装结构)
 
 ---
@@ -247,6 +248,15 @@ eo-flow 会：
 - `init` — 初始化骨架（一般由 `eo-project-init` 触发，单独跑用于补建缺失目录）
 
 详细维护策略见各 reference 文档：[git-sync](../eo-doc-manager/references/git-sync.md) / [re-sync](../eo-doc-manager/references/re-sync.md) / [maintenance](../eo-doc-manager/references/maintenance.md) / [splitting](../eo-doc-manager/references/splitting.md) / [templates](../eo-doc-manager/references/templates.md)。
+
+---
+
+## 看板与 GitHub 联动（opt-in）
+
+两套联动全部通过 `.eo-project.json` 的 `board` / `github` 段逐项目开启，缺省关闭，机制正文见 `eo-shared/board-github.md`：
+
+- **Obsidian 看板**（vault 模式）：各流程 skill 在 change 状态流转时向 `<project_root>/board/` upsert stub 卡片（change frontmatter 的投影，零双写）；呈现层在 Obsidian 用 Bases + Kanban Bases View 配置一次（指南：`eo-project-init/references/board-setup.md`），支持多项目聚合与泳道。后开开关时由 `/eo-project-init` 历史同步全量重建 stub。
+- **GitHub**：change 层一对一 issue（confirmed 建、编号回写去重、archive 兜底关）；PR 按 `github.pr` 策略（`auto` = 非默认分支自动建，body 含 AC 勾选清单与条件性 `Closes`——AC 全勾才关 issue）。**本地文件是唯一真相源**，严格单向推送，唯一逆向通道是漂移检测告警。
 
 ---
 

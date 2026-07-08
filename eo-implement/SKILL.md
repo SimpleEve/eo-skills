@@ -34,7 +34,7 @@ description: |
 
 2. **首次启动登记**
    - frontmatter 写入 `base_commit: <当前 HEAD>`（已有则不动）
-   - `status: confirmed → implementing`（skill 自动改，不要求用户操作）
+   - `status: confirmed → implementing`（skill 自动改，不要求用户操作）；联动钩子刷新 stub（[../eo-shared/board-github.md](../eo-shared/board-github.md)，未开启跳过）
 
 3. **确认执行范围**
    - 列出各 Batch 及 TODO 数，默认从第一个未完成 Batch 开始；用户可指定只跑某批
@@ -47,6 +47,7 @@ description: |
 5. **批末 checkpoint（STOP and VALIDATE）**
    - 验证该批对应的 AC：按 §2 的「验证」栏逐条执行，通过则勾选 AC
    - 提交本批代码：commit message 带 `[<change-id>]` 前缀（见 [../eo-shared/conventions.md](../eo-shared/conventions.md)；推荐一次 change 一次 commit，分批时一批一 commit）
+   - 联动钩子：刷新看板 stub 进度（[../eo-shared/board-github.md](../eo-shared/board-github.md)，未开启跳过）
    - 汇报：本批完成的 TODO / 勾掉的 AC / 验证结果，询问「继续下一批 / 停」
 
 6. **全部完成**
