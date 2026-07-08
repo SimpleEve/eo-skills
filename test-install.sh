@@ -16,20 +16,70 @@ src=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 usage() {
   cat <<EOF
 用法:
-  sh test-install.sh setup     # 构建试用配置目录（幂等）
-  sh test-install.sh remove    # 删除试用配置目录
+  sh test-install.sh swap      # 【推荐·免登录】全局软链临时指向本仓库(可逆,manifest 记录原状)
+  sh test-install.sh restore   # 还原全局到 swap 之前的状态
+  sh test-install.sh setup     # 【备选】独立配置目录(CLAUDE_CONFIG_DIR,需 /login 一次)
+  sh test-install.sh remove    # 删除独立配置目录
   sh test-install.sh status    # 查看当前状态
 
-试用方式（setup 后，在任意项目目录）:
-  CLAUDE_CONFIG_DIR="$trial" claude
-建议加别名:
-  alias claude-v2='CLAUDE_CONFIG_DIR="$trial" claude'
+swap 模式说明:
+  - 同名 skill 的全局链接改指本仓库;v2 已删除的 v1 skill 链接改名停车(.v1-parked)
+  - 窗口期内所有项目的新会话都是 v2;restore 一条命令秒级还原
 EOF
 }
 
 [ "$#" -ge 1 ] || { usage >&2; exit 1; }
 
 case "$1" in
+  swap)
+    gskills="$HOME/.claude/skills"
+    manifest="$EO_HOME/v2-swap-manifest.txt"
+    if [ -f "$manifest" ]; then echo "已处于 swap 状态 (manifest 存在): $manifest" >&2; exit 1; fi
+    mkdir -p "$EO_HOME"; : > "$manifest"
+    swapped=0; parked=0; added=0
+    # 1) 本仓库有的 skill: 全局链接改指本仓库(记录原 target); 全局没有的直接新增
+    for skill_dir in "$src"/eo-*; do
+      [ -d "$skill_dir" ] || continue
+      name=$(basename "$skill_dir")
+      gpath="$gskills/$name"
+      if [ -L "$gpath" ]; then
+        echo "RELINK $name $(readlink "$gpath")" >> "$manifest"
+        rm "$gpath"; ln -s "$skill_dir" "$gpath"; swapped=$((swapped+1))
+      elif [ ! -e "$gpath" ]; then
+        echo "ADDED $name -" >> "$manifest"
+        ln -s "$skill_dir" "$gpath"; added=$((added+1))
+      else
+        echo "跳过 ${name} (全局是实体目录, 不敢动)" >&2
+      fi
+    done
+    # 2) 全局有、本仓库没有的 eo-* 链接(v1 独有): 改名停车
+    for gpath in "$gskills"/eo-*; do
+      [ -L "$gpath" ] || continue
+      name=$(basename "$gpath")
+      case "$name" in *.v1-parked) continue;; esac
+      if [ ! -d "$src/$name" ]; then
+        echo "PARKED $name $(readlink "$gpath")" >> "$manifest"
+        mv "$gpath" "$gpath.v1-parked"; parked=$((parked+1))
+      fi
+    done
+    echo "swap 完成: 改指 ${swapped} 个 / 新增 ${added} 个 / 停车 ${parked} 个 (v1 独有)"
+    echo "全局现为 v2 → $src ; 还原: sh test-install.sh restore"
+    ;;
+  restore)
+    gskills="$HOME/.claude/skills"
+    manifest="$EO_HOME/v2-swap-manifest.txt"
+    [ -f "$manifest" ] || { echo "无 swap manifest, 无需还原。" >&2; exit 1; }
+    while IFS=" " read -r op name target; do
+      gpath="$gskills/$name"
+      case "$op" in
+        RELINK) rm -f "$gpath"; ln -s "$target" "$gpath";;
+        ADDED)  rm -f "$gpath";;
+        PARKED) rm -f "$gpath"; mv "$gpath.v1-parked" "$gpath" 2>/dev/null || ln -s "$target" "$gpath";;
+      esac
+    done < "$manifest"
+    rm "$manifest"
+    echo "已还原全局 skills 到 swap 之前的状态。"
+    ;;
   setup)
     mkdir -p "$trial/skills"
     linked=0; skipped=0
@@ -70,6 +120,11 @@ PYEOF
     echo "已删除 $trial。全局 ~/.claude 从未被触碰。"
     ;;
   status)
+    if [ -f "$EO_HOME/v2-swap-manifest.txt" ]; then
+      echo "swap 状态: 生效中 (全局 → $src); 还原: sh test-install.sh restore"
+    else
+      echo "swap 状态: 未启用"
+    fi
     if [ -d "$trial/skills" ]; then
       echo "试用配置: $trial"
       echo "skills: $(ls "$trial/skills" | wc -l | tr -d ' ') 个 → 指向 $(readlink "$trial/skills/eo-change" 2>/dev/null | sed 's|/eo-change$||' || echo '?')"
