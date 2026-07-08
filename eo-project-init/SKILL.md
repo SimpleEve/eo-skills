@@ -48,7 +48,7 @@ description: "eo-skills 在当前仓库的总入口：生成 .eo-project.json、
 
 ### 2. 询问运行模式（必须问，不默认）
 
-**不要直接默认到 local**。向用户展示两种模式的区别，让其选择：
+**不要直接默认到 local**。用 AskUserQuestion 呈现两个选项（用户级配置有 `default_mode` 时把它标为 Recommended），选项说明取自下方要点：
 
 ```
 这个项目的"项目管理侧"（roadmap / log / backlog / decisions / lessons 等）放在哪里？
@@ -145,7 +145,7 @@ updated: "{{date}}"
 ```
 eo-doc/
 ├── agent-handbook/INDEX.md   # 骨架
-├── dev/INDEX.md              # 骨架
+├── changes/INDEX.md          # 骨架
 └── templates/                # 空目录
 ```
 
@@ -154,7 +154,7 @@ eo-doc/
 
 额外：
 - 初始化 `eo-doc/.sync-cursor`（当前 HEAD 作为首次基线）
-- 将 `eo-doc/.sync-cursor` 追加到 `.gitignore`
+- 将 `eo-doc/.sync-cursor` 与 `tmp/eo/` 追加到 `.gitignore`（tmp/eo/ 是各 skill 的临时工件命名空间，见 [../eo-shared/conventions.md](../eo-shared/conventions.md)）
 - CLAUDE.md 注入（详见 `eo-doc-manager/references/claude-injection.md`）
 
 **注意**：如果用户本次只想要项目管理侧（例如纯规划项目，没代码），可用 `--skip-code-side` 跳过 §8。此时 `doc_root` 字段仍写入配置，留待将来补建。
@@ -228,31 +228,19 @@ local 模式**不建软链**。
 - 项目管理侧（roadmap / backlog / decisions / lessons 等）：`{{project_root}}`
 - 代码侧文档：`{{doc_root}}/`
 
-### 待办提醒
+### 项目记录入口
 
-当对话中出现"以后要做"、"TODO"、"先跳过"、"回头处理"等信号，或用户做了 workaround 时，主动提示：
+仅当**用户明确表达**要记录时响应（不做关键词嗅探，避免误触发）：
 
-> 💡 检测到待办事项：「{内容}」。要加入项目 backlog 吗？
+- 用户明确说「加个待办 / 记到 backlog / 以后做」→ 调用 `/eo-backlog` 追加到 `{{project_root}}/backlog.md`
+- 用户明确说「把这个决策记下来」→ 在 `{{project_root}}/decisions/` 创建决策记录（首次 lazy 建目录）
+- 用户明确说「记一条经验 / 踩坑记录一下」→ 调用 `/eo-project-lesson` 写入 `{{project_root}}/lessons/`
 
-用户确认后调用 `/eo-backlog` 追加到 `{{project_root}}/backlog.md`。
-
-### 决策同步
-
-当对话中出现关键技术决策（选型、架构、方案取舍），提示：
-
-> 💡 这是一个关键决策。要记录到 decisions/ 吗？
-
-用户确认后，在 `{{project_root}}/decisions/` 创建决策记录（首次时 lazy 建目录）。
-
-### 经验教训
-
-当用户提到"踩坑"、"下次不这么干"、"学到了"时，提示：
-
-> 💡 要记录到 lessons/ 吗？
-
-用户确认后，在 `{{project_root}}/lessons/` 创建经验记录（首次时 lazy 建目录）。
+对话中出现疑似待办/决策/教训但用户未明说时，**至多在当前话题收尾处轻提一句**「要不要记入 backlog/decisions/lessons？」，不打断进行中的工作。
 <!-- eo-project:end -->
 ```
+
+**DESIGN.md 检查**：若仓库根存在 `DESIGN.md` 但 agent 配置文件中无 `<!-- eo-design:start -->` 标记段，执行 `/eo-design` 的约束注入子步骤补上（见 `eo-design/references/design-md-template.md` 的注入模板）。
 
 ### 13. 注册到项目看板（仅 `kanban_path` 非空时）
 

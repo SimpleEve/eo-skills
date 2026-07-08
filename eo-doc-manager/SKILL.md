@@ -106,7 +106,7 @@ state/ 和 agent-handbook/ 的内容必须从**源码**生成，不是从已有�
 2. 读取 `.eo-project.json` 的 `doc_root`（默认 `eo-doc`）作为根
 3. 创建最小骨架：
    - `<doc_root>/agent-handbook/INDEX.md`（骨架）
-   - `<doc_root>/dev/INDEX.md`（骨架）
+   - `<doc_root>/changes/INDEX.md`（骨架）
    - `<doc_root>/templates/`（空目录，不自动生成模板文件）
 4. **不创建** `state/`（首次 sync 时 lazy 建）
 5. 初始化 `<doc_root>/.sync-cursor`（当前 HEAD 作为首次基线）

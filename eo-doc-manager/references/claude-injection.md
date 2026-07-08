@@ -26,7 +26,7 @@
 |------|------|--------|
 | [agent-handbook/](eo-doc/agent-handbook/INDEX.md) | 代码架构、模块入口、接口索引 | **看/改代码前必读 INDEX**，按需深入模块 |
 | [state/](eo-doc/state/INDEX.md) | 业务规则、状态流转、系统现状 | 了解功能"现在是什么样" |
-| [dev/](eo-doc/dev/INDEX.md) | 功能开发文档（spec/change/review） | 查变更进度 |
+| [changes/](eo-doc/changes/INDEX.md) | change 工件流（change/review/test） | 查变更进度 |
 | [templates/](eo-doc/templates/) | 项目定制模板（eo-* 技能扩展点） | eo-* 技能启动时自动读取 |
 
 > 项目管理侧（roadmap / decisions / lessons / 原始 PRD 与设计）见 `.eo-project.json` 的 `project_root` 字段。
