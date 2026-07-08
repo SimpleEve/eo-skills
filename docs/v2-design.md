@@ -39,6 +39,7 @@
 | eo-change-review | **保留现状** | 决策 #1：暂不轻量化，预留观测（已入 backlog）；新增粒度超标检查项 |
 | eo-project-init | **调整** | 骨架与注入内容更新；待确定问题全部走 AskUserQuestion |
 | eo-design | **新增** | 四模式：init / variants / apply / audit（参考 gstack 全链路） |
+| eo-recall | **新增** | 活文档消费入口：回忆/解释问答（检索瀑布 + 分层作答带出处 + 按需 mermaid/HTML 解释页）；吸收 doc-manager 的 query |
 | eo-flow | **保留，延后修改** | 本次只清理其中 eo-workflow 与 spec 相关引用 |
 | eo-backlog / eo-handoff / eo-project-update / eo-project-lesson / eo-miniapp-ideation | 不动 | |
 
@@ -106,9 +107,10 @@ gstack 模式：不到百行的「token + rationale + 决策日志」单文件�
 
 ```
 tmp/eo/
-├── handoff/<topic>.md        # 会话交接快照（目录已表意，去掉 -handoff 后缀）
-├── fix/<date>-<slug>.md      # 深挖模式调查记录
-└── design/<date>-<topic>/    # 设计变体与预览 HTML
+├── handoff/<topic>.md          # 会话交接快照（目录已表意，去掉 -handoff 后缀）
+├── fix/<date>-<slug>.md        # 深挖模式调查记录
+├── design/<date>-<topic>/      # 设计变体与预览 HTML
+└── explain/<date>-<topic>.html # eo-recall 的一次性解释页
 ```
 
 纪律：① tmp/eo/ 下一切**可丢弃**，任何 skill 不得当信源引用——有长期价值的结论在产生时即沉淀到正式位置（根因 → change / lessons；design 选中结论 → DESIGN.md 决策日志；handoff 被下个会话消费后即弃）；② project-init 负责把 `tmp/eo/` 写入 .gitignore；③ 文件名带日期/topic 前缀，清理按 mtime，无需登记表。多包一层 `eo/` 的理由：不侵占项目自己的 tmp/，且 `rm -rf tmp/eo` 即全量清理。
@@ -268,6 +270,12 @@ created: 2026-07-07
 **取证路（仅语义分歧）**：期望行为不是单一锚点，是**证据瀑布**——用户口述（最高权威，永远在）> 相关 AC（最优书面期望，若有）> state 记载（**意图佐证**：state 是代码派生物，不能裁决代码对错，但「行为被记为规则」佐证它是有意的）> git 归属。判定：查无出处且明显缺陷 → 修；**行为是有意设计 → 停手告知，用户坚持 = 需求变更转 /eo-change**；AC 写漏且未归档 → 补了再修；state≠代码 → 文档陈旧触发 sync。设计承认：砍 spec 后书面期望覆盖是稀疏的（只有 AC 点亮过的地方），由口述主权 + state 佐证补偿；若长期痛，出路是只读的「AC 累积索引」而非回到 spec（暂不做）。
 
 **深挖模式**（自动升级，吸收 eo-investigate 候选）：升级显式宣告；方法论在 `references/investigation.md`（固定复现 → 假设清单 → 二分排除 → 验证还原），仅升级时加载；允许临时插桩/bisect，结束还原现场；调查记录进 `tmp/eo/fix/`（§2.3）；根因回分诊定路。
+
+### 5.3 eo-recall（新增：活文档的消费入口）
+
+**存在性论证**：v2 供给侧完备（state/handbook 从代码长出、decisions/brainstorm 记了为什么），但除 fix/change 顺路读之外，「人想回忆当初的设计」这个最自然的需求没有正门——记录必须有消费入口，否则记录会退化（与 lessons 消费同构）。裸口述的失败模式：检索路径随机（最危险是凭印象编造当回忆）、口径混杂、无出处、不知道 vault 里有 decisions/brainstorm 可查。
+
+设计要点：**严格只读**；问题三分类（现状 → state / 实现 → handbook→源码 / 缘由 → change §1 已钉决策 + decisions + brainstorm），按类走检索瀑布（禁全局 grep）；分层作答（设计口径/实现口径分节）+ 每论断带出处 + **查无记载显式声明**（把回忆和现场推断分开）；发现文档≠代码 → 报告并提示 sync；富输出按需（mermaid 对话内 / 盘根错节的出一次性自包含 HTML 解释页到 `tmp/eo/explain/`）。doc-manager 的 `query` 子命令退役并入本 skill，doc-manager 回归纯维护。
 
 ---
 

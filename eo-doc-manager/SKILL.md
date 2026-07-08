@@ -1,6 +1,6 @@
 ---
 name: eo-doc-manager
-description: 管理 eo-doc/ 代码侧文档体系（init / sync / re-sync / modify / query）。所有 eo-doc 下的文档操作必须走此 skill。触发：初始化文档 / 同步文档 / 查文档 / /eo-doc-manager。
+description: 管理 eo-doc/ 代码侧文档体系（init / sync / re-sync / modify / select）。所有 eo-doc 下的文档维护操作必须走此 skill。触发：初始化文档 / 同步文档 / /eo-doc-manager。NOT FOR：查询与解释文档内容（走 /eo-recall）。
 ---
 
 # eo-doc-manager
@@ -22,7 +22,8 @@ description: 管理 eo-doc/ 代码侧文档体系（init / sync / re-sync / modi
 | `sync` | 同步文档、sync docs、更新文档 | git diff 增量 → 更新 agent-handbook/ + state/ |
 | `re-sync` | 重建文档、全量同步 | 全量扫描源码 → 重建 agent-handbook/ + state/ |
 | `select` | 只操作 agent-handbook / state | 缩小作用域 → 后续命令 |
-| `query` | 查文档、有没有关于 X 的 | 扫各子目录 INDEX.md → 按 tag/keyword 匹配 |
+
+> 「查文档 / 当时怎么设计的 / 这个逻辑怎么实现的」→ 走 `/eo-recall`（本 skill 不再提供 query，回归纯维护职责）。
 
 **路由规则**：
 1. 明确命令（如 `/eo-doc-manager sync`） → 直接路由
@@ -155,12 +156,6 @@ state/ 和 agent-handbook/ 的内容必须从**源码**生成，不是从已有�
 1. 解析指定目录（`agent-handbook` / `state`）
 2. 将后续命令作用域限制到指定目录
 3. 组合：`select state sync`（只同步 state/）
-
-### query — 查询文档
-
-1. 读各子目录 INDEX.md
-2. 按 tag / 关键词 / 文件名匹配
-3. 返回：路径 + 摘要 + 相关度
 
 ## 结构化规则
 

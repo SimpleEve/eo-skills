@@ -113,6 +113,7 @@ flowchart TD
     Rev -.同上.-> Flow
 
     Init --> Doc["/eo-doc-manager<br/>维护 eo-doc/"]
+    Init --> Rec["/eo-recall<br/>回忆：当时怎么设计的?"]
     Init --> PU["/eo-project-update<br/>项目进度 / 决策"]
     Init --> PL["/eo-project-lesson<br/>项目经验"]
 
@@ -141,6 +142,7 @@ flowchart TD
 | 实施后代码审查 | `/eo-review` | 强制，每个 change 都要 |
 | 审查通过后归档 | `/eo-archive` | 更新 state/handbook + 冻结 change（不反写 spec） |
 | 把一步甩给另一个 pane 的 codex | `/eo-flow <action>` | 需 tmux + smux |
+| 忘了当初怎么设计的 / 想看某段逻辑的实现 | `/eo-recall` | 只读问答，分层作答带出处；复杂逻辑可出图/解释页 |
 | 定设计系统 / 出视觉方案 / 高保真页面 | `/eo-design <mode>` | init / variants / apply / audit，真相源 `DESIGN.md` |
 | 即将 `/clear` 但要保留进度 | `/eo-handoff` | 写到 `tmp/eo/handoff/<topic>.md`，下个会话载入即续 |
 | 维护 `eo-doc/` 文档体系 | `/eo-doc-manager` | sync / re-sync |

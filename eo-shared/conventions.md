@@ -8,9 +8,10 @@
 
 ```
 tmp/eo/
-├── handoff/<topic>.md        # 会话交接快照（eo-handoff）
-├── fix/<date>-<slug>.md      # 深挖模式调查记录（eo-fix）
-└── design/<date>-<topic>/    # 设计变体与预览 HTML（eo-design）
+├── handoff/<topic>.md          # 会话交接快照（eo-handoff）
+├── fix/<date>-<slug>.md        # 深挖模式调查记录（eo-fix）
+├── design/<date>-<topic>/      # 设计变体与预览 HTML（eo-design）
+└── explain/<date>-<topic>.html # 一次性解释页（eo-recall）
 ```
 
 纪律：

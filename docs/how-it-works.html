@@ -299,7 +299,7 @@
     <table class="rec">
       <tr><th>东西</th><th>落在哪</th><th>谁写</th><th>谁消费</th></tr>
       <tr><td>需求与验收</td><td>eo-doc/changes/&lt;id&gt;/change.md（§2 AC）</td><td class="who">eo-change</td><td>implement 当判据 · review 当检查表 · fix 取证时的书面证据</td></tr>
-      <tr><td>系统现状</td><td>eo-doc/state/ + agent-handbook/</td><td class="who">doc-manager（代码为信源）</td><td>下一个 change 的事实自查 · fix 的三方对比</td></tr>
+      <tr><td>系统现状</td><td>eo-doc/state/ + agent-handbook/</td><td class="who">doc-manager（代码为信源）</td><td>下一个 change 的事实自查 · fix 的取证 · /eo-recall 的回忆问答</td></tr>
       <tr><td>已钉决策</td><td>change.md §1（brainstorming 移交）</td><td class="who">brainstorming / change</td><td>下游不重问、不隐式推翻</td></tr>
       <tr><td>设计口径</td><td>DESIGN.md（token + 决策日志）</td><td class="who">eo-design</td><td>一切 UI 改动前必读 · review 一致性维度</td></tr>
       <tr><td>教训</td><td>&lt;项目&gt;/lessons/ + INDEX</td><td class="who">eo-project-lesson</td><td>change / implement / fix 启动时按 trigger 命中</td></tr>
@@ -458,6 +458,7 @@ const CAT=[
  ["基座 · 一次配置长期受益",[
   ["eo-project-init","总入口","生成 .eo-project.json、双侧骨架、CLAUDE.md 注入；看板 / GitHub 联动在这里开关（问一次写回配置）。","所有 skill 的前置"],
   ["eo-doc-manager","活文档引擎","cursor sync 按 commit 增量把代码变化归档进 state/ + handbook；脏变更三选一；每 5 次 sync 提示一致性抽查。","维护 eo-doc/ 活文档"],
+  ["eo-recall","回忆与解释","「当时怎么设计的 / 逻辑怎么实现的 / 为什么这么定」——按问题类型走检索瀑布（state / handbook→源码 / change 已钉决策 + decisions），<b>分层作答、每个论断带出处、查无记载明说</b>（不把编造当回忆）；复杂逻辑可出 mermaid 或一次性 HTML 解释页。活文档的消费入口：记下来的东西从这扇门被读回来。","只读 · 解释页进 tmp/eo/explain/"],
   ["eo-shared","共享规范（非技能）","提问纪律 / AC 规范 / 粒度判据 / lessons 格式 / 联动规范的单一来源——skill 只引用，不复述。","被所有 skill 引用"]]],
  ["增强 · 需要时才出现",[
   ["eo-design","设计系统","init 建 DESIGN.md（SAFE/RISK 提案 + HTML 预览）；variants 反趋同多方案对比；apply 生产级落地；audit 一致性审计。","DESIGN.md + CLAUDE.md 约束注入"],
