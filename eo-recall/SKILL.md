@@ -36,7 +36,7 @@ description: |
 
 - **现状**：`eo-doc/state/INDEX.md` 按关键词收敛 → 只读命中篇目
 - **实现**：`eo-doc/agent-handbook/INDEX.md` → 命中模块篇（入口/接口/依赖）→ 按图索骥读源码**相关段落**（不通读文件）
-- **缘由**：`eo-doc/changes/INDEX.md` 找相关 change → 读其 §1 意图与已钉决策；再查 `<project_root>/decisions/`（文件名即索引）与 `<project_root>/brainstorm/` 的相关记录；涉及外部世界（第三方 API / 平台规则 / 竞品 / 选型）→ 查 `<project_root>/research/`（扫其 INDEX，若存在）；lessons 若 trigger 命中也一并带上（踩坑背景常常就是「为什么后来改成这样」）
+- **缘由**：`eo-doc/changes/INDEX.md` 找相关 change → 读其 §1 意图与已钉决策；再查 `<project_root>/decisions/`（扫其 INDEX.md，无 INDEX 则按文件名收敛）与 `<project_root>/brainstorm/` 的相关记录；涉及外部世界（第三方 API / 平台规则 / 竞品 / 选型）→ 按 [../eo-shared/research.md](../eo-shared/research.md) 消费规则查 `<project_root>/research/`；lessons 若 trigger 命中也一并带上（踩坑背景常常就是「为什么后来改成这样」）
 - 候选 >3 或全无命中 → 追问关键词，不硬猜
 
 ### 第三步：分层作答

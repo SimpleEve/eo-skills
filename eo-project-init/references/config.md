@@ -17,11 +17,12 @@
 **自动迁移**：若 `~/.eo-skills.json` 存在且 `~/.eo/config.json` 不存在，`eo-project-init` 启动时**静默执行一次**：
 
 ```bash
-mkdir -p ~/.eo
-mv ~/.eo-skills.json ~/.eo/config.json
+EO_HOME="${EO_HOME:-$HOME/.eo}"
+mkdir -p "$EO_HOME"
+mv ~/.eo-skills.json "$EO_HOME/config.json"
 ```
 
-迁移后在终端打印一行提示，之后不再检查旧路径。已完成迁移的机器或新机器，只读 `~/.eo/config.json`。
+迁移后在终端打印一行提示，之后不再检查旧路径。已完成迁移的机器或新机器，只读 `$EO_HOME/config.json`。
 
 ## 两个配置文件
 
@@ -106,7 +107,7 @@ mv ~/.eo-skills.json ~/.eo/config.json
 3. 找到 → 解析其内容，后续一律用其中的路径（**不读 `~/.eo/config.json`**）
 
 **`eo-project-init` 的启动行为更特殊**：
-1. **迁移检查**：若 `~/.eo-skills.json` 存在且 `~/.eo/config.json` 不存在 → 自动迁移（`mkdir -p ~/.eo && mv ~/.eo-skills.json ~/.eo/config.json`），打印一行提示。
+1. **迁移检查**：若 `~/.eo-skills.json` 存在且用户级配置不存在 → 自动迁移到 `"${EO_HOME:-$HOME/.eo}"/config.json`，打印一行提示。
 2. 先看 cwd 是否已有 `.eo-project.json`（已初始化过）。
 3. 未初始化时，读 `~/.eo/config.json` 拿默认值，提示用户确认/覆盖。
 4. 用户级文件不存在 → 进入首次引导流程（见 `eo-project-init/SKILL.md`）。

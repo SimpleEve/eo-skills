@@ -40,7 +40,7 @@
    ```
 6. 用户确认后执行
 
-> 若输入材料中含规划/设计/调研内容，提示用户这些内容应进入**项目管理侧** `<project_root>/docs/` 或 `backlog.md`，不进入 eo-doc/。
+> 若输入材料中含规划/设计内容，提示进入**项目管理侧** `<project_root>/docs/`；调研沉淀进入 `<project_root>/research/`（规范见 [../../eo-shared/research.md](../../eo-shared/research.md)）；领域术语进 `state/glossary.md`。均不进入 eo-doc/ 其他位置。
 
 ## 一致性检查清单
 

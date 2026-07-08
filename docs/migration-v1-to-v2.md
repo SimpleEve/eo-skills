@@ -24,9 +24,9 @@
 
 1. **更新安装**：重跑 install 脚本（软链模式下拉取新版仓库即生效）。新目录 `eo-shared/`、`eo-design/` 会被自动链接；已删除的四个 skill 需手动清理残留软链：
    ```bash
-   rm -f ~/.claude/skills/{eo-workflow,eo-spec,eo-spec-review,eo-module-init} \
-         ~/.agents/skills/{eo-workflow,eo-spec,eo-spec-review,eo-module-init} \
-         ~/.gemini/antigravity/skills/{eo-workflow,eo-spec,eo-spec-review,eo-module-init}
+   rm -f ~/.claude/skills/{eo-workflow,eo-spec,eo-spec-review,eo-module-init,eo-project-update,eo-project-lesson} \
+         ~/.agents/skills/{eo-workflow,eo-spec,eo-spec-review,eo-module-init,eo-project-update,eo-project-lesson} \
+         ~/.gemini/antigravity/skills/{eo-workflow,eo-spec,eo-spec-review,eo-module-init,eo-project-update,eo-project-lesson}
    ```
 2. **冻结存量 spec**：给每个 `eo-doc/dev/<module>/spec.md` 与 `spec-history.md` 的 frontmatter 加 `status: frozen`。它们保留作历史参考，v2 的任何 skill 不再读写。
 3. **建立项目级 changes/**：创建 `eo-doc/changes/INDEX.md`，编号从所有模块现存最大号 +1 续起。存量模块内的 changes/ 目录原地保留（历史），INDEX 中可加一行指向旧位置。
@@ -34,7 +34,7 @@
 5. **更新注入段**：重跑 `/eo-project-init`（幂等）——刷新 CLAUDE.md 的 eo-doc 目录表（dev → changes）、行为钩子新口径、`tmp/eo/` 进 .gitignore。
 6. **首次 sync**：跑 `/eo-doc-manager sync`。若此前从未建过 state/，会 lazy 生成首批文档；此后 state + agent-handbook 就是「系统现在是什么样」的唯一口径。
 7. （可选）`/eo-design init` 建立 DESIGN.md。
-8. **项目管理侧迁移**：`kanban_path` 字段从此被忽略（旧手工看板文件可归档删除，如 00-Wiki/项目看板.md）；roadmap.md frontmatter 补 `status/phase/summary` 三字段后可被 Bases 聚合成项目总览；`/eo-project-lesson` 的残留软链手动清理（`rm ~/.claude/skills/eo-project-lesson` 等三端），新入口是 `/eo-project-record`。
+8. **项目管理侧迁移**：`kanban_path` 字段从此被忽略（旧手工看板文件可归档删除，如 00-Wiki/项目看板.md）；roadmap.md frontmatter 补 `status/phase/summary` 三字段后可被 Bases 聚合成项目总览；记录入口统一为 `/eo-project-record`（旧 lesson/update 软链已在步骤 1 一并清理）。
 
 ## 语义速查（旧习惯 → 新做法）
 

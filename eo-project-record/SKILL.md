@@ -1,6 +1,6 @@
 ---
 name: eo-project-record
-description: "项目记忆的统一写入口：经验教训（lessons/）与关键决策（decisions/），带 INDEX 与检索锚点，供 eo-change / eo-fix / eo-recall 消费。通过 .eo-project.json 定位。触发（仅用户明确要求记录时）：把这个坑记下来 / 记条经验 / lesson learned / 把这个决策记下来 / 记录决策 / reindex lessons / /eo-project-record。NOT FOR: 对话提到踩坑或决策但用户未要求记录；待办类（走 /eo-backlog）。"
+description: "项目记忆的统一写入口：经验教训（lessons/）与关键决策（decisions/），带 INDEX 与检索锚点，供 eo-change / eo-fix / eo-recall 消费。通过 .eo-project.json 定位。触发（仅用户明确要求记录时）：把这个坑记下来 / 记条经验 / lesson learned / 把这个决策记下来 / 记录决策 / reindex lessons / reindex decisions / /eo-project-record。NOT FOR: 对话提到踩坑或决策但用户未要求记录；待办类（走 /eo-backlog）。"
 ---
 
 # eo-project-record
@@ -12,7 +12,7 @@ description: "项目记忆的统一写入口：经验教训（lessons/）与关�
 | 类型 | 目录 | 记什么 | 谁消费 |
 |------|------|--------|--------|
 | **lesson** | `<project_root>/lessons/` | 踩坑、最佳实践、意外收获 | eo-change / eo-implement / eo-fix 启动时按 trigger 自动消费 |
-| **decision** | `<project_root>/decisions/` | 关键决策：背景、候选、裁定、理由 | eo-recall 缘由瀑布；eo-change 事实自查 |
+| **decision** | `<project_root>/decisions/` | 关键决策：背景、候选、裁定、理由 | eo-recall 缘由瀑布（以及一切「当初为什么」的场景） |
 
 分不清类型时的判据：**教训回答「下次怎么做」，决策回答「当时为什么这么定」**。一次对话产出两者都有 → 各记一条，互相 `[[链接]]`。
 

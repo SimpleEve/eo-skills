@@ -9,8 +9,9 @@
 | [granularity.md](granularity.md) | 粒度硬指标、trivial 判据、拆分决策表 | eo-change / eo-fix / eo-change-review / eo-brainstorming |
 | [conventions.md](conventions.md) | 横切约定：tmp/eo/、commit 前缀、状态流转 | 主链各 skill |
 | [board-github.md](board-github.md) | 看板 stub 与 GitHub issue/PR 联动（opt-in） | eo-change / eo-implement / eo-review / eo-fix / eo-archive / eo-project-init |
+| [research.md](research.md) | 调研沉淀的格式、INDEX 与消费规则 | 任意调研产出方（产）/ eo-recall / eo-change（消费） |
 | [lessons.md](lessons.md) | lessons 生产格式（结论前置 + trigger/summary 锚点）与消费流程（INDEX 匹配） | eo-project-record（产）/ eo-change / eo-implement / eo-fix（消费） |
 
 各 skill 以相对路径引用（`../eo-shared/<file>`，相对 skill 自身目录，软链与仓库内均可解析）。
 
-**维护规则**：口径修改只改这里，禁止在任何 skill 内复制正文（v1 教训：「分段读 spec」规程复制进 3 个 skill 各自漂移）。
+**维护规则**：口径修改只改这里，禁止在任何 skill 内复制正文（v1 教训：「分段读 spec」规程复制进 3 个 skill 各自漂移）。上表「主要消费方」列仅供导览——**以各 skill 正文的实际引用为准**，此类反向名单不作同步维护承诺（供给方文件里不要再新建「被谁引用」清单）。
