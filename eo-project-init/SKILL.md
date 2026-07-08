@@ -131,13 +131,11 @@ updated: "{{date}}"
 
 # {{project_name}} Backlog
 
-> 待办池 + 未接入的未来规划（如将来想接入 research、knowledgebase skill 时的 placeholder）。
+> 待办池 + 灵感。
 
 ## 待办
 
 ## 灵感 & 以后再说
-
-## 未接入（等 skill 支持再接入）
 ```
 
 ### 7. Roadmap 拆解（可选）
@@ -162,7 +160,7 @@ eo-doc/
 ```
 
 **不创建** `state/`（首次 `/eo-doc-manager sync` 时按需建）。
-**不创建** `design/ / research/ / knowledgebase/`（已移除）。
+**不创建** `design/ / research/ / knowledgebase/`（已移除且不再规划——调研沉淀归项目管理侧 `research/`，领域术语归 `state/glossary.md`）。
 
 额外：
 - 初始化 `eo-doc/.sync-cursor`（当前 HEAD 作为首次基线）

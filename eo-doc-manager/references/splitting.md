@@ -14,7 +14,7 @@
 | **与代码关系** | 必须与代码一致 | 必须与代码一致 |
 | **典型动词** | 实现了、支持、目前 | 入口、导出、依赖 |
 
-> 规划、设计、调研、通用知识类内容**不属于** `eo-doc/`。它们归项目管理侧（`<project_root>/docs/` 等），或暂时未接入 skill 时记入 `<project_root>/backlog.md`。
+> 规划、设计、调研类内容**不属于** `eo-doc/`。它们归项目管理侧（`<project_root>/docs/`、`<project_root>/research/`）；领域术语的家是 `state/glossary.md`（见 doc-style.md）。
 
 ### 边界场景判断表
 
@@ -23,8 +23,9 @@
 | "系统目前支持单租户，数据隔离通过 tenantId 字段实现" | **state/** | 当前实际实现的描述 |
 | "多租户入口 src/lib/tenant.ts，导出 getTenant()、validateTenant()" | **agent-handbook/** | 代码定位信息 |
 | "我们计划支持多租户架构，设计如下" | **项目管理侧** `docs/` | 规划/设计，不在 eo-doc/ |
-| "市场上 SaaS 多租户方案有 A/B/C 三种" | **项目管理侧 backlog** 或未来 research skill | 外部调研，当前无对应 skill |
-| "多租户数据隔离最佳实践" | **项目管理侧 backlog** 或未来 knowledgebase skill | 通用知识，当前无对应 skill |
+| "市场上 SaaS 多租户方案有 A/B/C 三种" | **项目管理侧 `research/`** | 外部调研沉淀（带 INDEX + frontmatter，供 recall/change 消费） |
+| "『租户』在本系统指付费主体而非登录账号" | **state/glossary.md** | 领域术语定义 |
+| "多租户数据隔离踩过的坑" | **项目管理侧 `lessons/`** | 教训，带 trigger 锚点 |
 
 ### state vs agent-handbook 关键区分
 

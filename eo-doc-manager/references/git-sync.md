@@ -104,6 +104,7 @@ src/actions/sync.ts                  → actions/sync 模块
 | 新增依赖关系 | 中 | agent-handbook: 更新依赖关系 |
 | 新增/删除文件 | 中 | agent-handbook: 更新目录结构 |
 | 业务规则变更 | 中 | state: 更新规则描述 |
+| 新领域概念（新枚举业务语义、新业务名词） | 中 | state: glossary.md 追加/更新术语行（约定见 doc-style.md） |
 | 内部重构（接口不变） | 低 | 仅更新 `updated` 时间 |
 | 注释/格式调整 | 无 | 跳过 |
 

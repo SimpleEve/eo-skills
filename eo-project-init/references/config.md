@@ -128,7 +128,7 @@ eo-doc/
 └── state/            # 按需，系统当前状态描述（sync 时首建）
 ```
 
-**已移除**：`design/`、`doc/`、`research/`、`knowledgebase/`（`doc/` 语义迁到 `state/`；其余三者搬到项目管理侧或暂时移除）。
+**已移除（不再规划）**：`design/`、`doc/`、`research/`、`knowledgebase/`——`doc/` 语义迁到 `state/`；design 迁项目管理侧 `docs/`；调研沉淀归项目管理侧 `research/`；通用领域术语归 `state/glossary.md`。若将来知识规模大到检索吃力，升级路径是索引层而非目录（backlog 有远期条目）。
 
 ### 项目管理侧（`project_root/`）
 
@@ -138,12 +138,13 @@ eo-doc/
 <project_root>/
 ├── roadmap.md     # 必建
 ├── log.md         # 必建
-├── backlog.md     # 必建（待办池 + 未接入的未来规划）
+├── backlog.md     # 必建（待办池 + 灵感）
 ├── phases/        # 按需，roadmap 拆解后生成
 ├── decisions/     # 按需，首次记录决策时建
 ├── lessons/       # 按需，首次记录经验时建（**项目级**，替代全局 _lessons/）
 ├── brainstorm/    # 按需，eo-brainstorming 首次产出时建
 ├── board/         # 按需，change 看板 stub（board.enabled 时由各流程 skill 维护）
+├── research/      # 按需，调研沉淀（带 INDEX + frontmatter；eo-recall / eo-change 事实自查消费）
 └── docs/          # 按需，原始 PRD / 设计 / 规划
 ```
 
