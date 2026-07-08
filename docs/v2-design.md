@@ -31,7 +31,7 @@
 | eo-change | **重构（核心）** | 新模板 + 内嵌提问纪律 + AC 前置 + 粒度校验 |
 | eo-brainstorming | **增强** | 保留全部机制，新增「捕获出口」：结论可直接拆成 change 序列 |
 | eo-implement | **调整** | TODO 分批 + 批间 checkpoint + commit 纪律（推荐非强制） |
-| eo-fix | **重构** | 三方对比改为 AC ↔ state ↔ 代码；普通模式直接修复（不再只诊断）；新增深挖模式（吸收 eo-investigate 候选） |
+| eo-fix | **重构** | 三层按需付费：快路直接修 + 落点记账（默认）；语义分歧才走证据瀑布取证（口述 > AC > state 佐证 > git 归属）；难缠 bug 深挖模式（吸收 eo-investigate 候选） |
 | eo-archive | **重构** | 不再反写 spec；改为「校验 → commit 区间 → 触发 doc sync → 冻结」 |
 | eo-doc-manager | **增强** | 移除 dev/ 概念；sync 支持 range 与脏变更三选项；归档计数 + 一致性校验 |
 | eo-test | **微调** | 测试锚点从 spec/change §6 改为 AC；其余不变 |
@@ -255,31 +255,19 @@ created: 2026-07-07
 - fix 循环：change 生命周期内（含 archived 前）的 bug 修复归 implement，不开新 change（v1 定位保留）。
 - 全部 TODO 完成 + AC 全勾 → 提示走 test/review；review 通过后 status 自动置 `done`。
 
-### 5.2 eo-fix（重构：定位 + 修复一体，含深挖模式）
+### 5.2 eo-fix（重构：三层按需付费）
 
-定位改变：v1「只诊断不改文件」的约束源于要先判「bug 属于哪个 spec」；spec 消失后判界负担不复存在，**普通模式直接完成修复**，路由只保留「这其实是业务变更」的出口。该约束删除。
+**存在性论证**（为什么不直接修）：大多数 bug 就该直接修，fix 对 typo 的开销必须趋近于零；它的价值是三层**按需**保险——① 落点记账（勾 AC、commit 前缀，是 archive 归集/看板/retro 的输入，唯一不豁免层）；② 误修保险（推翻一个「可能是有意的行为」之前先取证，防止静默推翻已确认决策）；③ 深挖方法论。外加 lessons 消费挂载点。不触发的层不存在。
 
-三方事实：
+**分诊定路**：明显缺陷（报错/崩溃/数据错，对错无需文档裁决）→ 快路；「应该/不应该」类语义分歧（行为疑似有意实现、涉及业务规则数值）→ 取证路；定位不了 → 深挖。
 
-- **F-ac**：change 验收清单声明的期望行为（活跃 change 优先，无活跃则查最近 archived change）
-- **F-state**：state/ 记载的系统现状
-- **F-code**：实现事实
+**定位（代码反查为主，~500-900 token）**：症状字符串 grep 源码（或 handbook INDEX 定位入口）→ `git log -n 20 -- <文件>` 按 commit 前缀反查归属（`[NNN]` 直达 change / `fix:` 直改史 / 无前缀存量代码）→ 只读 frontmatter + §2 AC。**commit 前缀纪律免费提供了「文件 ↔ change」精确反向索引，不另建**。辅路：changes/INDEX.md（活跃置顶、通常 0-3 个先验最高，再关键词扫 archived）。
 
-**普通模式（快路径）**：定位原因 → 直接修复 → 验证。修复落点自动判断：有相关活跃 change → 修复计入该 change（勾选相关 TODO/AC，commit 带 change-id 前缀）；无活跃 change → 走直改路径（§3.7），常规 commit，由 doc-manager 的 cursor sync 吸收。
+**快路（默认）**：最小变更修复 → 复现步骤转回归验证 → 落点记账（活跃 change 计入并勾 AC；无则 `fix:` 直改，cursor 落后 >10 提示 sync）。
 
-修复前的路由判定（仅剩这几个分叉）：
+**取证路（仅语义分歧）**：期望行为不是单一锚点，是**证据瀑布**——用户口述（最高权威，永远在）> 相关 AC（最优书面期望，若有）> state 记载（**意图佐证**：state 是代码派生物，不能裁决代码对错，但「行为被记为规则」佐证它是有意的）> git 归属。判定：查无出处且明显缺陷 → 修；**行为是有意设计 → 停手告知，用户坚持 = 需求变更转 /eo-change**；AC 写漏且未归档 → 补了再修；state≠代码 → 文档陈旧触发 sync。设计承认：砍 spec 后书面期望覆盖是稀疏的（只有 AC 点亮过的地方），由口述主权 + state 佐证补偿；若长期痛，出路是只读的「AC 累积索引」而非回到 spec（暂不做）。
 
-| 情形 | 动作 |
-|---|---|
-| 实现 bug（代码 ≠ AC，或普通缺陷） | 本 skill 内直接修复 |
-| AC 写漏且 change 未 archived | 先补 AC/TODO 再修（Update preserves context） |
-| 实为需求变更 / 涉事 change 已 archived 且改动非平凡 | 新开 change（New change provides clarity） |
-| F-state 与 F-code 矛盾 | 文档陈旧 → 触发 doc-manager sync 后重判 |
-| 原因无法定位 / 无法稳定复现 | **自动升级深挖模式** |
-
-**深挖模式（自动升级，替代原 eo-investigate 候选）**：升级时向用户显式宣告；方法论全文在 `references/investigation.md`（固定复现 → 假设清单 → 二分排除 → 验证，借 superpowers systematic-debugging 四阶段），**仅升级时才加载**；约束信封切换——允许临时插桩、加日志、git bisect，结束后还原现场；产出调查记录（`tmp/eo/fix/<date>-<slug>.md`，见 §2.3，若关联 change 则附到其目录）；根因确认后回到普通模式路由表定归属。
-
-保留 v1 的轻量定位纪律（INDEX + frontmatter 收敛，禁全局 grep）。
+**深挖模式**（自动升级，吸收 eo-investigate 候选）：升级显式宣告；方法论在 `references/investigation.md`（固定复现 → 假设清单 → 二分排除 → 验证还原），仅升级时加载；允许临时插桩/bisect，结束还原现场；调查记录进 `tmp/eo/fix/`（§2.3）；根因回分诊定路。
 
 ---
 

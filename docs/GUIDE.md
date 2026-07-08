@@ -102,7 +102,7 @@ eo-doc/changes/
 | `/eo-change` | 发起变更（bootstrap / feature / enhance / refactor） | `changes/<NNN-xxx>/change.md`（AC 前置 + TODO 分批） | trivial 主动短路成直改 |
 | `/eo-change-review` | change draft 完成后、implement 前的方案审查 | `change-review.md` | ✅ 可选 |
 | `/eo-implement` | 按 change.md TODO 分批实施（含 bug 修复循环） | 代码 + 勾选 TODO/AC | 批末 checkpoint |
-| `/eo-fix` | 发现 bug（口喷即可） | 定位 + **直接修复**；难缠 bug 自动升级深挖模式 | 需求变更转 change |
+| `/eo-fix` | 发现 bug（口喷即可） | 快路**直接修复** + 落点记账；语义分歧才取证；难缠 bug 自动深挖 | 需求变更转 change |
 | `/eo-test` | 运行测试 / 场景验证 | `test.md`（以 AC 为锚） | 失败 → 回 implement |
 | `/eo-review` | 实施后的**代码**审查 | `review.md` | 强制 |
 | `/eo-archive` | 代码审查通过后归档 | 触发 doc sync 更新 state/handbook + 冻结 change | 不反写 spec |
@@ -147,6 +147,16 @@ eo-doc/changes/
 | 状态流转 | `draft → confirmed → implementing → done → archived`（**skill 自动流转**，用户不手改 frontmatter） |
 | trivial 直改 | 满足硬判据（不改行为/接口/数据、无方案权衡、单会话）→ 不开 change，直改 + commit |
 | 归档不反写 | archive 只更新活文档 + 冻结 change；spec 概念已移除 |
+
+### 为什么修 bug 要喊 /eo-fix，而不是直接改？
+
+诚实的回答：**大多数 bug 确实就该直接修，fix 对一个 typo 的开销也确实趋近于零**。它的存在不是流程仪式，而是三层「按需付费」的保险——不触发的层根本不会执行：
+
+1. **落点记账（唯一必做，约 30 秒）**：修完勾对应 change 的 TODO/AC、commit 带 `[change-id]` 或 `fix:` 前缀。没有这层，实施中的 change 会和代码悄悄漂移（archive 的 AC 门禁对不上账）、commit 无法归集、直改流量无从统计——整个闭环的输入就断了。
+2. **误修保险（仅「行为不对」类分歧时触发）**：裸改代码最危险的失败不是修错，是**静默推翻有意设计**——你说「列表怎么把归档项也显示了，去掉」，但那是上个 change 的 AC 白纸黑字特意做的。fix 在推翻一个行为前会花几百 token 取证（口述 > AC > state 佐证 > git 归属），是有意的就会停下来告诉你：「要推翻它，这是需求变更」。报错、崩溃这类明显缺陷**不走**这层，直接修。
+3. **深挖方法论（仅难缠 bug 触发）**：复现不稳、多因纠缠时升级系统化调查（固定复现 → 假设清单 → 二分排除 → 验证还原），插桩和 bisect 结束后还原现场。
+
+外加一个顺手的福利：fix 启动时会撞一下 lessons 的 trigger 索引——同类坑踩过的，答案直接送到上下文里。
 
 ---
 

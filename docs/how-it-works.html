@@ -298,7 +298,7 @@
     <div class="sec-head"><span class="sec-no">03½</span><h2 style="font-size:24px">什么东西被记在哪</h2></div>
     <table class="rec">
       <tr><th>东西</th><th>落在哪</th><th>谁写</th><th>谁消费</th></tr>
-      <tr><td>需求与验收</td><td>eo-doc/changes/&lt;id&gt;/change.md（§2 AC）</td><td class="who">eo-change</td><td>implement 当判据 · review 当检查表 · fix 当锚点</td></tr>
+      <tr><td>需求与验收</td><td>eo-doc/changes/&lt;id&gt;/change.md（§2 AC）</td><td class="who">eo-change</td><td>implement 当判据 · review 当检查表 · fix 取证时的书面证据</td></tr>
       <tr><td>系统现状</td><td>eo-doc/state/ + agent-handbook/</td><td class="who">doc-manager（代码为信源）</td><td>下一个 change 的事实自查 · fix 的三方对比</td></tr>
       <tr><td>已钉决策</td><td>change.md §1（brainstorming 移交）</td><td class="who">brainstorming / change</td><td>下游不重问、不隐式推翻</td></tr>
       <tr><td>设计口径</td><td>DESIGN.md（token + 决策日志）</td><td class="who">eo-design</td><td>一切 UI 改动前必读 · review 一致性维度</td></tr>
@@ -453,7 +453,7 @@ const CAT=[
   ["eo-archive","归档","五层：AC 门禁 → 工作区结算 → 冻结 → <b>内嵌调用 doc sync</b>（零自有逻辑）→ issue/PR/看板收尾。","冻结 change · 更新活文档 · 状态 →archived"]]],
  ["入口 · 事情从这里进来",[
   ["eo-brainstorming","想法发散与钉决策","三层追问、每轮 1-2 问、决策池（已钉不翻案）；捕获出口直接拆 change 序列并移交决策。","产出 brainstorm 记录 + change 草案"],
-  ["eo-fix","bug 口喷入口","三方对比（AC↔state↔代码）→ <b>直接修复</b>；难缠 bug 自动升级深挖模式（插桩/bisect，结束还原）；实为需求变更转 change。","修代码 · 调查记录进 tmp/eo/fix/"],
+  ["eo-fix","bug 口喷入口","<b>为什么不直接改？</b>——大多数时候它就是直接改：明显缺陷（报错/崩溃）不查任何文档，速度对齐裸改。只多三层<b>按需</b>保险：① 落点记账（勾 AC、commit 前缀，30 秒，是归档/看板/统计的输入）；② 误修保险——「这行为不对吧」类分歧先取证（口述 &gt; AC &gt; state 佐证 &gt; git 归属），防止静默推翻上个 change 特意做的设计，是有意的会停下来告诉你「要改它就是需求变更」；③ 难缠 bug 深挖模式（插桩/bisect，结束还原现场）。启动时还会撞一下 lessons 的 trigger——同类坑直接给答案。","修代码 · 落点：勾 AC 或 fix: 直改 · 调查记录进 tmp/eo/fix/"],
   ["直改模式","不是 skill，是一条豁免规则","纯样式/文案/多语言/小修 → 不开 change，改完 commit（fix:/ui: 前缀），cursor sync 兜底归档。","零工件"]]],
  ["基座 · 一次配置长期受益",[
   ["eo-project-init","总入口","生成 .eo-project.json、双侧骨架、CLAUDE.md 注入；看板 / GitHub 联动在这里开关（问一次写回配置）。","所有 skill 的前置"],
