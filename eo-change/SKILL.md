@@ -13,7 +13,7 @@ description: |
 
 1. **验收驱动**：AC 先于 TODO 产出，是 implement 的完成判据、review 的检查表、fix 的期望行为锚点
 2. **渐进式严谨**：必填仅 4 节，方案/流程图/风险/开放问题全部条件化；trivial 改动直接短路成直改
-3. **量化粒度**：TODO 3-7 理想 / 10 硬上限，change.md 500 行软 / 700 行硬，超标拆序列
+3. **量化粒度**：超软标建议拆、超硬标拒绝确认，指标数值以 [../eo-shared/granularity.md](../eo-shared/granularity.md) §1 为准
 4. **提问有预算**：事实自查、决策上抛、决策台账钉结论——规则见 [../eo-shared/questioning.md](../eo-shared/questioning.md)
 5. **状态自动流转**：用户在对话里确认，skill 落盘 status，用户永不手改 frontmatter
 
@@ -44,7 +44,7 @@ description: |
 
 ### 第三步：预算内澄清
 
-按 [../eo-shared/questioning.md](../eo-shared/questioning.md) 全文执行：预算配比、每轮 1-2 问、封闭选择走 AskUserQuestion（带推荐项）、内部决策台账（已钉/未钉/defer）、UI/UX 问题附「生成 HTML 对比页」选项、疲劳信号立即降级用默认。defer 上限 3 条，落入 §8 开放问题。
+按 [../eo-shared/questioning.md](../eo-shared/questioning.md) 全文执行：预算配比、每轮 1-2 问、封闭选择按其 §4 协议（带推荐项）、内部决策台账（已钉/未钉/defer）、UI/UX 问题附「生成 HTML 对比页」选项、疲劳信号立即降级用默认。defer 上限 3 条，落入 §8 开放问题。
 
 ### 第四步：产出验收清单（先于 TODO）
 
@@ -75,7 +75,7 @@ description: |
 **场景 A — 首次产出**（目录下无含未解决 P0/P1 的 change-review.md）：
 
 > change 已就绪（status: confirmed）。后续：
-> 🟡（可选，建议：AC ≥ 5 条 / 有条件节 §5 / type=refactor 时）`/eo-change-review` — 方案审查
+> 🟡（可选；符合 /eo-change-review 自述的「建议跑」条件时主动提示）`/eo-change-review` — 方案审查
 > 1. `/eo-implement <change-path>` — 按 Batch 实施
 > 2. `/eo-test <change-path>` → `/eo-review <change-path>`
 > 3. `/eo-archive <change-id>` — review 通过后归档
@@ -96,8 +96,7 @@ description: |
 ## 关键约束
 
 - **AC 先于 TODO**；每条 TODO 必须映射到 AC
-- **粒度硬上限拒绝确认**（10 条 TODO / 700 行）
+- **粒度硬上限拒绝确认**（数值见 granularity.md §1）
 - **无 `fix` 类型**；bug 走 /eo-fix
 - **status 由 skill 流转**（见 [../eo-shared/conventions.md](../eo-shared/conventions.md)），用户不手改
 - **change 阶段不写代码**、不改活文档；归档不反写（由 eo-archive 触发 doc sync）
-- 提问纪律、AC 规范、粒度判据的正文**只在 eo-shared/**，本文件不复述

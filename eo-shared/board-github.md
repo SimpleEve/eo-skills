@@ -45,7 +45,7 @@ tags: [eo-change]
 ```
 
 - `todo_done/todo_total` 数 change.md §3 的 checkbox
-- **skill 永不写 `.base` 文件**——看板视图由用户在 Obsidian 里配置一次（指南见 `eo-project-init/references/board-setup.md`）
+- **skill 永不写 `.base` 文件**——看板视图由用户在 Obsidian 里配置一次（指南见 [../eo-project-init/references/board-setup.md](../eo-project-init/references/board-setup.md)）
 - stub 是投影：允许随时全量重建（`/eo-project-init` 开启开关时做历史同步就是批量执行本节写法）
 
 ## 二、GitHub issue（`github.issue: true`）
@@ -76,6 +76,6 @@ PR body 自动生成：意图摘要 + AC 清单（勾选状态照抄）+ **条�
 
 任一 skill 走到触发点时发现 `.eo-project.json` **缺失对应段**（区别于显式 `false`/`never`——那是用户已选择关闭）：
 
-1. AskUserQuestion 问一次（board：开/关；github：issue 开/关 + pr 三选，推荐 `auto`）
+1. 按 [questioning.md](questioning.md) §4 的封闭选择协议问一次（board：开/关；github：issue 开/关 + pr 三选，推荐 `auto`）
 2. 答案写回 `.eo-project.json`
 3. 此后所有 skill 按配置静默执行，不再询问

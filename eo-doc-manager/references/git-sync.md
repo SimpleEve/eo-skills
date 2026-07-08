@@ -37,7 +37,7 @@
 
 ### 脏变更三选一
 
-sync 启动时若 `git status` 显示工作区有未提交/已暂存变更，**问用户一次**（AskUserQuestion，三选项）：
+sync 启动时若 `git status` 显示工作区有未提交/已暂存变更，**问用户一次**（按 [../../eo-shared/questioning.md](../../eo-shared/questioning.md) §4 封闭选择协议，三选项）：
 
 | 选项 | 语义 | 适用 |
 |------|------|------|
@@ -152,7 +152,7 @@ src/actions/sync.ts                  → actions/sync 模块
 ### Step 8: 汇报变更
 
 ```
-文档同步完成（基于 abc1234..def5678 + 未提交变更）：
+文档同步完成（基于 abc1234..def5678，已提交增量）：
 
 agent-handbook/ 更新:
   ✏️ agent-handbook/task-engine.md — 新增 retryTask 接口描述

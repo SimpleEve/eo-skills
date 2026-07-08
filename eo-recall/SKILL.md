@@ -1,8 +1,8 @@
 ---
 name: eo-recall
 description: |
-  只读的回忆与解释入口：「这个功能当时怎么设计的 / 这段逻辑代码上怎么实现的 / 当初为什么这么定」——按问题类型走检索瀑布（state / agent-handbook / change 已钉决策 / decisions / brainstorm），分层作答、每个论断带出处；复杂逻辑可产 mermaid 或一次性 HTML 解释页。触发：当时怎么设计的 / 这个逻辑怎么实现的 / 为什么这么定 / 帮我回忆 / recall / /eo-recall。
-  NOT FOR: 修 bug（/eo-fix）、发起变更（/eo-change）、维护文档（/eo-doc-manager sync）。
+  只读的回忆与解释入口，分层作答带出处。触发：这个功能当时怎么设计的 / 这段逻辑怎么实现的 / 当初为什么这么定 / 帮我回忆 / recall / /eo-recall。
+  NOT FOR: 修 bug（/eo-fix）、发起变更（/eo-change）、维护文档（/eo-doc-manager）。
 ---
 
 # eo-recall — 回忆与解释

@@ -1,6 +1,6 @@
 ---
 name: eo-project-update
-description: "更新项目进度、阶段状态、决策记录，并同步项目看板（若配置）。通过 .eo-project.json 定位项目。触发：更新项目 / 同步进展 / 记录决策 / 阶段完成 / /eo-project-update。"
+description: "更新项目进度、阶段状态、决策记录，并同步项目看板（若配置）。通过 .eo-project.json 定位项目。触发（仅用户明确要求时）：更新项目进度 / 把这个决策记下来 / 阶段完成了记一下 / /eo-project-update。NOT FOR: 对话中出现决策/进展字眼但用户未要求记录。"
 ---
 
 # eo-project-update

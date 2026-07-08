@@ -37,7 +37,7 @@
 | eo-test | **微调** | 测试锚点从 spec/change §6 改为 AC；其余不变 |
 | eo-review | **微调** | 检查表以 AC 为锚；清理 spec/模块引用 |
 | eo-change-review | **保留现状** | 决策 #1：暂不轻量化，预留观测（已入 backlog）；新增粒度超标检查项 |
-| eo-project-init | **调整** | 骨架与注入内容更新；待确定问题全部走 AskUserQuestion |
+| eo-project-init | **调整** | 骨架与注入内容更新；待确定问题全部走封闭选择协议（questioning.md §4，runtime 中立） |
 | eo-design | **新增** | 四模式：init / variants / apply / audit（参考 gstack 全链路） |
 | eo-recall | **新增** | 活文档消费入口：回忆/解释问答（检索瀑布 + 分层作答带出处 + 按需 mermaid/HTML 解释页）；吸收 doc-manager 的 query |
 | eo-flow | **保留，延后修改** | 本次只清理其中 eo-workflow 与 spec 相关引用 |
@@ -135,7 +135,7 @@ tmp/eo/
 综合 grillme / spec-kit / spec-kitty / eo-brainstorming 决策池：
 
 - **预算按复杂度配比**：trivial 0-1 问、simple 1-3 问、complex 3-5 问、critical 5+ 问（并建议升级 brainstorming）。每轮最多 1-2 问。
-- **封闭选择一律走 AskUserQuestion**：2-4 个选项 + 推荐项标注（Recommended）；开放问题走正文，放消息末尾。
+- **封闭选择协议（runtime 中立）**：优先用当前 runtime 的结构化提问工具（Claude Code 为 AskUserQuestion），无则对话内列 2-4 个编号选项；必带推荐项；开放问题走正文，放消息末尾。
 - **决策台账**：内部维护「已钉（结论+理由）/ 未钉 / defer」三态，不渲染给用户；已钉项不得重问、不得被后续讨论隐式推翻；defer 项写入 change.md §8 开放问题，**全篇上限 3 条**。
 - **UI/UX 类问题**：文字难以描述时，选项末尾附「生成 HTML 对比页帮你决策」（低保真、自包含、可点选；借 superpowers visual companion 思路，产物放 tmp/ 不入库，结论回填决策台账）。
 - **疲劳信号识别**：用户说「别问了 / 先做吧 / 就这样」→ 立即用合理默认推进，假设显式写入 §1 并标注「（假设）」。
@@ -376,7 +376,7 @@ P2（可后置）：
   - `eo-doc` 段目录表改为三行（agent-handbook / state / changes，各注「何时读」）；
   - 保留三个行为钩子（backlog / decisions / lessons）；
   - 若 DESIGN.md 存在，检查并补 eo-design 约束段。
-- 全部待确定问题（建哪个 agent 文件、vault 模式等）用 AskUserQuestion 呈现，带推荐项。
+- 全部待确定问题（建哪个 agent 文件、vault 模式等）按封闭选择协议呈现，带推荐项。
 - 注意 v1 已知副作用：行为钩子的触发词曾污染下游 skill 措辞（change-review 被迫避用「关键决策」字样）——v2 注入的钩子触发条件收窄为「用户明确表达」而非关键词匹配。
 
 ### 9.2 eo-shared/（新增共享目录）
@@ -444,7 +444,7 @@ install.sh 是逐目录软链，跨 skill 相对路径引用不可靠。方案�
 
 ## 14. GitHub 联动（opt-in）
 
-- **配置**：`.eo-project.json` 的 `github` 段 `{ sync, issue, pr: "auto"|"always"|"never" }`。首次遇到未配置时 AskUserQuestion 问一次并写回，此后永不再问。
+- **配置**：`.eo-project.json` 的 `github` 段 `{ sync, issue, pr: "auto"|"always"|"never" }`。首次遇到未配置时按封闭选择协议问一次并写回，此后永不再问。
 - **change ↔ issue**：粒度停在 change 层，一对一。`draft→confirmed` 时建 issue（草稿夭折不留孤儿）；issue 号回写 frontmatter（`issue: 42`，去重唯一依据，绝不靠标题匹配）；TODO 作为 issue body checklist（原生 n of m 进度）；archive 兜底关闭。
 - **change ↔ PR**：`pr: auto`（推荐默认）= archive 收尾时在非默认分支自动 push + `gh pr create`，默认分支直接提交不建 PR，零提问。PR body 自动生成：意图摘要 + AC 勾选清单 + **条件性 Closes**（AC 全勾才写 `Closes #N`，否则 `Linked to #N (partial)`——issue 关闭语义严格等于验收完成）。PR URL 回写 frontmatter，board stub 带上。
 - **真相源裁决**：本地文件是唯一真相源，GitHub 是投影 + 协作评论区。严格单向推送；唯一逆向通道是漂移检测告警（issue 已关但本地未 archived → 报一行，不自动改）。不做双向同步（echo loop / 冲突 / rate limit 三重税，gstack 与 spec-kit 双双选单向互为印证）。

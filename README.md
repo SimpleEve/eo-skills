@@ -38,7 +38,7 @@ cd ~/code/eo-skills
 sh install.sh
 ```
 
-脚本会把仓库中所有 `eo-*` 目录**直接软链**到各 agent 的 skills 目录，无中间层：
+脚本会把仓库中所有 `eo-*` 目录（各 skill + `eo-shared` 支持目录）**直接软链**到各 agent 的 skills 目录，无中间层。**必须整套安装**——单独拷贝某个 skill 目录会使其对 `../eo-shared/` 的引用断链：
 
 | Agent | 目标目录 |
 |-------|----------|
@@ -117,13 +117,13 @@ flowchart TD
     Init --> PU["/eo-project-update<br/>项目进度 / 决策"]
     Init --> PL["/eo-project-lesson<br/>项目经验"]
 
-    Imp -.clear 前快照.-> Hand["/eo-handoff<br/>tmp/&lt;topic&gt;-handoff.md"]:::cross
+    Imp -.clear 前快照.-> Hand["/eo-handoff<br/>tmp/eo/handoff/&lt;topic&gt;.md"]:::cross
 
     classDef entry fill:#fef3c7,stroke:#f59e0b,stroke-width:2px
     classDef cross fill:#dbeafe,stroke:#3b82f6,stroke-dasharray: 3 3
 ```
 
-> `/eo-handoff` 横切整个流程：clear 前在**任意节点**都可触发，把当前状态写到 `tmp/<topic>-handoff.md` 供下个会话载入。图中仅以 implement 阶段示意。
+> `/eo-handoff` 横切整个流程：clear 前在**任意节点**都可触发，把当前状态写到 `tmp/eo/handoff/<topic>.md` 供下个会话载入。图中仅以 implement 阶段示意。
 >
 > 样式微调、多语言这类 trivial 改动走**直改模式**（不开 change，判据见 [eo-shared/granularity.md](eo-shared/granularity.md)），由 doc-manager 的 cursor sync 兜底归档。
 

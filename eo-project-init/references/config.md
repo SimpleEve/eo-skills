@@ -12,7 +12,7 @@
 | `~/.eo/platform.db` | eo-platform 本地索引缓存（SQLite） | eo-platform |
 | `~/.eo/logs/` | eo-platform 日志（按需） | eo-platform |
 
-根路径可通过环境变量 `EO_HOME` 覆盖（例如跑测试或多账号隔离时指向临时目录）。未设置时一律使用 `~/.eo/`。
+根路径可通过环境变量 `EO_HOME` 覆盖（例如跑测试或多账号隔离时指向临时目录）。未设置时一律使用 `~/.eo/`。涉及该路径的内联命令一律写 `"${EO_HOME:-$HOME/.eo}"`。
 
 **自动迁移**：若 `~/.eo-skills.json` 存在且 `~/.eo/config.json` 不存在，`eo-project-init` 启动时**静默执行一次**：
 

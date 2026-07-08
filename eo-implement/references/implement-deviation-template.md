@@ -5,7 +5,6 @@
 ```markdown
 ---
 title: <change-id> 实施偏差记录
-module: <module-name>
 change_id: <change-id>
 tags: [偏差]
 created: YYYY-MM-DD

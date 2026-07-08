@@ -1,7 +1,7 @@
 ---
 name: eo-fix
 description: |
-  bug 口喷入口：默认快路直接修复 + 落点记账；「行为不对」类的语义分歧才取证（缺陷 vs 有意设计 vs 需求变更）；原因不明的难缠 bug 自动升级深挖模式。触发：修 bug / 有个 bug / 行为不对 / fix / /eo-fix。
+  bug 口喷入口：定位并直接修复。触发：修 bug / 有个 bug / 报错了 / 行为不对 / fix / /eo-fix。
   NOT FOR: 明确的业务变更（走 /eo-change）；implement-test-review 循环内的反馈修复（归 /eo-implement 模式二）。
 ---
 

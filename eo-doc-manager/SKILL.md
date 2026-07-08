@@ -1,6 +1,6 @@
 ---
 name: eo-doc-manager
-description: 管理 eo-doc/ 代码侧文档体系（init / sync / re-sync / modify / select）。所有 eo-doc 下的文档维护操作必须走此 skill。触发：初始化文档 / 同步文档 / /eo-doc-manager。NOT FOR：查询与解释文档内容（走 /eo-recall）。
+description: 管理 eo-doc/ 代码侧文档体系（init / sync / re-sync / modify / select）。所有 eo-doc 下的文档维护操作必须走此 skill。触发：初始化文档 / 同步文档 / 重建文档 / re-sync / 修改文档 / 整理文档 / 只同步 state 或 agent-handbook / /eo-doc-manager。NOT FOR：查询与解释文档内容（走 /eo-recall）。
 ---
 
 # eo-doc-manager
@@ -46,17 +46,9 @@ eo-doc/
 └── .sync-cursor      # sync 基线与计数（自动进 .gitignore）
 ```
 
-### 已移除的目录
+### 不处理的旧目录
 
-以下目录在重构中移除，**本 skill 不再处理**：
-
-| 旧目录 | 去向 |
-|--------|------|
-| `eo-doc/doc/` | 改名为 `state/`（语义更准："系统现在什么样" = state） |
-| `eo-doc/dev/` | 模块维度移除；change 工件上提为项目级 `eo-doc/changes/`（模块 spec 不再存在） |
-| `eo-doc/design/` | 迁至项目管理侧 `<project_root>/docs/`（与原始 PRD 合并） |
-| `eo-doc/research/` | **暂时移除**（未来有对应 skill 再接入；先记在 `<project_root>/backlog.md`） |
-| `eo-doc/knowledgebase/` | **暂时移除**（同上） |
+遇到 `eo-doc/` 下存在 `doc/`、`dev/`、`design/`、`research/`、`knowledgebase/` 时：**不读取、不重建、不同步**，提示用户按 [../docs/migration-v1-to-v2.md](../docs/migration-v1-to-v2.md) 处理（注：该文档在仓库 docs/ 下，软链安装环境中若不可达则直接口头提示「这是 v1 遗留目录，见仓库迁移指南」）。
 
 ## 目录职责
 
@@ -75,8 +67,7 @@ eo-doc/
 - state 回答"系统做了什么"，agent-handbook 回答"代码在哪里、怎么调用"
 
 **templates/**：
-- 不是文档，是 eo-* 技能的扩展点
-- 定义项目类型（`project-profile.md`）、多层对齐模板（`spec-layers.md`）、分层 Part 模板（`plan-layers.md`）、分层执行模板（`implement-layers.md`）
+- 不是文档，是 eo-* 技能的扩展点（如项目类型画像 `project-profile.md`）
 - 模板可选，不存在时 eo-* 技能使用内置默认行为
 - sync / re-sync 不处理 templates/（它们不是从源码生成的）
 
@@ -95,7 +86,7 @@ state/ 和 agent-handbook/ 的内容必须从**源码**生成，不是从已有�
 
 ## state/ 写作规范
 
-见 [references/doc-style.md](references/doc-style.md)（原名保留，指代 state 的写作规范）。
+见 [references/doc-style.md](references/doc-style.md)。
 
 ## 核心工作流
 
@@ -115,7 +106,6 @@ state/ 和 agent-handbook/ 的内容必须从**源码**生成，不是从已有�
 7. CLAUDE.md 注入（见下方"CLAUDE.md 注入规则"）
 8. **不自动生成 state/ 和 agent-handbook/ 内容**——留待 `/eo-doc-manager sync` 或 `re-sync` 首次触发
 
-> 与旧版差异：旧版 init 会立即 re-sync 生成 agent-handbook / doc。新版拆开——init 只建骨架，内容生成是单独动作（避免新项目还没多少代码就先做一次全量扫描）。
 
 ### modify — 修改/创建文档
 
@@ -149,7 +139,6 @@ state/ 和 agent-handbook/ 的内容必须从**源码**生成，不是从已有�
 3. 更新 CLAUDE.md 注入
 4. 重置 `.sync-cursor`
 
-> 与旧版差异：旧版有 design/ 的 impl_status 校准步骤。新版移除——design 已迁至项目管理侧，不再由本 skill 管。
 
 ### select — 选择性操作
 
@@ -159,34 +148,7 @@ state/ 和 agent-handbook/ 的内容必须从**源码**生成，不是从已有�
 
 ## 结构化规则
 
-### Frontmatter（YAML）
-
-```yaml
----
-title: 简明标题
-type: agent | state
-tags: [tag1, tag2, tag3]
-created: YYYY-MM-DD
-updated: YYYY-MM-DD
-scope: 一句话适用范围
-status: draft | active | archived
-source: 原始链接或项目内部路径
-summary: >
-  1-2 句核心摘要，AI 靠这个决定是否读全文。
-conclusions:
-  - 关键结论1
-  - 关键结论2
----
-```
-
-### 正文结构
-
-1. 上下文段落（2-3 句）
-2. `##` 结构化章节，自包含、可独立扫读
-3. 事实用列表，分析用短段落，对比用表格
-4. 底部来源引用
-
-参考 [templates.md](references/templates.md) 获取模板。
+frontmatter 规格与正文结构以 [references/templates.md](references/templates.md) 为唯一来源（要点：frontmatter 含 type/tags/summary/conclusions 供 AI 免读全文判断相关性；正文 `##` 扁平章节、自包含可扫读）。
 
 ### 拆分规则
 

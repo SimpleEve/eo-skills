@@ -15,7 +15,7 @@
 | [filename.md](filename.md) | 标题 | `tag1` `tag2` | YYYY-MM-DD | 一句摘要 |
 ```
 
-> 重构后 `eo-doc/` 仅保留 `agent-handbook/` / `state/` / `dev/` / `templates/`，统一使用上面的标准列。已无需 `impl_coverage` 特殊列（design/ 已迁出 eo-doc/）。
+> `eo-doc/` 各子目录（`agent-handbook/` / `state/` / `changes/`）统一使用上面的标准列。
 
 ## 分组式 INDEX（10+ 篇时使用）
 

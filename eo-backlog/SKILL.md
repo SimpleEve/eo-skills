@@ -1,6 +1,6 @@
 ---
 name: eo-backlog
-description: "往项目 backlog.md 追加待办、灵感或未接入的未来规划。通过 .eo-project.json 定位项目。触发：加入 backlog / 记一条待办 / 以后再说 / /eo-backlog。"
+description: "往项目 backlog.md 追加待办、灵感或未接入的未来规划。通过 .eo-project.json 定位项目。触发（仅用户明确要求记录时）：加入 backlog / 记一条待办 / 这个以后再说，记一下 / /eo-backlog。NOT FOR: 对话中顺带出现的『以后 / TODO』——未经用户确认不落盘。"
 ---
 
 # eo-backlog

@@ -2,20 +2,20 @@
 
 本规范覆盖 eo-skills 体系内所有 mermaid 图的类型选择、样式约定、维护规则。
 
-被以下 skill 引用：
-- `eo-change` — 流程图、状态图（条件节：画比说清楚时才画）
-- `eo-project-init` / `eo-project-update` — 项目级 ARCHITECTURE.md 依赖图
+主要消费方：
+- `eo-change` — 条件节 §6 流程图（画比说清楚时才画）
+- `eo-recall` — 回忆问答的按需出图
+- `eo-doc-manager` 自身 — state/ 中「当前稳定态」流程图的重画
 - `eo-change-review` / `eo-review` — 一致性审查
 
 ## 1. 图类型选择矩阵
 
 | 目标 | 图类型 | 用在哪 |
 |------|--------|--------|
-| 用户操作流程、业务决策分支 | `flowchart TD` | spec §3、change §2 |
-| 多角色/多系统交互、时序敏感 | `sequenceDiagram` | spec §3、change §2（涉及跨模块调用） |
-| 业务状态机、生命周期 | `stateDiagram-v2` | spec §3 |
-| 模块内部组件关系 | `flowchart LR` | spec §1（模块架构图） |
-| 项目级模块依赖拓扑 | `flowchart TB` | `eo-doc/ARCHITECTURE.md` |
+| 用户操作流程、业务决策分支 | `flowchart TD` | change §6、state/ 流程章节 |
+| 多角色/多系统交互、时序敏感 | `sequenceDiagram` | change §6（涉及跨系统调用） |
+| 业务状态机、生命周期 | `stateDiagram-v2` | change §6、state/ 规则章节 |
+| 组件/依赖关系 | `flowchart LR/TB` | agent-handbook 依赖章节、recall 输出 |
 
 **选型原则**：能用 `flowchart` 表达就不要上 `sequenceDiagram`；用户读图的认知成本低于语法表达力。
 
@@ -111,17 +111,17 @@ flowchart TB
 
 | 检查项 | 严重度 |
 |--------|--------|
-| spec/change 应画图但未画（符合触发规则） | P2 |
+| change 满足 §6 触发条件（状态机/多角色交互）却未画图 | P2 |
 | 图与代码实现不一致（节点/分支/状态对不上） | P1 |
-| change 流程图缺少 `:::new` / `:::changed` 标注（但明显有 Delta） | P2 |
+| change 流程图有明显变更点却缺 `:::new` / `:::changed` 标注 | P2 |
 | 节点 ID 含中文或空格（违反命名规则） | P3 |
 | 图类型选错（如用 sequenceDiagram 画纯流程） | P3 |
-| 归档后 spec 流程图残留 `:::new` / `:::changed` | P2 |
+| state/ 的稳定态流程图残留 `:::new` / `:::changed`（重画时应清除） | P2 |
 
 ## 6. 什么时候可以不画
 
 - 纯配置调整、纯文案/样式变更
-- Delta 只有 1 条 ADDED 且不涉及流程分支
-- bootstrap change 只是把 spec 已声明的能力落成代码，流程由 spec 图表达即可
+- 单一能力点新增且不涉及流程分支
+- 用文字一句能说清的线性流程
 
-其他情况默认要画。
+满足 change 模板 §6 触发条件（状态机、多角色交互等「画比说清楚」的场景）才画，其余默认不画。

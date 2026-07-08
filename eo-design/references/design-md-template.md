@@ -61,4 +61,4 @@ Decisions Log **只追加不改写**——包括「light 模式强调色用 600 
 <!-- eo-design:end -->
 ```
 
-注入流程与验证同 `eo-doc-manager/references/claude-injection.md` 的三场景规则（不存在则创建、无标记则追加、有标记则整段替换）。
+注入流程与验证同 [../../eo-doc-manager/references/claude-injection.md](../../eo-doc-manager/references/claude-injection.md) 的三场景规则（不存在则创建、无标记则追加、有标记则整段替换）。

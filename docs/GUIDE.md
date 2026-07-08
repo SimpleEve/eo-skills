@@ -144,7 +144,7 @@ eo-doc/changes/
 | `.eo-project.json` 存在 | 所有 eo-* skill 的前置。找不到 → 报错 |
 | `change-id` 命名 | `NNN-kebab-name`（3 位数字前缀，项目级递增）；**拒绝 `fix-` 前缀** |
 | `change_type` 枚举 | `bootstrap` / `feature` / `enhance` / `refactor`（**无 `fix`**） |
-| 粒度硬指标 | TODO 3-7 理想 / 10 硬上限；change.md 500 行软 / 700 行硬；超标拆序列 |
+| 粒度硬指标 | TODO 数与行数超软标建议拆、超硬标必须拆；数值以 `eo-shared/granularity.md` 为准 |
 | 状态流转 | `draft → confirmed → implementing → done → archived`（**skill 自动流转**，用户不手改 frontmatter） |
 | trivial 直改 | 满足硬判据（不改行为/接口/数据、无方案权衡、单会话）→ 不开 change，直改 + commit |
 | 归档不反写 | archive 只更新活文档 + 冻结 change；spec 概念已移除 |
@@ -217,24 +217,9 @@ eo-flow 会：
 - 一个跨多次会话的长任务，每次结束前留个交接文件
 - `/compact` 留下的信息密度太低、噪音太多
 
-**横切性**：和 dev track 任意节点正交。spec / change / implement / test / review 任一阶段都可触发。
+**横切性**：和 dev track 任意节点正交，brainstorming / change / implement / test / review 任一阶段都可触发；不依赖 `.eo-project.json`，任何 git 仓库都能用。
 
-**输出骨架**（6 段固定）：
-
-| 段 | 内容 |
-|---|------|
-| §1 当前状态 | 在哪个节点，关键产物路径 + status |
-| §2 基线 | git HEAD、工作目录状态、关键文件清单 |
-| §3 下一步分叉 | 等用户决策的候选方案（A/B/C） |
-| §4 关键口径清单 ⭐ | 跨 clear 必须保持的决策与不变量；每条带「为什么」 |
-| §5 开机动作序列 | clear 后第一组有序动作 |
-| §6 明确不写的 | 主动丢弃了什么，让用户最后检查 |
-
-§4 是核心价值：探索过程可以丢，但收敛出来的决策不能丢。
-
-**不依赖 `.eo-project.json`**：`tmp/` 是工作区机制，任何 git 仓库都能用，即使没跑过 `/eo-project-init` 也能用。
-
-**tmp/ 由用户管**：默认覆盖同名文件；不自动清理；不进 `.gitignore`（项目自决）。
+输出为 6 段固定骨架（当前状态 / 基线 / 下一步分叉 / **关键口径清单**⭐ / 开机动作序列 / 明确不写的）——核心价值在 §4：探索过程可以丢，收敛出来的决策不能丢。骨架细节与写法以 `eo-handoff/SKILL.md` 为准，此处不复写。
 
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: eo-flow
 description: |
-  单点 handoff：把 eo-* 任务（review/test/implement/change-review）甩给 tmux 里的 codex pane 执行，回包后决定"甩回去修"或"暂停问用户"。触发：eo-flow / 甩给 codex / /eo-flow。
+  单点 handoff：把 eo-* 任务（review/test/implement/change-review/fix）甩给 tmux 里的 codex pane 执行，回包后决定"甩回去修"或"暂停问用户"。触发：eo-flow / 甩给 codex / /eo-flow。
   NOT FOR: 完整流水线编排（一次只 handoff 一个动作）。
 ---
 
@@ -90,7 +90,7 @@ CALLBACK="$(tmux-bridge id)"   # %N 形式的 pane-id
 第 3 步的 Enter 是提交键——漏掉就只是把字打到对方 prompt 里不会触发回调。这三步必须是 shell 里最后动作，否则视为未完成。
 ```
 
-走 `/smux` 的 read-act-read 四段把这整条指令发到 codex pane，然后**立刻告知用户**派了什么、在等哪个 pane 的回包。停手。
+按 `/smux` 技能的跨 pane 发送流程把这整条指令发到 codex pane（发送前 read 确认对方就绪、发送后 read 确认已上屏），然后**立刻告知用户**派了什么、在等哪个 pane 的回包。停手。
 
 ### 4. 收到回包后决策分叉
 
@@ -117,17 +117,9 @@ codex 按合约会回 `[tmux-bridge from:... ] done: ...` 到本 pane。**必须
 
 - **自动修**（按上面路径走）：明确 P0 bug、测试失败、AC 未覆盖、规范违反——客观、有标准答案的。
 - **暂停问用户**：架构取舍、接口命名、影响面外溢、需要改 change 方案、同一问题反复 2 轮没收敛。
-- **通过可合**：零 P0/P1 或仅 P2 → 告知用户进入**对应 action 的下一步**（见下表，**不要无脑建议 `/eo-archive`**）：
-
-  | 刚跑完的 action | 通过后的下一步（提示给用户） |
-  |----------------|------------------------------|
-  | `change-review` | 用户确认后 `change.md` 进入 `confirmed` → `/eo-flow implement`（或直接 `/eo-implement`） |
-  | `implement` | `/eo-flow test`（或 `/eo-test`） |
-  | `test` | `/eo-flow review`（或 `/eo-review`） |
-  | `review` | `/eo-archive <module> <change-id>` ← **只有这里才是归档入口** |
-  | `fix` | 按 fix 前的上下文回到原 action 复审（例：review 触发的 fix → 再跑 `/eo-flow review`） |
-
-  关键区分：`eo-archive` 只消费"实施后代码审查（`review.md`）通过"的 change，不消费 `change-review.md`。change-review 是方案级审查，通过后代码还没写，不能归档。
+- **通过可合**：零 P0/P1 或仅 P2 → 读对应产出文件末尾的速报，**按其「下一步」原样转达用户**（各 skill 的下一步口径以其自身速报为单一来源，本 skill 不重写流程表）。两条 eo-flow 特有的例外需自己把住：
+  - `review` 通过 → 下一步是 `/eo-archive <change-id>`——**只有这里才是归档入口**；`eo-archive` 只消费 review.md 通过的 change，不消费 change-review.md（方案审查通过时代码还没写，不能归档）
+  - `fix` 完成 → 按 fix 前的上下文回到原 action 复审（例：review 触发的 fix → 再跑 `/eo-flow review`）
 
 超时未回包（≥10 分钟）：`tmux-bridge read <codex-pane> 40` 看状态——进程还在就继续等；已 idle 但文件落稿了说明 codex 漏发 message，手动读产出决策并告知用户。
 

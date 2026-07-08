@@ -1,6 +1,6 @@
 ---
 name: eo-project-lesson
-description: "捕获项目经验教训（踩坑、最佳实践、意外收获），写入当前项目的 lessons/ 目录。通过 .eo-project.json 定位。触发：踩坑了 / 记录经验 / 教训 / lesson learned / /eo-project-lesson。"
+description: "捕获项目经验教训（踩坑、最佳实践、意外收获），写入当前项目的 lessons/ 目录并维护 INDEX。通过 .eo-project.json 定位。触发（仅用户明确要求记录时）：把这个坑记下来 / 记条经验 / lesson learned / reindex lessons / /eo-project-lesson。NOT FOR: 对话提到踩坑但用户未要求记录。"
 ---
 
 # eo-project-lesson

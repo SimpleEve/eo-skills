@@ -1,7 +1,7 @@
 ---
 name: eo-design
 description: |
-  项目设计能力：init（0→1 建立设计系统并落地 DESIGN.md + 约束注入）/ variants（多变体视觉发散对比）/ apply（把选中方向落成生产级 HTML）/ audit（实现与 DESIGN.md 的一致性审计）。触发：设计 / design / 配色 / 字体 / 高保真 / /eo-design。
+  项目设计能力，真相源为仓库根 DESIGN.md。触发：定设计系统 / 出几版视觉方案对比 / 做高保真页面 / 设计审计 / 配色 / 字体 / design / /eo-design。
   NOT FOR: 具体功能的变更起草（走 /eo-change）；纯文案修改。
 ---
 
@@ -26,7 +26,7 @@ description: |
 - **预览一律自包含 HTML**：内联全部 CSS/JS、不依赖外部服务；候选字体可用字体服务 link 标签加载。质量要求见 [references/visual-craft.md](references/visual-craft.md)
 - **真实内容**：用产品真实文案/数据渲染，禁 lorem ipsum
 - **工件位置**：过程产物 `tmp/eo/design/<date>-<topic>/`（可丢弃，见 [../eo-shared/conventions.md](../eo-shared/conventions.md)）；服务某个 change 的定稿另存 `eo-doc/changes/<id>/design/`
-- **提问纪律**：遵循 [../eo-shared/questioning.md](../eo-shared/questioning.md)；封闭选择用 AskUserQuestion 带推荐项
+- **提问纪律**：遵循 [../eo-shared/questioning.md](../eo-shared/questioning.md)；封闭选择按其 §4 协议带推荐项
 
 ## init — 建立设计系统
 
@@ -66,12 +66,12 @@ description: |
 结论：一致 / 偏差 N 项（P0 x / P1 y / P2 z）
 P0：1. <一句话> — <位置>
 下一步：<修复建议归属：直改（ui:）/ 开 change>
-（详单见 <报告路径，写 tmp/eo/design/<date>-audit.md>）
+（详单见 <报告路径，写 tmp/eo/design/<date>-audit/report.md>）
 ```
 
 ## 关键约束
 
-- **不写 .base、不碰 eo-doc/ 之外的项目文档**；本 skill 只产 DESIGN.md、约束注入段、HTML 工件、audit 报告
+- **落盘白名单**：本 skill 的全部写入仅限——仓库根 `DESIGN.md`、agent 配置文件的 `eo-design` 注入段、`tmp/eo/design/`、`eo-doc/changes/<id>/design/`；此外一律不写（含 `.base` 文件与任何其他项目文档）
 - **Decisions Log 只追加不改写**（日期｜决策｜理由）
 - **联网调研永远可选**，跳过不阻塞任何模式
 - 偏离 DESIGN.md = 用户批准 + 记 Decisions Log，两者缺一不可

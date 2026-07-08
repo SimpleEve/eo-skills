@@ -41,4 +41,4 @@ draft ──(eo-change：用户对话确认)──▶ confirmed
       ──(eo-archive：完成归档)──▶ archived（不可逆）
 ```
 
-用户的确认动作发生在对话里（回复确认 / AskUserQuestion 选择），skill 负责落盘。
+用户的确认动作发生在对话里（回复确认，或按 [questioning.md](questioning.md) §4 封闭选择协议选择），skill 负责落盘。

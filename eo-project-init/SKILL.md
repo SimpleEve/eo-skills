@@ -31,24 +31,36 @@ description: "eo-skills 在当前仓库的总入口：生成 .eo-project.json、
 
 ### 1. 解析配置来源
 
-1. **旧路径自动迁移**（静默，执行一次）：若 `~/.eo-skills.json` 存在且 `~/.eo/config.json` 不存在，执行：
+1. **旧路径自动迁移**（静默，执行一次）：若 `~/.eo-skills.json` 存在且用户级配置不存在，执行：
    ```bash
-   mkdir -p ~/.eo
-   mv ~/.eo-skills.json ~/.eo/config.json
+   EO_HOME="${EO_HOME:-$HOME/.eo}"
+   mkdir -p "$EO_HOME"
+   mv ~/.eo-skills.json "$EO_HOME/config.json"
    ```
-   迁移后打印一行提示：`已将旧配置 ~/.eo-skills.json 迁移至 ~/.eo/config.json`。之后不再检查旧路径。
+   迁移后打印一行提示。之后不再检查旧路径。
 
 2. **检查 cwd 是否已有 `.eo-project.json`**：
-   - 已有 → 走「更新/修复」分支（见 §6）
-   - 未有 → 继续 §3
+   - 已有 → 走下方「1.5 更新/修复分支」，**不进入首次创建流程**
+   - 未有 → 继续本节第 3 小步
 
 3. **读取 `~/.eo/config.json`**（用户级默认，可能不存在）：
-   - 存在 → 取 `default_mode` / `vault_root` 等作为推荐值进入 §2（节号指下文的"询问运行模式"）
-   - 不存在 → 进入 §2 时推荐值为空
+   - 存在 → 取 `default_mode` / `vault_root` 等作为推荐值，进入「2. 询问运行模式」
+   - 不存在 → 进入「2. 询问运行模式」时推荐值为空
+
+### 1.5 更新/修复分支（已初始化项目重跑本 skill）
+
+对已有 `.eo-project.json` 的项目，重跑是**幂等的补齐动作**，逐项执行、已达标项静默跳过：
+
+1. **配置校验**：读现有 `.eo-project.json`，对照 [references/config.md](references/config.md) 的 schema——缺失字段按默认值补写（如老配置缺 `board` / `github` 段），已有字段一律不改
+2. **骨架补齐**：项目管理侧三必建（roadmap/log/backlog）与代码侧 `eo-doc/` 骨架缺什么补什么；**不触碰任何已有文件的内容**
+3. **注入段刷新**：按标记对整段替换 agent 配置文件中的 `eo-project` / `eo-doc` 注入段；仓库根存在 `DESIGN.md` 时核对 `eo-design` 注入段
+4. **.gitignore 核对**：`tmp/eo/`、`<doc_root>/.sync-cursor`、（local 模式）`.eo-project/`、（vault 模式）`<doc_root>/vault` 缺项补写
+5. **联动两问**（仅对应段缺失时，规则见「9. 生成 .eo-project.json」的 board/github 小节）：开启 board → 立即做 stub 历史同步
+6. **输出摘要**：列出本次补齐/刷新/跳过了什么，然后结束——不执行首次创建流程的其余步骤
 
 ### 2. 询问运行模式（必须问，不默认）
 
-**不要直接默认到 local**。用 AskUserQuestion 呈现两个选项（用户级配置有 `default_mode` 时把它标为 Recommended），选项说明取自下方要点：
+**不要直接默认到 local**。按封闭选择协议（[../eo-shared/questioning.md](../eo-shared/questioning.md) §4）呈现两个选项（用户级配置有 `default_mode` 时标为推荐），选项说明取自下方要点：
 
 ```
 这个项目的"项目管理侧"（roadmap / log / backlog / decisions / lessons 等）放在哪里？
@@ -155,7 +167,7 @@ eo-doc/
 额外：
 - 初始化 `eo-doc/.sync-cursor`（当前 HEAD 作为首次基线）
 - 将 `eo-doc/.sync-cursor` 与 `tmp/eo/` 追加到 `.gitignore`（tmp/eo/ 是各 skill 的临时工件命名空间，见 [../eo-shared/conventions.md](../eo-shared/conventions.md)）
-- CLAUDE.md 注入（详见 `eo-doc-manager/references/claude-injection.md`）
+- CLAUDE.md 注入（详见 [../eo-doc-manager/references/claude-injection.md](../eo-doc-manager/references/claude-injection.md)）
 
 **注意**：如果用户本次只想要项目管理侧（例如纯规划项目，没代码），可用 `--skip-code-side` 跳过 §8。此时 `doc_root` 字段仍写入配置，留待将来补建。
 
@@ -177,11 +189,11 @@ eo-doc/
 - vault 模式 + 用户级 `kanban_path` 有值 → 拼接为绝对路径 `<vault_root>/<kanban_path>`
 - 否则 → `null`
 
-**board / github 段**（联动开关，规范见 [../eo-shared/board-github.md](../eo-shared/board-github.md)）：用 AskUserQuestion 各问一次——
+**board / github 段**（联动开关，规范见 [../eo-shared/board-github.md](../eo-shared/board-github.md)）：按封闭选择协议各问一次——
 - `board.enabled`（仅 vault 模式提供此问；推荐开启）：开启则写 `{"enabled": true}` 并**立即做历史同步**——扫描 `eo-doc/changes/` 全部 change，按 board-github.md 的 stub 写法批量 upsert 到 `<project_root>/board/`（幂等，可随时重跑）；同时提示用户按 [references/board-setup.md](references/board-setup.md) 在 Obsidian 配置看板视图（一次性）
 - `github.issue` + `github.pr`（检测到 git remote 指向 GitHub 时才问；pr 推荐 `auto`）
 
-用户跳过 → 写显式关闭值（`false` / `"never"`），后续 skill 不再询问。**后开场景**：对已初始化项目重跑本 skill（更新/修复分支）时同样提供这两问，开启 board 即触发历史同步。
+用户跳过 → 写显式关闭值（`false` / `"never"`），后续 skill 不再询问。**后开场景**：对已初始化项目重跑本 skill 走「1.5 更新/修复分支」，其第 5 步提供这两问，开启 board 即触发历史同步。
 
 ### 10. 建立软链（vault 模式 + `create_symlink: true`）
 
@@ -246,21 +258,11 @@ local 模式**不建软链**。
 <!-- eo-project:end -->
 ```
 
-**DESIGN.md 检查**：若仓库根存在 `DESIGN.md` 但 agent 配置文件中无 `<!-- eo-design:start -->` 标记段，执行 `/eo-design` 的约束注入子步骤补上（见 `eo-design/references/design-md-template.md` 的注入模板）。
+**DESIGN.md 检查**：若仓库根存在 `DESIGN.md` 但 agent 配置文件中无 `<!-- eo-design:start -->` 标记段，执行 `/eo-design` 的约束注入子步骤补上（注入模板见 [../eo-design/references/design-md-template.md](../eo-design/references/design-md-template.md)）。
 
 ### 13. 注册到项目看板（仅 `kanban_path` 非空时）
 
-在 `kanban_path` 指向的看板对应状态分区添加：
-
-```markdown
-### {{project_name}}
-- 状态：`active`
-- 当前阶段：[[phase-1-<阶段名>]]（若已拆解）
-- 下一步：<第一个任务或"待拆解">
-- 阻塞：无
-- 决策记录：无
-- 经验教训：0 条
-```
+在 `kanban_path` 指向的看板对应状态分区添加初始条目——**条目格式以 [../eo-project-update/SKILL.md](../eo-project-update/SKILL.md) 第 4 步为单一来源**，各字段填初始值（状态 `active`、下一步「第一个任务或待拆解」、阻塞「无」、决策/经验为空）。
 
 `kanban_path: null` 时跳过整步。
 

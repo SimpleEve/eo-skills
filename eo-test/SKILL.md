@@ -1,6 +1,6 @@
 ---
 name: eo-test
-description: 以 change.md 的验收清单（AC）为锚编写并执行测试，产出 test.md 报告。严禁修改业务代码。触发：写测试 / 跑测试 / test / /eo-test。
+description: 为某个 change 编写并执行测试（以其验收清单为锚），产出 test.md 报告。严禁修改业务代码。触发：给这个 change 写测试 / 出测试报告 / test.md / /eo-test。NOT FOR: 与 change 无关的日常跑测试或补单测（直接做即可，不产报告）。
 ---
 
 # eo-test — 测试
@@ -57,5 +57,5 @@ description: 以 change.md 的验收清单（AC）为锚编写并执行测试，
 
 - **禁止跨权**：严禁修改业务逻辑代码
 - **测试独立性**：用例独立运行，不依赖执行顺序
-- **不修改 change**：发现 AC 写漏/写偏，记录到报告并建议用户走 /eo-fix 判定（可能就地补 AC）
+- **不修改 change**：发现 AC 写漏/写偏，记录到报告并建议回 /eo-implement（其流程含「确认后就地补 AC」；循环内问题不出循环）
 - **证据完整**：关键场景必须有可验证的执行证据
