@@ -246,7 +246,7 @@ description: |
 3. **衔接 /eo-change**：逐个进入 eo-change 流程，**已钉决策清单整体移交**（eo-change 第一步会继承台账、跳过已钉项的重复提问）——这是「钉住的结论不再重问」的落地
 4. 用户不同意拆 → 走常规分流表（记 backlog / 搁置）
 
-**边界**（决策 #2 双轨隔离）：日常小变更不需要经过 brainstorming，eo-change 内嵌的轻量澄清就够；只有「做不做 / 方向未定 / critical 级」才值得进来。反过来，brainstorming 结束不强制产出 change——纯探索（结论是「不做」或「再想想」）同样是合法终点。
+**边界**：日常小变更不需要经过 brainstorming，eo-change 内嵌的轻量澄清就够；只有「做不做 / 方向未定 / critical 级」才值得进来。反过来，brainstorming 结束不强制产出 change——纯探索（结论是「不做」或「再想想」）同样是合法终点。
 
 ## 固定模板
 

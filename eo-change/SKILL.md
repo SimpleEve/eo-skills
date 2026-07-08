@@ -81,7 +81,6 @@ description: |
 
 **场景 B — 返工修订**（存在未解决 P0/P1 的 change-review.md）：修订后**必须**再跑 `/eo-change-review` 复审（此时代码未写，**严禁**走 /eo-review 或直接 implement），直到无 P0/P1。复审通过前保持 `status: draft`。
 
-若 GitHub 联动开启（`.eo-project.json` 的 `github.issue`）：confirmed 时创建 issue，issue 号回写 frontmatter（见设计稿 §14；未配置时首次问一次并写回配置）。
 
 ## changes/INDEX.md 模板
 
@@ -98,6 +97,6 @@ description: |
 - **AC 先于 TODO**；每条 TODO 必须映射到 AC
 - **粒度硬上限拒绝确认**（10 条 TODO / 700 行）
 - **无 `fix` 类型**；bug 走 /eo-fix
-- **status 由 skill 流转**（conventions.md §3），用户不手改
+- **status 由 skill 流转**（见 [../eo-shared/conventions.md](../eo-shared/conventions.md)），用户不手改
 - **change 阶段不写代码**、不改活文档；归档不反写（由 eo-archive 触发 doc sync）
 - 提问纪律、AC 规范、粒度判据的正文**只在 eo-shared/**，本文件不复述

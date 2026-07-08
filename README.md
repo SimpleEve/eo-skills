@@ -125,7 +125,7 @@ flowchart TD
 
 > `/eo-handoff` 横切整个流程：clear 前在**任意节点**都可触发，把当前状态写到 `tmp/<topic>-handoff.md` 供下个会话载入。图中仅以 implement 阶段示意。
 >
-> 样式微调、多语言这类 trivial 改动走**直改模式**（不开 change，见设计稿 §3.7），由 doc-manager 的 cursor sync 兜底归档。
+> 样式微调、多语言这类 trivial 改动走**直改模式**（不开 change，判据见 [eo-shared/granularity.md](eo-shared/granularity.md)），由 doc-manager 的 cursor sync 兜底归档。
 
 ---
 
