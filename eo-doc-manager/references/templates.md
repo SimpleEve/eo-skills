@@ -34,39 +34,7 @@ conclusions:
 
 ## INDEX.md 模板
 
-### 目录级 INDEX.md
-
-```markdown
-# [分类名] Index
-
-> Last updated: YYYY-MM-DD
-> Total: N docs
-
-| File | Title | Tags | Updated | Summary |
-|------|-------|------|---------|---------|
-| [filename.md](filename.md) | 标题 | `tag1` `tag2` | YYYY-MM-DD | 一句摘要 |
-```
-
-### 分组式 INDEX（10+ 篇时使用）
-
-```markdown
-# [分类名] Index
-
-> Last updated: YYYY-MM-DD
-> Total: N docs
-
-## [子分类 A]
-
-| File | Title | Tags | Updated | Summary |
-|------|-------|------|---------|---------|
-| [file1.md](file1.md) | 标题 | `tag` | YYYY-MM-DD | 摘要 |
-
-## [子分类 B]
-
-| File | Title | Tags | Updated | Summary |
-|------|-------|------|---------|---------|
-| [file2.md](file2.md) | 标题 | `tag` | YYYY-MM-DD | 摘要 |
-```
+INDEX 模板（目录级 / 分组式）以 [index-templates.md](index-templates.md) 为唯一来源，本文件不重复。
 
 ## Frontmatter 字段规则
 

@@ -6,7 +6,7 @@
 - `eo-change` — 条件节 §6 流程图（画比说清楚时才画）
 - `eo-recall` — 回忆问答的按需出图
 - `eo-doc-manager` 自身 — state/ 中「当前稳定态」流程图的重画
-- `eo-change-review` / `eo-review` — 一致性审查
+- `eo-change-review` — change 含 §6 流程图时按本文件 §5 审查清单核对
 
 ## 1. 图类型选择矩阵
 

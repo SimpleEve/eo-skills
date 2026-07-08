@@ -1,6 +1,8 @@
 ---
 name: eo-test
-description: 为某个 change 编写并执行测试（以其验收清单为锚），产出 test.md 报告。严禁修改业务代码。触发：给这个 change 写测试 / 出测试报告 / test.md / /eo-test。NOT FOR: 与 change 无关的日常跑测试或补单测（直接做即可，不产报告）。
+description: |
+  为某个 change 编写并执行测试（以其验收清单为锚），产出 test.md 报告。严禁修改业务代码。触发：给这个 change 写测试 / 出测试报告 / test.md / /eo-test。
+  NOT FOR: 与 change 无关的日常跑测试或补单测（直接做即可，不产报告）。
 ---
 
 # eo-test — 测试

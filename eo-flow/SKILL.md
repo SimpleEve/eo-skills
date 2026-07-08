@@ -117,8 +117,9 @@ codex 按合约会回 `[tmux-bridge from:... ] done: ...` 到本 pane。**必须
 
 - **自动修**（按上面路径走）：明确 P0 bug、测试失败、AC 未覆盖、规范违反——客观、有标准答案的。
 - **暂停问用户**：架构取舍、接口命名、影响面外溢、需要改 change 方案、同一问题反复 2 轮没收敛。
-- **通过可合**：零 P0/P1 或仅 P2 → 读对应产出文件末尾的速报，**按其「下一步」原样转达用户**（各 skill 的下一步口径以其自身速报为单一来源，本 skill 不重写流程表）。两条 eo-flow 特有的例外需自己把住：
-  - `review` 通过 → 下一步是 `/eo-archive <change-id>`——**只有这里才是归档入口**；`eo-archive` 只消费 review.md 通过的 change，不消费 change-review.md（方案审查通过时代码还没写，不能归档）
+- **通过可合**：零 P0/P1 或仅 P2 → 读对应产出文件（test.md / review.md / change-review.md）末尾的「## 速报」节，**按其「下一步」原样转达用户**（各 skill 的下一步口径以其报告速报节为单一来源，本 skill 不重写流程表）。三条 eo-flow 特有的补充：
+  - `implement` 没有报告文件——TODO 勾选完成即下一步 `/eo-flow test`（或直接 `/eo-test`）
+  - `review` 通过 → `/eo-archive <change-id>`——**只有这里才是归档入口**；`eo-archive` 只消费 review.md 通过的 change，不消费 change-review.md（方案审查通过时代码还没写，不能归档）
   - `fix` 完成 → 按 fix 前的上下文回到原 action 复审（例：review 触发的 fix → 再跑 `/eo-flow review`）
 
 超时未回包（≥10 分钟）：`tmux-bridge read <codex-pane> 40` 看状态——进程还在就继续等；已 idle 但文件落稿了说明 codex 漏发 message，手动读产出决策并告知用户。

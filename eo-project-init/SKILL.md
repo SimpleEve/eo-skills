@@ -43,7 +43,7 @@ description: "eo-skills 在当前仓库的总入口：生成 .eo-project.json、
    - 已有 → 走下方「1.5 更新/修复分支」，**不进入首次创建流程**
    - 未有 → 继续本节第 3 小步
 
-3. **读取 `~/.eo/config.json`**（用户级默认，可能不存在）：
+3. **读取用户级配置**（可能不存在）。本 skill 全程以 `EO_CONFIG="${EO_HOME:-$HOME/.eo}/config.json"` 为用户级配置的唯一路径（下文写「用户级配置」均指它）：
    - 存在 → 取 `default_mode` / `vault_root` 等作为推荐值，进入「2. 询问运行模式」
    - 不存在 → 进入「2. 询问运行模式」时推荐值为空
 
@@ -51,10 +51,10 @@ description: "eo-skills 在当前仓库的总入口：生成 .eo-project.json、
 
 对已有 `.eo-project.json` 的项目，重跑是**幂等的补齐动作**，逐项执行、已达标项静默跳过：
 
-1. **配置校验**：读现有 `.eo-project.json`，对照 [references/config.md](references/config.md) 的 schema——缺失字段按默认值补写（如老配置缺 `board` / `github` 段），已有字段一律不改
+1. **配置校验**：读现有 `.eo-project.json`，对照 [references/config.md](references/config.md) 的 schema——基础字段（project_name/mode/project_root/doc_root/kanban_path）缺失按默认补写，已有字段一律不改；**`board` / `github` 段缺失时不在本步补写**（补了默认关闭值会吞掉第 5 步的询问），只记录缺段，留给第 5 步问答后落盘
 2. **骨架补齐**：项目管理侧三必建（roadmap/log/backlog）与代码侧 `eo-doc/` 骨架缺什么补什么；**不触碰任何已有文件的内容**
 3. **注入段刷新**：按标记对整段替换 agent 配置文件中的 `eo-project` / `eo-doc` 注入段；仓库根存在 `DESIGN.md` 时核对 `eo-design` 注入段
-4. **.gitignore 核对**：`tmp/eo/`、`<doc_root>/.sync-cursor`、（local 模式）`.eo-project/`、（vault 模式）`<doc_root>/vault` 缺项补写
+4. **.gitignore 与软链核对**：`tmp/eo/`、`<doc_root>/.sync-cursor`、（local 模式）`.eo-project/`、（vault 模式）`<doc_root>/vault` 缺项补写；vault 模式且 `create_symlink: true` 时核对 `<doc_root>/vault` **软链本体**存在且指向 `project_root`，缺失/指错按「10. 建立软链」重建
 5. **联动两问**（仅对应段缺失时，规则见「9. 生成 .eo-project.json」的 board/github 小节）：开启 board → 立即做 stub 历史同步
 6. **输出摘要**：列出本次补齐/刷新/跳过了什么，然后结束——不执行首次创建流程的其余步骤
 
@@ -79,7 +79,7 @@ B) local 模式 —— 放在仓库自己的 .eo-project/ 下，跟代码走
 ```
 
 用户回答后：
-- 若选 vault 但用户级配置无 `vault_root` → 当场询问 `vault_root` 路径（以及可选的 `projects_subdir` / `kanban_path` / `create_symlink`），写入 `~/.eo/config.json`（必要时先 `mkdir -p ~/.eo`）
+- 若选 vault 但用户级配置无 `vault_root` → 当场询问 `vault_root` 路径（以及可选的 `projects_subdir` / `kanban_path` / `create_symlink`），写入 `$EO_CONFIG`（必要时先 `mkdir -p "${EO_HOME:-$HOME/.eo}"`）
 - 若用户级已有推荐值，展示并让用户确认或覆盖
 
 最终落定 `mode = "vault" | "local"` 进入 §3。
@@ -97,7 +97,7 @@ B) local 模式 —— 放在仓库自己的 .eo-project/ 下，跟代码走
 - **local 模式**：`<repo>/.eo-project/`
 
 检查 `project_root` 是否已存在：
-- 存在且含 `roadmap.md` → 询问：1) 只建代码侧关联 2) 更新 roadmap 3) 重建（需确认）
+- 存在且含 `roadmap.md` → 按封闭选择协议三选一：1) 只建代码侧关联（推荐）2) 更新 roadmap 3) 重建（需确认）
 - 存在但无 `roadmap.md` → 异常，提示补全后进入拆解
 - 不存在 → 正常创建
 
@@ -232,7 +232,7 @@ local 模式**不建软链**。
 2. `AGENTS.md`
 3. `COPILOT.md`
 4. `CURSOR.md`
-5. 都不存在 → 询问用户创建哪个
+5. 都不存在 → 按封闭选择协议问创建哪个（推荐 CLAUDE.md）
 
 使用 `<!-- eo-project:start -->` / `<!-- eo-project:end -->` 标记段落幂等注入：
 

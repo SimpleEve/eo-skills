@@ -48,7 +48,7 @@ eo-doc/
 
 ### 不处理的旧目录
 
-遇到 `eo-doc/` 下存在 `doc/`、`dev/`、`design/`、`research/`、`knowledgebase/` 时：**不读取、不重建、不同步**，提示用户按 [../docs/migration-v1-to-v2.md](../docs/migration-v1-to-v2.md) 处理（注：该文档在仓库 docs/ 下，软链安装环境中若不可达则直接口头提示「这是 v1 遗留目录，见仓库迁移指南」）。
+遇到 `eo-doc/` 下存在 `doc/`、`dev/`、`design/`、`research/`、`knowledgebase/` 时：**不读取、不重建、不同步**，口头提示用户「这是 v1 遗留目录，处理方式见 eo-skills 仓库的 docs/migration-v1-to-v2.md（迁移指南）」。
 
 ## 目录职责
 

@@ -58,12 +58,11 @@
   "last_sync_commit": "<当前 HEAD commit hash>",
   "last_sync_date": "YYYY-MM-DD",
   "sync_type": "re-sync",
-  "sync_count": 0,
-  "archive_count": <保留原值>
+  "sync_count": 0
 }
 ```
 
-（`sync_count` 清零——全量重建等价于做过一次彻底的一致性核对；`archive_count` 是累计统计，保留原值。）
+（`sync_count` 清零——全量重建等价于做过一次彻底的一致性核对；`archive_count` 字段**保留原值原样带过来**，它是累计统计，不随 re-sync 变化。）
 
 ### Step 5: 汇报结果
 

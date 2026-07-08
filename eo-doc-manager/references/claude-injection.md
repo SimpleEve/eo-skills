@@ -54,7 +54,7 @@
 ### 场景 2：CLAUDE.md 存在，无 `<!-- eo-doc:start -->` 标记
 
 1. 读取现有 CLAUDE.md 全文
-2. 询问用户：注入到文件末尾 or 用户指定位置
+2. 按封闭选择协议（[../../eo-shared/questioning.md](../../eo-shared/questioning.md) §4）问：注入到文件末尾（推荐）or 用户指定位置
 3. 默认追加到文件末尾（保持两空行间隔）
 4. 添加 `<!-- eo-doc:start -->` / `<!-- eo-doc:end -->` 标记包裹注入内容
 

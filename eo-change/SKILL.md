@@ -75,7 +75,7 @@ description: |
 **场景 A — 首次产出**（目录下无含未解决 P0/P1 的 change-review.md）：
 
 > change 已就绪（status: confirmed）。后续：
-> 🟡（可选；符合 /eo-change-review 自述的「建议跑」条件时主动提示）`/eo-change-review` — 方案审查
+> 🟡（可选；符合 [../eo-change-review/SKILL.md](../eo-change-review/SKILL.md) 开头「建议跑」条件时主动提示）`/eo-change-review` — 方案审查
 > 1. `/eo-implement <change-path>` — 按 Batch 实施
 > 2. `/eo-test <change-path>` → `/eo-review <change-path>`
 > 3. `/eo-archive <change-id>` — review 通过后归档

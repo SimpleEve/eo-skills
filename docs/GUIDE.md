@@ -181,22 +181,9 @@ eo-doc/changes/
 - 装好 `tmux` + [smux](https://github.com/ShawnPana/smux)（提供 `tmux-bridge` CLI）
 - 已有一个跑着 codex 的 tmux pane
 
-**用法示例**：
+**用法**：`/eo-flow implement|test|review|change-review|fix`——派发、回包合约、回包后读产出文件决策的具体流程以 `eo-flow/SKILL.md` 为准，此处不复写。
 
-```
-/eo-flow implement   # 甩 implement 给 codex pane
-/eo-flow test        # 甩 test 给 codex pane
-/eo-flow review      # 甩 review 给 codex pane
-```
-
-eo-flow 会：
-
-1. 找到（或新建）codex pane，校验 label
-2. 派发指令并附带"回包合约"（codex 完成后通过 `tmux-bridge message` 回到本 pane）
-3. 立刻把"派了什么、等谁回包"告诉用户
-4. 收到回包后**读产出文件**做决策（不要只信回包字面）
-
-**关键约束**：eo-* skill 本身不懂 smux（要能在没 tmux 的机器上独立跑）；"回包合约"由 eo-flow 在每次派发的附言里手动注入，**不要去改 eo-* skill 的 SKILL.md**。
+**设计要点**：eo-* skill 本身不懂 smux（要能在没 tmux 的机器上独立跑）；"回包合约"由 eo-flow 在每次派发的附言里注入，不改任何 eo-* skill 正文。
 
 ---
 
