@@ -43,35 +43,16 @@ lessons 目录：`<project_root>/lessons/`（**lazy 创建**，本 skill 首次�
 - **阶段**：从活跃 phase 文件读取（若有）
 - **内容**：发生了什么 + 学到了什么 + 下次怎么做
 
-### 3. 创建经验文件
+### 3. 创建经验文件 + 维护索引
 
 - 首次运行时 lazy 建 `<project_root>/lessons/` 目录
-- 文件命名：`{YYYY-MM-DD}-{简述}.md`（不再需要 `{项目名}` 前缀，因为已按项目隔离）
+- 文件命名：`{YYYY-MM-DD}-{slug}.md`
+- **格式严格按 [../eo-shared/lessons.md](../eo-shared/lessons.md) §2**（结论前置：规则 → 适用条件 → 背景；frontmatter 必填 `trigger` 与 `summary` 检索锚点）——它是 eo-change / eo-implement / eo-fix 启动时自动消费的口粮，写给 agent 看的部分必须在前
+- 同步更新 `<project_root>/lessons/INDEX.md`（格式见 lessons.md §3；不存在则创建）
 
-```markdown
----
-type: lesson
-category: "pitfall" | "best-practice" | "surprise"
-project: "项目名"
-phase: "phase-N-阶段名"
-date: YYYY-MM-DD
-tags: []
----
+### 3.5 reindex（存量迁移动作）
 
-# {标题}
-
-## 发生了什么
-
-{背景和经过}
-
-## 学到了什么
-
-{核心教训}
-
-## 下次怎么做
-
-{可操作的改进方案}
-```
+用户说「reindex lessons / 迁移旧经验」时：扫描 lessons/ 全部文件——缺 `trigger`/`summary`/`status` 的，读正文提炼后**只回填 frontmatter**（正文一字不动）；重建 INDEX.md。幂等，可重复跑。
 
 ### 4. 更新项目看板（仅 `kanban_path` 非空）
 
@@ -95,7 +76,8 @@ tags: []
 
 ## 约束
 
-- 经验文件一旦创建不可修改，只能新建补充
+- 经验文件正文创建后不改，补充走新建；**唯一例外**：教训被证伪/取代时把 `status` 改 `superseded` 并在顶部加一行指向新条目（消费方会跳过 superseded）
+- 每次写入必须同步 INDEX.md——没进索引的 lesson 等于没写（消费方只扫 INDEX）
 - 经验按项目隔离，不再有全局 `_lessons/`
 - 首次运行时 lazy 建 `lessons/` 目录
 - 能推断的字段自动填充

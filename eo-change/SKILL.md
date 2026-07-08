@@ -38,7 +38,7 @@ description: |
 
 1. 读 `eo-doc/state/` 相关篇目（系统现状）与 `eo-doc/agent-handbook/INDEX.md` 索引到的相关代码地图
 2. 读 `eo-doc/changes/INDEX.md` 最近 3 条（演化方向，避免重复/冲突）
-3. 检索项目管理侧 `<project_root>/lessons/`（frontmatter tags/summary 匹配），相关教训带入起草上下文（**lessons 消费**）
+3. **lessons 消费**：按 [../eo-shared/lessons.md](../eo-shared/lessons.md) §1 执行——扫 lessons/INDEX.md 匹配 trigger/tags，命中 ≤3 条读其「规则」节带入起草；采纳的在 §1 已钉决策标注来源
 4. 涉及 UI 且仓库根有 `DESIGN.md` → 读入作为默认设计约束
 5. 能从以上信源回答的问题，**禁止问用户**
 

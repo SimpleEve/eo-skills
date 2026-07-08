@@ -29,7 +29,7 @@ description: |
 1. **阅读上下文**
    - change.md（主输入：§1 意图与已钉决策、§2 AC、§3 TODO、条件节）
    - `eo-doc/agent-handbook/` 中相关代码地图（经 INDEX 定位），理解入口与既有模式
-   - 检索 `<project_root>/lessons/`（frontmatter tags/summary 匹配），相关教训带入
+   - lessons 消费：按 [../eo-shared/lessons.md](../eo-shared/lessons.md) §1 扫 INDEX 匹配 trigger，命中读「规则」节带入
    - 涉及 UI 且仓库根有 `DESIGN.md` → 读入并遵守
 
 2. **首次启动登记**
