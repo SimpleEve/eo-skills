@@ -22,6 +22,8 @@
 
 ## 迁移步骤（存量 v1 项目）
 
+> **推荐走自动路径**：在项目里重跑 `/eo-project-init`——其更新/修复分支会检测 v1 痕迹并自动引导下列第 2-6、8 步（可执行版见 `eo-project-init/references/migrate-v1.md`）。手动只需第 1 步（更新安装）与第 7 步（可选 design）。以下为完整手动版备查。
+
 1. **更新安装**：重跑 install 脚本（软链模式下拉取新版仓库即生效）。新目录 `eo-shared/`、`eo-design/` 会被自动链接；已删除的四个 skill 需手动清理残留软链：
    ```bash
    rm -f ~/.claude/skills/{eo-workflow,eo-spec,eo-spec-review,eo-module-init,eo-project-update,eo-project-lesson} \

@@ -51,6 +51,7 @@ description: "eo-skills 在当前仓库的总入口：生成 .eo-project.json、
 
 对已有 `.eo-project.json` 的项目，重跑是**幂等的补齐动作**，逐项执行、已达标项静默跳过：
 
+0. **v1 痕迹检测**：发现 `eo-doc/dev/` 存在、`kanban_path` 非 null 等信号 → 先按 [references/migrate-v1.md](references/migrate-v1.md) 执行迁移子流程（冻结 spec、建项目级 changes、kanban 退役、roadmap 补 frontmatter 等，幂等），完成后继续下列步骤
 1. **配置校验**：读现有 `.eo-project.json`，对照 [references/config.md](references/config.md) 的 schema——基础字段（project_name/mode/project_root/doc_root）缺失按默认补写；存量配置的 `kanban_path` 字段忽略不改（旧看板体系已退役），已有字段一律不改；**`board` / `github` 段缺失时不在本步补写**（补了默认关闭值会吞掉第 5 步的询问），只记录缺段，留给第 5 步问答后落盘
 2. **骨架补齐**：项目管理侧两必建（roadmap/backlog）与代码侧 `eo-doc/` 骨架缺什么补什么；**不触碰任何已有文件的内容**
 3. **注入段刷新**：按标记对整段替换 agent 配置文件中的 `eo-project` / `eo-doc` 注入段；仓库根存在 `DESIGN.md` 时核对 `eo-design` 注入段
