@@ -1,73 +1,82 @@
 #!/usr/bin/env sh
-# 试用安装：把本仓库（通常是开发中的 worktree）的 eo-* skill 软链到某个项目的
-# 项目级 skills 目录（<project>/.claude/skills/），不触碰全局 ~/.claude/skills。
-# Claude Code 同名 skill 项目级优先，因此该项目内 v2 会覆盖全局 v1。
-# 软链指向本仓库，改动即时生效——调整满意后再正式提交/推送。
+# 试用安装：为「开发中的本仓库」构建一套独立的 Claude Code 配置目录（试用配置），
+# 其 skills/ 软链到本仓库的 eo-*。用 CLAUDE_CONFIG_DIR 启动即可在任意项目试用 v2，
+# 全局 ~/.claude 零接触、无同名冲突；本仓库的改动即时生效，满意后再正式提交推送。
+#
+# 注：不用「项目级 .claude/skills」方案——Claude Code 同名 skill 的优先级是
+# personal > project（官方文档），项目级会被全局 v1 覆盖；skillOverrides "off"
+# 又是按名字整体隐藏（实测两级同灭）。独立配置目录是唯一干净的隔离面。
 
 set -eu
 
-usage() {
-  cat <<'EOF'
-用法:
-  sh test-install.sh <project-path>            # 安装到指定项目
-  sh test-install.sh <project-path> --remove   # 从该项目移除（只删指向本仓库的链接）
+EO_HOME="${EO_HOME:-$HOME/.eo}"
+trial="$EO_HOME/v2-trial-config"
+src=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
-说明:
-  - 只写 <project>/.claude/skills/，全局 skills 不受影响
-  - 自动把链接路径加入项目 .gitignore（幂等）
-  - v2 已删除的 skill（eo-spec 等）仍存在于全局 v1，本脚本不处理；
-    v2 文档不会引导到它们，试用时避免手动调用即可
+usage() {
+  cat <<EOF
+用法:
+  sh test-install.sh setup     # 构建试用配置目录（幂等）
+  sh test-install.sh remove    # 删除试用配置目录
+  sh test-install.sh status    # 查看当前状态
+
+试用方式（setup 后，在任意项目目录）:
+  CLAUDE_CONFIG_DIR="$trial" claude
+建议加别名:
+  alias claude-v2='CLAUDE_CONFIG_DIR="$trial" claude'
 EOF
 }
 
 [ "$#" -ge 1 ] || { usage >&2; exit 1; }
-case "$1" in -h|--help) usage; exit 0;; esac
 
-project=$(CDPATH= cd -- "$1" && pwd)
-shift
-mode="install"
-[ "${1:-}" = "--remove" ] && mode="remove"
-
-src=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-target="$project/.claude/skills"
-
-if [ "$mode" = "remove" ]; then
-  removed=0
-  for link in "$target"/eo-*; do
-    [ -L "$link" ] || continue
-    dest=$(readlink "$link")
-    case "$dest" in
-      "$src"/*) rm "$link"; removed=$((removed+1)); echo "已移除 $(basename "$link")";;
-      *) echo "跳过 $(basename "$link") (不指向本仓库)";;
-    esac
-  done
-  echo "完成：移除 $removed 个链接。全局 skills 未受影响。"
-  exit 0
-fi
-
-mkdir -p "$target"
-linked=0; skipped=0
-for skill_dir in "$src"/eo-*; do
-  [ -d "$skill_dir" ] || continue
-  name=$(basename "$skill_dir")
-  path="$target/$name"
-  if [ -e "$path" ] || [ -L "$path" ]; then
-    echo "跳过 ${name} (目标已存在: ${path})"; skipped=$((skipped+1)); continue
-  fi
-  ln -s "$skill_dir" "$path"
-  linked=$((linked+1))
-done
-
-# .gitignore 幂等追加（试用链接不入库）
-gi="$project/.gitignore"
-marker="# eo-skills test-install (trial links, do not commit)"
-if ! { [ -f "$gi" ] && grep -qF "$marker" "$gi"; }; then
-  { echo ""; echo "$marker"; echo ".claude/skills/eo-*"; } >> "$gi"
-  echo "已追加 .gitignore 规则: .claude/skills/eo-*"
-fi
-
-echo ""
-echo "完成: 链接 ${linked} 个 (跳过 ${skipped}) → ${target}"
-echo "来源: $src"
-echo "提示: 同名 skill 项目级优先于全局；在该项目的 Claude Code 会话中即用 v2。"
-echo "      本仓库的任何改动即时生效。试用结束: sh test-install.sh $project --remove"
+case "$1" in
+  setup)
+    mkdir -p "$trial/skills"
+    linked=0; skipped=0
+    for skill_dir in "$src"/eo-*; do
+      [ -d "$skill_dir" ] || continue
+      name=$(basename "$skill_dir")
+      path="$trial/skills/$name"
+      if [ -e "$path" ] || [ -L "$path" ]; then skipped=$((skipped+1)); continue; fi
+      ln -s "$skill_dir" "$path"
+      linked=$((linked+1))
+    done
+    # 带上全局设置与记忆（副本，改动不回写全局）
+    for f in settings.json CLAUDE.md; do
+      if [ -f "$HOME/.claude/$f" ] && [ ! -f "$trial/$f" ]; then
+        cp "$HOME/.claude/$f" "$trial/$f"
+        echo "已复制全局 ${f} (副本, 独立演化)"
+      fi
+    done
+    # 跳过 onboarding 向导（不复制凭据——首次启动需 /login 一次，token 之后常驻试用配置）
+    if [ -f "$HOME/.claude.json" ] && [ ! -f "$trial/.claude.json" ]; then
+      python3 - <<PYEOF 2>/dev/null || true
+import json
+d=json.load(open("$HOME/.claude.json"))
+keep={k:d[k] for k in ("hasCompletedOnboarding","theme") if k in d}
+json.dump(keep,open("$trial/.claude.json","w"))
+PYEOF
+    fi
+    echo "完成: 链接 ${linked} 个 skill (跳过 ${skipped}) → $trial/skills"
+    echo "来源: $src (改动即时生效)"
+    echo ""
+    echo "启动试用会话（任意项目目录下）:"
+    echo "  CLAUDE_CONFIG_DIR=\"$trial\" claude"
+    echo "建议别名: alias claude-v2='CLAUDE_CONFIG_DIR=\"$trial\" claude'"
+    echo "注意: 凭据按配置目录隔离, 首次启动需 /login 一次 (仅此一次)"
+    ;;
+  remove)
+    rm -rf "$trial"
+    echo "已删除 $trial。全局 ~/.claude 从未被触碰。"
+    ;;
+  status)
+    if [ -d "$trial/skills" ]; then
+      echo "试用配置: $trial"
+      echo "skills: $(ls "$trial/skills" | wc -l | tr -d ' ') 个 → 指向 $(readlink "$trial/skills/eo-change" 2>/dev/null | sed 's|/eo-change$||' || echo '?')"
+    else
+      echo "未安装。运行: sh test-install.sh setup"
+    fi
+    ;;
+  -h|--help) usage ;;
+  *) usage >&2; exit 1 ;;
+esac
