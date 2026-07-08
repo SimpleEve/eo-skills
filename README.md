@@ -115,7 +115,6 @@ flowchart TD
     Init --> Doc["/eo-doc-manager<br/>维护 eo-doc/"]
     Init --> PU["/eo-project-update<br/>项目进度 / 决策"]
     Init --> PL["/eo-project-lesson<br/>项目经验"]
-    Init --> Mini["/eo-miniapp-ideation<br/>(可选)"]
 
     Imp -.clear 前快照.-> Hand["/eo-handoff<br/>tmp/&lt;topic&gt;-handoff.md"]:::cross
 
@@ -147,7 +146,6 @@ flowchart TD
 | 维护 `eo-doc/` 文档体系 | `/eo-doc-manager` | sync / re-sync |
 | 项目进度 / 决策 / 经验 | `/eo-project-update` `/eo-project-lesson` | 项目管理侧 |
 | 加一条 backlog 待办 / 灵感 | `/eo-backlog` | 仅追加到 `backlog.md` |
-| 微信小程序构思 | `/eo-miniapp-ideation` | 可选 |
 
 不在表里的 skill（`eo-change-review`）是可选增强，详见 [GUIDE](docs/GUIDE.md)。
 

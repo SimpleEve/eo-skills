@@ -235,7 +235,6 @@ eo-flow 会：
 |-------|------|-------|
 | `/eo-project-update` | 进度、阶段、决策、阻塞 | `roadmap.md` / `phases/` / `decisions/` / `log.md` |
 | `/eo-project-lesson` | 经验教训 | `lessons/` |
-| `/eo-miniapp-ideation` | 微信小程序方向构思 | `docs/` |
 
 ---
 

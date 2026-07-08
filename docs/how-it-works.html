@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>eo-skills · 它是怎么转起来的</title>
+<style>
+  :root{
+    --paper:#f6f1e7; --paper-2:#efe8d9; --ink:#211c14; --ink-2:#5c5344; --ink-3:#8d8270;
+    --line:#d8cfbc; --accent:#bf3f1a; --accent-soft:#f3d9cd;
+    --st-draft:#8d8270; --st-confirmed:#b07d10; --st-impl:#1a6a8f; --st-done:#3d7a3a; --st-arch:#211c14;
+    --mono:"SF Mono","Cascadia Code","JetBrains Mono",Menlo,Consolas,"Courier New",monospace;
+    --serif:"Songti SC","STSong","Noto Serif SC","SimSun",serif;
+    --sans:"PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--paper); color:var(--ink); font-family:var(--sans);
+    font-size:16px; line-height:1.75; -webkit-font-smoothing:antialiased;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size:56px 56px; background-position:-1px -1px;
+  }
+  body::after{content:"";position:fixed;inset:0;pointer-events:none;opacity:.5;
+    background-image:radial-gradient(rgba(33,28,20,.06) 1px, transparent 1px);background-size:3px 3px;}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  ::selection{background:var(--accent);color:var(--paper)}
+
+  /* ---------- nav ---------- */
+  nav{position:sticky;top:0;z-index:50;background:rgba(246,241,231,.92);backdrop-filter:blur(8px);
+    border-bottom:2px solid var(--ink);}
+  nav .wrap{display:flex;align-items:center;gap:20px;height:52px}
+  nav .logo{font-family:var(--mono);font-weight:700;font-size:15px;letter-spacing:.5px}
+  nav .logo em{font-style:normal;color:var(--accent)}
+  nav a{color:var(--ink-2);text-decoration:none;font-size:13.5px;padding:4px 2px;border-bottom:2px solid transparent}
+  nav a:hover{color:var(--accent);border-bottom-color:var(--accent)}
+  nav .spacer{flex:1}
+  nav .ver{font-family:var(--mono);font-size:11px;color:var(--paper);background:var(--ink);padding:2px 8px;border-radius:2px}
+
+  /* ---------- hero ---------- */
+  header{padding:72px 0 56px;border-bottom:2px solid var(--ink);position:relative;overflow:hidden}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:3px;color:var(--accent);text-transform:uppercase;margin-bottom:18px}
+  h1.hero{font-family:var(--serif);font-weight:900;font-size:clamp(38px,6.5vw,66px);line-height:1.15;letter-spacing:1px}
+  h1.hero .u{box-shadow:inset 0 -0.28em var(--accent-soft)}
+  .hero-sub{margin-top:20px;max-width:620px;color:var(--ink-2);font-size:17px}
+  .hero-grid{display:grid;grid-template-columns:1.2fr .9fr;gap:36px;align-items:end}
+  .term{background:var(--ink);color:#e8e0cf;border-radius:6px;padding:18px 20px;font-family:var(--mono);
+    font-size:13.5px;line-height:2.05;box-shadow:6px 6px 0 var(--accent-soft);position:relative}
+  .term::before{content:"最小用法 · 三步";position:absolute;top:-11px;left:14px;background:var(--accent);color:#fff;
+    font-size:11px;letter-spacing:2px;padding:1px 10px;border-radius:2px;font-family:var(--sans)}
+  .term .c{color:#8d8270}
+  .term .p{color:#e8a44a}
+  .term b{color:#fff;font-weight:600}
+  @media(max-width:820px){.hero-grid{grid-template-columns:1fr}}
+
+  /* ---------- sections ---------- */
+  section{padding:72px 0 24px}
+  .sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:10px}
+  .sec-no{font-family:var(--mono);font-size:13px;color:var(--accent);letter-spacing:2px}
+  h2{font-family:var(--serif);font-size:clamp(26px,3.6vw,36px);font-weight:900}
+  .sec-lede{color:var(--ink-2);max-width:680px;margin-bottom:34px}
+  .mono{font-family:var(--mono)}
+  code.k{font-family:var(--mono);font-size:.86em;background:var(--paper-2);border:1px solid var(--line);
+    padding:1px 6px;border-radius:3px;white-space:nowrap}
+
+  /* ---------- path picker ---------- */
+  .picker{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:26px}
+  .pick{border:2px solid var(--ink);background:var(--paper);padding:16px 18px;cursor:pointer;text-align:left;
+    font:inherit;color:inherit;transition:transform .12s ease, box-shadow .12s ease;border-radius:4px}
+  .pick:hover{transform:translate(-2px,-2px);box-shadow:4px 4px 0 var(--line)}
+  .pick[aria-pressed="true"]{background:var(--ink);color:var(--paper);box-shadow:5px 5px 0 var(--accent)}
+  .pick .q{font-weight:700;font-size:15.5px}
+  .pick .a{font-family:var(--mono);font-size:12px;margin-top:6px;color:var(--accent)}
+  .pick[aria-pressed="true"] .a{color:#e8a44a}
+  .route{border:2px solid var(--ink);border-radius:6px;background:var(--paper-2);padding:26px 28px;min-height:150px}
+  .route .chain{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:14px}
+  .node{font-family:var(--mono);font-size:13px;background:var(--ink);color:var(--paper);padding:5px 12px;border-radius:3px;
+    animation:pop .35s ease backwards}
+  .node.opt{background:transparent;color:var(--ink);border:1.5px dashed var(--ink-3)}
+  .node.hot{background:var(--accent)}
+  .arrow{color:var(--accent);font-weight:700;animation:pop .35s ease backwards}
+  .route .note{color:var(--ink-2);font-size:14.5px}
+  .chain>*:nth-child(1){animation-delay:.02s}.chain>*:nth-child(2){animation-delay:.07s}
+  .chain>*:nth-child(3){animation-delay:.12s}.chain>*:nth-child(4){animation-delay:.17s}
+  .chain>*:nth-child(5){animation-delay:.22s}.chain>*:nth-child(6){animation-delay:.27s}
+  .chain>*:nth-child(7){animation-delay:.32s}.chain>*:nth-child(8){animation-delay:.37s}
+  .chain>*:nth-child(9){animation-delay:.42s}.chain>*:nth-child(10){animation-delay:.47s}
+  .chain>*:nth-child(11){animation-delay:.52s}.chain>*:nth-child(12){animation-delay:.57s}
+  @keyframes pop{from{opacity:0;transform:translateY(6px) scale(.96)}to{opacity:1;transform:none}}
+  @media(max-width:820px){.picker{grid-template-columns:1fr}}
+
+  /* ---------- life stepper ---------- */
+  .life{border:2px solid var(--ink);border-radius:6px;overflow:hidden;background:var(--paper)}
+  .steps{display:flex;border-bottom:2px solid var(--ink);overflow-x:auto}
+  .step{flex:1;min-width:118px;padding:12px 10px;border:none;background:var(--paper);cursor:pointer;font:inherit;
+    border-right:1px solid var(--line);text-align:center;position:relative}
+  .step:last-child{border-right:none}
+  .step .n{font-family:var(--mono);font-size:11px;color:var(--ink-3);display:block}
+  .step .t{font-weight:700;font-size:14px}
+  .step[aria-selected="true"]{background:var(--ink);color:var(--paper)}
+  .step[aria-selected="true"] .n{color:#e8a44a}
+  .step[aria-selected="true"]::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--accent)}
+  .life-body{display:grid;grid-template-columns:1fr 1fr;min-height:430px}
+  .life-left{padding:26px 28px;border-right:2px solid var(--ink)}
+  .life-left h3{font-family:var(--serif);font-size:21px;margin-bottom:4px}
+  .life-left .who{font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:16px}
+  .talk{display:flex;flex-direction:column;gap:10px}
+  .bub{max-width:92%;padding:9px 14px;border-radius:6px;font-size:13.8px;line-height:1.65;animation:pop .3s ease backwards}
+  .bub.u{align-self:flex-end;background:var(--ink);color:var(--paper);border-bottom-right-radius:2px}
+  .bub.a{align-self:flex-start;background:var(--paper-2);border:1px solid var(--line);border-bottom-left-radius:2px}
+  .bub.s{align-self:center;background:transparent;color:var(--ink-3);font-size:12px;font-family:var(--mono);padding:2px}
+  .bub .mono{font-size:.92em}
+  .talk>*:nth-child(1){animation-delay:.03s}.talk>*:nth-child(2){animation-delay:.1s}.talk>*:nth-child(3){animation-delay:.17s}
+  .talk>*:nth-child(4){animation-delay:.24s}.talk>*:nth-child(5){animation-delay:.31s}.talk>*:nth-child(6){animation-delay:.38s}
+  .life-right{padding:26px 28px;background:var(--paper-2)}
+  .life-right .cap{font-family:var(--mono);font-size:11px;letter-spacing:2px;color:var(--ink-3);margin-bottom:12px}
+  .tree{font-family:var(--mono);font-size:13px;line-height:1.95;white-space:pre}
+  .tree .dim{color:var(--ink-3)}
+  .tree .new{background:var(--accent-soft);border-radius:2px;animation:flash 1.2s ease}
+  .tree .chg{box-shadow:inset 0 -2px var(--accent);animation:flash 1.2s ease}
+  @keyframes flash{0%{background:var(--accent);color:#fff}60%{background:var(--accent-soft);color:inherit}}
+  .statusline{margin-top:18px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .statusline .lbl{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:1px}
+  .badge{font-family:var(--mono);font-size:11.5px;padding:2px 9px;border-radius:10px;border:1.5px solid var(--ink-3);color:var(--ink-3)}
+  .badge.on{color:#fff;border-color:transparent}
+  .badge.on.b-draft{background:var(--st-draft)} .badge.on.b-confirmed{background:var(--st-confirmed)}
+  .badge.on.b-impl{background:var(--st-impl)} .badge.on.b-done{background:var(--st-done)} .badge.on.b-arch{background:var(--st-arch)}
+  .life-nav{display:flex;justify-content:space-between;align-items:center;border-top:2px solid var(--ink);padding:12px 20px;background:var(--paper)}
+  .life-nav .hint{font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
+  .btn{font:inherit;font-weight:700;font-size:14px;border:2px solid var(--ink);background:var(--paper);
+    padding:7px 20px;cursor:pointer;border-radius:3px;transition:all .12s}
+  .btn:hover{background:var(--ink);color:var(--paper)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover{background:var(--ink);border-color:var(--ink)}
+  .btn:disabled{opacity:.35;cursor:default}
+  .btn:disabled:hover{background:var(--paper);color:var(--ink)}
+  .btn.primary:disabled:hover{background:var(--accent);color:#fff}
+  @media(max-width:820px){.life-body{grid-template-columns:1fr}.life-left{border-right:none;border-bottom:2px solid var(--ink)}}
+
+  /* ---------- loops ---------- */
+  .loops{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .loop{border:2px solid var(--ink);border-radius:6px;background:var(--paper);padding:22px;position:relative;overflow:hidden}
+  .loop h3{font-family:var(--serif);font-size:19px;margin-bottom:2px}
+  .loop .en{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:1.5px;margin-bottom:14px}
+  .loop svg{width:100%;height:118px;display:block;margin-bottom:12px}
+  .loop svg .path{fill:none;stroke:var(--ink);stroke-width:2;stroke-dasharray:6 5;animation:dash 14s linear infinite}
+  .loop svg .oneway{stroke:var(--accent)}
+  @keyframes dash{to{stroke-dashoffset:-220}}
+  .loop svg text{font-family:var(--mono);font-size:10.5px;fill:var(--ink)}
+  .loop svg .st{font-size:9.5px;fill:var(--accent)}
+  .loop svg rect{fill:var(--paper-2);stroke:var(--ink);stroke-width:1.5;rx:3}
+  .loop p{font-size:13.8px;color:var(--ink-2)}
+  .loop p b{color:var(--ink)}
+  .proj{margin-top:18px;border:2px dashed var(--ink-3);border-radius:6px;padding:20px 24px;display:flex;gap:24px;align-items:center;flex-wrap:wrap}
+  .proj .tag{font-family:var(--mono);font-size:11px;background:var(--ink);color:var(--paper);padding:2px 9px;border-radius:2px}
+  .proj p{font-size:13.8px;color:var(--ink-2);flex:1;min-width:260px}
+  @media(max-width:900px){.loops{grid-template-columns:1fr}}
+
+  /* ---------- catalog ---------- */
+  .cat-group{margin-bottom:26px}
+  .cat-group>.gt{font-family:var(--mono);font-size:12px;letter-spacing:2px;color:var(--ink-3);margin-bottom:10px;
+    display:flex;align-items:center;gap:12px}
+  .cat-group>.gt::after{content:"";flex:1;height:1px;background:var(--line)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+  details.card{border:1.5px solid var(--ink);border-radius:4px;background:var(--paper);overflow:hidden}
+  details.card summary{list-style:none;cursor:pointer;padding:13px 16px;display:flex;align-items:baseline;gap:10px}
+  details.card summary::-webkit-details-marker{display:none}
+  details.card summary .nm{font-family:var(--mono);font-weight:700;font-size:13.5px}
+  details.card summary .one{font-size:12.5px;color:var(--ink-2);flex:1}
+  details.card summary::after{content:"+";font-family:var(--mono);color:var(--accent);font-weight:700}
+  details.card[open] summary::after{content:"−"}
+  details.card[open]{background:var(--paper-2);grid-column:1/-1}
+  details.card .bd{padding:2px 16px 16px;font-size:13.8px;color:var(--ink-2);border-top:1px dashed var(--line)}
+  details.card .bd b{color:var(--ink)}
+  details.card .bd .io{font-family:var(--mono);font-size:12px;color:var(--accent);margin-top:6px;display:block}
+
+  /* ---------- record table ---------- */
+  .rec{width:100%;border-collapse:collapse;font-size:13.8px;border:2px solid var(--ink)}
+  .rec th{font-family:var(--mono);font-size:11.5px;letter-spacing:1px;text-align:left;background:var(--ink);color:var(--paper);padding:9px 14px}
+  .rec td{padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  .rec tr:last-child td{border-bottom:none}
+  .rec td:first-child{font-family:var(--mono);font-size:12.5px;white-space:nowrap}
+  .rec .who{color:var(--accent);font-family:var(--mono);font-size:12px;white-space:nowrap}
+
+  footer{margin-top:64px;border-top:2px solid var(--ink);padding:28px 0 44px;color:var(--ink-2);font-size:13.5px}
+  footer .wrap{display:flex;gap:28px;flex-wrap:wrap;align-items:baseline}
+  footer a{color:var(--accent)}
+  .reveal{opacity:0;transform:translateY(14px);transition:opacity .5s ease,transform .5s ease}
+  .reveal.in{opacity:1;transform:none}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <span class="logo">eo-<em>skills</em></span>
+  <a href="#pick">怎么用</a><a href="#life">一个 change 的一生</a><a href="#loops">数据轮转</a><a href="#catalog">Skill 图鉴</a>
+  <span class="spacer"></span><span class="ver">v2</span>
+</div></nav>
+
+<header><div class="wrap hero-grid">
+  <div>
+    <div class="kicker">HOW IT WORKS · 不用先读文档</div>
+    <h1 class="hero">让变更自己留痕，<br>让文档自己<span class="u">长出来</span>。</h1>
+    <p class="hero-sub">eo-skills 是一套装进 Claude Code / Codex 的开发工作流：你口喷需求和 bug，它负责澄清、验收、实施、归档——代码是唯一真相源，文档是代码的投影，教训会在下次自动回来找你。</p>
+  </div>
+  <div class="term">
+    <span class="c"># 每个项目一次</span><br>
+    <span class="p">/eo-project-init</span><br>
+    <span class="c"># 之后的日常，只有两句话</span><br>
+    <span class="p">/eo-change</span> <b>加一个批量导出</b><br>
+    <span class="p">/eo-fix</span> <b>导出的文件名不对</b>
+  </div>
+</div></header>
+
+<!-- ================= 选路器 ================= -->
+<section id="pick"><div class="wrap">
+  <div class="sec-head"><span class="sec-no">01</span><h2>你要做什么？</h2></div>
+  <p class="sec-lede">整套体系只有三条路。选一个场景，看看会发生什么——注意第一条路：<b>够小的事根本不需要流程</b>。</p>
+  <div class="picker" role="group">
+    <button class="pick" data-r="0" aria-pressed="true"><span class="q">“把按钮挪右边一点”</span><span class="a">→ 直改模式（无流程）</span></button>
+    <button class="pick" data-r="1" aria-pressed="false"><span class="q">“加一个批量导出功能”</span><span class="a">→ 标准 change</span></button>
+    <button class="pick" data-r="2" aria-pressed="false"><span class="q">“我想做个新东西，还没想清楚”</span><span class="a">→ 头脑风暴 → 拆首批 change</span></button>
+  </div>
+  <div class="route" id="route"></div>
+</div></section>
+
+<!-- ================= 一个 change 的一生 ================= -->
+<section id="life"><div class="wrap">
+  <div class="sec-head"><span class="sec-no">02</span><h2>一个 change 的一生</h2></div>
+  <p class="sec-lede">左边是对话里发生的事，右边是文件系统同步长出来的东西。点步骤或用 ← → 键走一遍：你会看到状态如何自动流转、什么被记录、最后又如何变成活文档。</p>
+  <div class="life">
+    <div class="steps" role="tablist" id="steps"></div>
+    <div class="life-body">
+      <div class="life-left"><h3 id="lt"></h3><div class="who" id="lw"></div><div class="talk" id="talk"></div></div>
+      <div class="life-right">
+        <div class="cap">FILE SYSTEM · 同步发生</div>
+        <div class="tree" id="tree"></div>
+        <div class="statusline"><span class="lbl">STATUS</span>
+          <span class="badge b-draft">draft</span><span class="badge b-confirmed">confirmed</span>
+          <span class="badge b-impl">implementing</span><span class="badge b-done">done</span><span class="badge b-arch">archived</span>
+        </div>
+      </div>
+    </div>
+    <div class="life-nav">
+      <button class="btn" id="prev">← 上一步</button>
+      <span class="hint">status 全程由 skill 自动流转，你只在对话里说话</span>
+      <button class="btn primary" id="next">下一步 →</button>
+    </div>
+  </div>
+</div></section>
+
+<!-- ================= 数据轮转 ================= -->
+<section id="loops"><div class="wrap">
+  <div class="sec-head"><span class="sec-no">03</span><h2>数据怎么轮转</h2></div>
+  <p class="sec-lede">三个循环 + 一层投影。关键只有一句话：<b>所有箭头都是单向的</b>——change 归档后冻结、文档从代码再生、投影永不反写，所以永远不会有两份口径打架。</p>
+  <div class="loops">
+    <div class="loop reveal">
+      <h3>工件流 · 单程</h3><div class="en">CHANGE, FROZEN ON ARRIVAL</div>
+      <svg viewBox="0 0 300 118">
+        <rect x="4" y="44" width="56" height="28"/><text x="14" y="62">想法</text>
+        <rect x="86" y="44" width="76" height="28"/><text x="93" y="56">change.md</text><text x="93" y="68" class="st">AC + TODO</text>
+        <rect x="188" y="44" width="44" height="28"/><text x="198" y="62">代码</text>
+        <rect x="256" y="44" width="40" height="28"/><text x="261" y="62">冻结</text>
+        <path class="path oneway" d="M60 58 L86 58"/><path class="path oneway" d="M162 58 L188 58"/><path class="path oneway" d="M232 58 L256 58"/>
+        <text x="86" y="98" class="st">归档 = 审计历史，不合并回任何文档</text>
+      </svg>
+      <p>验收清单（AC）先于代码存在，是 implement 的完成判据、review 的检查表、fix 的期望锚点。归档即冻结——<b>不反写</b>。</p>
+    </div>
+    <div class="loop reveal">
+      <h3>文档流 · 再生</h3><div class="en">DOCS GROW FROM CODE</div>
+      <svg viewBox="0 0 300 118">
+        <rect x="8" y="10" width="60" height="28"/><text x="22" y="28">代码</text>
+        <rect x="150" y="10" width="140" height="28"/><text x="158" y="22">state/ + handbook</text><text x="158" y="33" class="st">活文档 · 可随时重建</text>
+        <path class="path oneway" d="M68 24 L150 24"/><text x="80" y="18" class="st">cursor sync</text>
+        <path class="path" d="M220 38 C220 86 100 86 44 42"/><text x="96" y="102">下一个 change 起草前先读它</text>
+      </svg>
+      <p>doc-manager 按 commit 游标增量归档；archive 只是它的触发点之一，<b>直改的提交也会被兜住</b>。代码是唯一信源。</p>
+    </div>
+    <div class="loop reveal">
+      <h3>经验流 · 回响</h3><div class="en">LESSONS COME BACK</div>
+      <svg viewBox="0 0 300 118">
+        <rect x="8" y="10" width="64" height="28"/><text x="20" y="28">踩坑</text>
+        <rect x="140" y="10" width="150" height="28"/><text x="148" y="22">lessons/ + INDEX</text><text x="148" y="33" class="st">trigger · summary 锚点</text>
+        <path class="path oneway" d="M72 24 L140 24"/>
+        <path class="path" d="M215 38 C215 88 90 88 40 44"/><text x="66" y="104">change / fix 启动时按 trigger 自动带回</text>
+      </svg>
+      <p>教训写成「规则前置 + 触发信号」，下次任务关键词命中 trigger 时<b>自动出现在上下文里</b>——不靠人想起来。</p>
+    </div>
+  </div>
+  <div class="proj reveal">
+    <span class="tag">投影层 · OPT-IN</span>
+    <p>change 的 frontmatter 可以单向投影成 <b>Obsidian 看板卡片</b>（多项目聚合观测）和 <b>GitHub issue / PR</b>（AC 全勾才 <span class="mono">Closes</span>）。本地文件永远是唯一真相源，投影只读不回写——GitHub 上关了 issue 而本地没归档？只会收到一行告警。</p>
+  </div>
+
+  <div style="margin-top:44px" class="reveal">
+    <div class="sec-head"><span class="sec-no">03½</span><h2 style="font-size:24px">什么东西被记在哪</h2></div>
+    <table class="rec">
+      <tr><th>东西</th><th>落在哪</th><th>谁写</th><th>谁消费</th></tr>
+      <tr><td>需求与验收</td><td>eo-doc/changes/&lt;id&gt;/change.md（§2 AC）</td><td class="who">eo-change</td><td>implement 当判据 · review 当检查表 · fix 当锚点</td></tr>
+      <tr><td>系统现状</td><td>eo-doc/state/ + agent-handbook/</td><td class="who">doc-manager（代码为信源）</td><td>下一个 change 的事实自查 · fix 的三方对比</td></tr>
+      <tr><td>已钉决策</td><td>change.md §1（brainstorming 移交）</td><td class="who">brainstorming / change</td><td>下游不重问、不隐式推翻</td></tr>
+      <tr><td>设计口径</td><td>DESIGN.md（token + 决策日志）</td><td class="who">eo-design</td><td>一切 UI 改动前必读 · review 一致性维度</td></tr>
+      <tr><td>教训</td><td>&lt;项目&gt;/lessons/ + INDEX</td><td class="who">eo-project-lesson</td><td>change / implement / fix 启动时按 trigger 命中</td></tr>
+      <tr><td>待办与灵感</td><td>&lt;项目&gt;/backlog.md</td><td class="who">eo-backlog</td><td>被采纳时升级为 change（顺带升级成 issue）</td></tr>
+      <tr><td>临时现场</td><td>tmp/eo/{handoff,fix,design}/</td><td class="who">各 skill</td><td>用完即弃，永不当信源</td></tr>
+    </table>
+  </div>
+</div></section>
+
+<!-- ================= 图鉴 ================= -->
+<section id="catalog"><div class="wrap">
+  <div class="sec-head"><span class="sec-no">04</span><h2>Skill 图鉴</h2></div>
+  <p class="sec-lede">18 个目录，但你日常只会喊主链上那几个。点开看细节。</p>
+  <div id="cat"></div>
+</div></section>
+
+<footer><div class="wrap">
+  <span>想看严肃版：<a href="GUIDE.md">GUIDE.md</a> · <a href="../README.md">README</a> · 从 v1 来：<a href="migration-v1-to-v2.md">迁移指南</a></span>
+  <span class="mono" style="font-size:11px;color:var(--ink-3)">本页零依赖，离线可开 · 数据不出本文件</span>
+</div></footer>
+
+<script>
+/* ---------- 选路器 ---------- */
+const ROUTES=[
+ {chain:[["直接改代码",1],["验证",0],["commit（ui: 前缀）",0]],
+  note:"满足 trivial 判据（不改行为语义、不动接口和数据、无需方案权衡、单会话搞定）就不开 change——文件数不设限，改 50 个文件的多语言也算。文档侧由 doc-manager 的 cursor sync 兜底吸收。其实连 /eo-change 都会替你判断：够小它会主动说「不值得开 change，直接改」。"},
+ {chain:[["/eo-change",1],["AC 验收清单",0],["TODO 分批",0],["/eo-implement",1],["/eo-test",0],["/eo-review",1],["/eo-archive",1]],
+  note:"标准路。起草时有提问预算（不会被问到累）、验收清单先于代码产出、TODO 3-7 条超了强制拆；实施按批走、批末验 AC；review 通过自动置 done；归档冻结工件并触发文档同步。全程你不碰任何 frontmatter。",
+  opt:[4]},
+ {chain:[["/eo-brainstorming",1],["钉决策",0],["拆 change 序列",0],["/eo-change ×N",1],["……主链",0]],
+  note:"方向没定就先风暴：三层追问、每轮 1-2 问、决策池防止已钉结论被翻案。出口直接拆成 change 序列（第一个是 MVP），已钉决策整体移交——下游一个都不会重问。"}];
+const routeEl=document.getElementById('route');
+function renderRoute(i){
+  const r=ROUTES[i];let h='<div class="chain">';
+  r.chain.forEach((n,idx)=>{
+    if(idx)h+='<span class="arrow">→</span>';
+    const opt=(r.opt||[]).includes(idx)?' opt':'';
+    h+=`<span class="node${n[1]?' hot':''}${opt}">${n[0]}</span>`;});
+  h+='</div><p class="note">'+r.note+'</p>';routeEl.innerHTML=h;}
+document.querySelectorAll('.pick').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.pick').forEach(x=>x.setAttribute('aria-pressed','false'));
+  b.setAttribute('aria-pressed','true');renderRoute(+b.dataset.r);}));
+renderRoute(0);
+
+/* ---------- 一生步进器 ---------- */
+const T=(base,marks)=>({base,marks});
+const STEPS=[
+ {n:"STEP 0",t:"口喷",title:"一句话，别的不用想",who:"你 → /eo-change",
+  talk:[["u","加一个批量导出，选中的记录打包成 zip"],
+        ["a","先自查了 state/ 和 lessons——命中一条旧教训：「大文件打包要走流式，别整包进内存」，已带入。两个问题：导出入口放列表页还是详情页？<b>推荐列表页</b>（批量语义）"],
+        ["s","事实自查在先 · 提问有预算 · 命中的教训自动进上下文"]],
+  tree:`eo-doc/
+├─ agent-handbook/   <span class="dim">← 起草前先读（代码地图）</span>
+├─ state/            <span class="dim">← 起草前先读（系统现状）</span>
+└─ changes/
+   └─ INDEX.md
+
+<span class="dim">vault/lessons/INDEX.md → 命中 1 条 trigger ✓</span>`,
+  st:null},
+ {n:"STEP 1",t:"起草",title:"验收先于代码",who:"/eo-change",
+  talk:[["a","AC 定了 4 条（含一条失败路径：「超过 500 条时提示分批」）；TODO 拆成 2 批，Batch 1 是 MVP。粒度自检：5 条 TODO / 210 行，合规 ✓"],
+        ["u","可以，就这么干"],
+        ["a","已确认。<span class=\"mono\">status: draft → confirmed</span>（我改的，你永远不用碰 frontmatter）。看板卡片和 GitHub issue #42 已建"]],
+  tree:`eo-doc/changes/
+├─ INDEX.md          <span class="chg">+1 行</span>
+└─ <span class="new">014-batch-export/</span>
+   └─ <span class="new">change.md</span>
+      <span class="dim">§1 意图 + 已钉决策（含 lesson 来源）</span>
+      <span class="dim">§2 AC ×4 ☐☐☐☐   §3 TODO ×5（2 批）</span>
+      <span class="dim">issue: 42</span>
+
+<span class="dim">vault/board/014-batch-export.md（投影）</span>`,
+  st:"confirmed"},
+ {n:"STEP 2",t:"实施",title:"按批走，批末必须停下来验收",who:"/eo-implement",
+  talk:[["a","Batch 1（MVP）完成：TODO 1-3 勾掉，AC-1、AC-2 按验证方式跑过 ✓。已提交 <span class=\"mono\">[014] 导出核心链路</span>。继续 Batch 2 还是先停？"],
+        ["u","继续"],
+        ["s","STOP & VALIDATE：每批结束验对应 AC，你随时可以下车"]],
+  tree:`eo-doc/changes/014-batch-export/
+└─ change.md
+   <span class="dim">base_commit: a1b2c3</span>
+   §2 AC  <span class="chg">☑☑☐☐</span>
+   §3 TODO <span class="chg">☑☑☑☐☐</span>
+
+git log:
+<span class="new">[014] 导出核心链路（Batch 1）</span>`,
+  st:"impl"},
+ {n:"STEP 3",t:"验证",title:"测试和审查都拿 AC 说话",who:"/eo-test → /eo-review",
+  talk:[["a","test：AC 逐条推导 11 个用例，全绿。review：AC 覆盖 4/4，代码质量 P0=0 P1=0 P2=1（命名建议）。<span class=\"mono\">status → done</span>"],
+        ["s","速报是硬性要求——不打开报告文件就能知道结果"]],
+  talkExtra:null,
+  tree:`eo-doc/changes/014-batch-export/
+├─ change.md   §2 AC <span class="chg">☑☑☑☑</span>
+├─ <span class="new">test.md</span>    <span class="dim">11 用例 · 0 失败</span>
+└─ <span class="new">review.md</span>  <span class="dim">P0=0 P1=0 P2=1</span>`,
+  st:"done"},
+ {n:"STEP 4",t:"归档",title:"把世界结算成 commit，再让文档长出来",who:"/eo-archive → doc-manager",
+  talk:[["a","AC 门禁 ✓ → 工作区结算 ✓ → 冻结 <span class=\"mono\">status → archived</span> → 触发 doc sync：state/导出.md 新建、handbook 2 篇更新，游标推进。issue #42 已关（AC 全勾 → Closes），PR 已建"],
+        ["s","archive 自己没有一行同步逻辑——它只是 doc-manager 的触发器"]],
+  tree:`eo-doc/changes/014-batch-export/  <span class="dim">❄ 冻结（审计历史）</span>
+
+eo-doc/state/
+└─ <span class="new">导出.md</span>          <span class="dim">← 从代码长出来的</span>
+eo-doc/agent-handbook/
+├─ export-core.md   <span class="chg">更新</span>
+└─ INDEX.md         <span class="chg">更新</span>
+<span class="dim">.sync-cursor → HEAD ✓（顺带吸收了期间的直改提交）</span>`,
+  st:"arch"},
+ {n:"STEP 5",t:"回响",title:"故事没有结束，它开始复利",who:"/eo-fix · /eo-project-lesson",
+  talk:[["u","导出的文件名不对，少了日期"],
+        ["a","F-ac 说文件名含日期，代码没实现——实现 bug，已修，回归验证 ✓，<span class=\"mono\">fix:</span> 直改落地。顺带：这次流式打包的坑要记一条 lesson 吗？"],
+        ["u","记"],
+        ["s","这条 lesson 的 trigger 会在下一个涉及打包的 change 里自动响起——回到 STEP 0"]],
+  tree:`vault/lessons/
+├─ INDEX.md                       <span class="chg">+1 行</span>
+└─ <span class="new">2026-07-08-zip-streaming.md</span>
+   <span class="dim">trigger: 涉及 zip/大文件打包时</span>
+   <span class="dim">## 规则（结论前置，给下次的 agent 读）</span>
+
+<span class="dim">循环闭合：记录 → 索引 → 下次自动消费</span>`,
+  st:"arch"}];
+const stMap={confirmed:["b-draft","b-confirmed"],impl:["b-draft","b-confirmed","b-impl"],
+  done:["b-draft","b-confirmed","b-impl","b-done"],arch:["b-draft","b-confirmed","b-impl","b-done","b-arch"]};
+let cur=0;
+const stepsEl=document.getElementById('steps');
+STEPS.forEach((s,i)=>{const b=document.createElement('button');b.className='step';b.role='tab';
+  b.innerHTML=`<span class="n">${s.n}</span><span class="t">${s.t}</span>`;
+  b.addEventListener('click',()=>go(i));stepsEl.appendChild(b);});
+function go(i){cur=Math.max(0,Math.min(STEPS.length-1,i));const s=STEPS[cur];
+  document.querySelectorAll('.step').forEach((b,j)=>b.setAttribute('aria-selected',j===cur));
+  document.getElementById('lt').textContent=s.title;
+  document.getElementById('lw').textContent=s.who;
+  document.getElementById('talk').innerHTML=s.talk.map(m=>`<div class="bub ${m[0]}">${m[1]}</div>`).join('');
+  document.getElementById('tree').innerHTML=s.tree;
+  const on=s.st?stMap[s.st]:[];
+  document.querySelectorAll('.badge').forEach(b=>{b.classList.toggle('on',on.some(c=>b.classList.contains(c)));});
+  document.getElementById('prev').disabled=cur===0;
+  const nx=document.getElementById('next');nx.disabled=cur===STEPS.length-1;
+  nx.textContent=cur===STEPS.length-1?'循环闭合 ✓':'下一步 →';}
+document.getElementById('prev').addEventListener('click',()=>go(cur-1));
+document.getElementById('next').addEventListener('click',()=>go(cur+1));
+document.addEventListener('keydown',e=>{if(e.key==='ArrowRight')go(cur+1);if(e.key==='ArrowLeft')go(cur-1);});
+go(0);
+
+/* ---------- 图鉴 ---------- */
+const CAT=[
+ ["主链 · 日常就喊它们",[
+  ["eo-change","发起变更","复杂度定级（够小主动短路成直改）→ 事实自查（含 lessons）→ 预算内澄清 → <b>AC 先于 TODO</b> → 粒度硬校验（TODO&gt;10 或 700 行拒绝确认）。","产出 changes/<id>/change.md · 状态 draft→confirmed"],
+  ["eo-implement","按批实施","按 Batch 执行，批末 checkpoint：验该批 AC、勾进度、[change-id] 前缀提交、问你继续还是停。","勾 change.md 的 ☑ · 状态 →implementing"],
+  ["eo-test","以 AC 为锚测试","AC 逐条推导用例，严禁改业务代码；结束必出对话速报。","产出 test.md"],
+  ["eo-review","代码审查","AC 覆盖逐条核对 + 质量分级 P0/P1/P2 + DESIGN.md 一致性（条件）；通过自动置 done。","产出 review.md · 状态 →done"],
+  ["eo-archive","归档","五层：AC 门禁 → 工作区结算 → 冻结 → <b>内嵌调用 doc sync</b>（零自有逻辑）→ issue/PR/看板收尾。","冻结 change · 更新活文档 · 状态 →archived"]]],
+ ["入口 · 事情从这里进来",[
+  ["eo-brainstorming","想法发散与钉决策","三层追问、每轮 1-2 问、决策池（已钉不翻案）；捕获出口直接拆 change 序列并移交决策。","产出 brainstorm 记录 + change 草案"],
+  ["eo-fix","bug 口喷入口","三方对比（AC↔state↔代码）→ <b>直接修复</b>；难缠 bug 自动升级深挖模式（插桩/bisect，结束还原）；实为需求变更转 change。","修代码 · 调查记录进 tmp/eo/fix/"],
+  ["直改模式","不是 skill，是一条豁免规则","纯样式/文案/多语言/小修 → 不开 change，改完 commit（fix:/ui: 前缀），cursor sync 兜底归档。","零工件"]]],
+ ["基座 · 一次配置长期受益",[
+  ["eo-project-init","总入口","生成 .eo-project.json、双侧骨架、CLAUDE.md 注入；看板 / GitHub 联动在这里开关（问一次写回配置）。","所有 skill 的前置"],
+  ["eo-doc-manager","活文档引擎","cursor sync 按 commit 增量把代码变化归档进 state/ + handbook；脏变更三选一；每 5 次 sync 提示一致性抽查。","维护 eo-doc/ 活文档"],
+  ["eo-shared","共享规范（非技能）","提问纪律 / AC 规范 / 粒度判据 / lessons 格式 / 联动规范的单一来源——skill 只引用，不复述。","被所有 skill 引用"]]],
+ ["增强 · 需要时才出现",[
+  ["eo-design","设计系统","init 建 DESIGN.md（SAFE/RISK 提案 + HTML 预览）；variants 反趋同多方案对比；apply 生产级落地；audit 一致性审计。","DESIGN.md + CLAUDE.md 约束注入"],
+  ["eo-change-review","方案审查（可选）","AC 质量、TODO↔AC 映射、粒度合规、占位符检测——implement 之前把牢方向。","产出 change-review.md"],
+  ["eo-flow","甩给 codex","把单个步骤（implement/test/review）handoff 给 tmux 另一 pane 的 codex，回包后决策。","跨 agent 协作"],
+  ["eo-handoff","会话交接","/clear 前把「状态 + 口径 + 下一步」写成开机指令，新会话 5 分钟接上。","tmp/eo/handoff/<topic>.md"]]],
+ ["项目管理 · 落在 vault",[
+  ["eo-backlog","待办池","一句话灵感 / 以后再说的事，追加进 backlog.md；被采纳时升级成 change。","backlog.md"],
+  ["eo-project-update","进度与决策","roadmap / 阶段 / 决策记录 / 项目看板同步。","roadmap · decisions · log"],
+  ["eo-project-lesson","经验教训","结论前置格式（规则→适用条件→背景）+ trigger/summary 锚点 + INDEX——写下来是为了被自动消费。","lessons/ + INDEX.md"]]]];
+const catEl=document.getElementById('cat');
+catEl.innerHTML=CAT.map(g=>`<div class="cat-group reveal"><div class="gt">${g[0]}</div><div class="cards">${
+  g[1].map(c=>`<details class="card"><summary><span class="nm">${c[0]}</span><span class="one">${c[1]}</span></summary>
+  <div class="bd"><p>${c[2]}</p><span class="io">⇢ ${c[3]}</span></div></details>`).join('')}</div></div>`).join('');
+
+/* ---------- reveal ---------- */
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.12});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+</script>
+</body>
+</html>
