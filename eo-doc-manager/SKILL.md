@@ -37,12 +37,12 @@ description: 管理 eo-doc/ 代码侧文档体系（init / sync / re-sync / modi
 eo-doc/
 ├── agent-handbook/   # 必建，代码架构（AI 地图）
 │   └── INDEX.md
-├── dev/              # 必建，spec/change/review 流（由 eo-* 工作流 skill 维护）
+├── changes/          # 必建，change 工件流（由 eo-* 工作流 skill 维护）
 │   └── INDEX.md
 ├── templates/        # 必建（空），eo-* 技能扩展点
 ├── state/            # 按需，系统当前状态（首次 sync 时 lazy 建）
 │   └── INDEX.md
-└── .sync-cursor      # sync 基线（自动进 .gitignore）
+└── .sync-cursor      # sync 基线与计数（自动进 .gitignore）
 ```
 
 ### 已移除的目录
@@ -52,6 +52,7 @@ eo-doc/
 | 旧目录 | 去向 |
 |--------|------|
 | `eo-doc/doc/` | 改名为 `state/`（语义更准："系统现在什么样" = state） |
+| `eo-doc/dev/` | 模块维度移除；change 工件上提为项目级 `eo-doc/changes/`（模块 spec 不再存在） |
 | `eo-doc/design/` | 迁至项目管理侧 `<project_root>/docs/`（与原始 PRD 合并） |
 | `eo-doc/research/` | **暂时移除**（未来有对应 skill 再接入；先记在 `<project_root>/backlog.md`） |
 | `eo-doc/knowledgebase/` | **暂时移除**（同上） |
@@ -61,9 +62,9 @@ eo-doc/
 | 目录 | 职责 | 面向 | 核心问题 | type 值 |
 |------|------|------|----------|---------|
 | `agent-handbook/` | 代码架构 — 模块入口、接口索引、依赖关系 | AI | "代码**怎么**组织的？" | `agent` |
-| `dev/` | 功能开发文档 — 每个功能的 spec/change/review/test 产出 | 都 | "功能**开发**到哪了？" | — |
+| `changes/` | change 工件流 — 每次变更的 change/review/test 产出 | 都 | "变更**进行**到哪了？" | — |
 | `state/` | 当前实现 — 系统实际做了什么，业务规则、状态流转、配置 | 人 | "系统**现在**是什么样？" | `state` |
-| `templates/` | eo-* 技能的扩展点 — 项目类型、层级结构、工作流定制 | AI | "项目**怎么**定制？" | — |
+| `templates/` | eo-* 技能的扩展点 — 项目类型、工作流定制 | AI | "项目**怎么**定制？" | — |
 
 ### 关键区分
 
@@ -126,17 +127,17 @@ state/ 和 agent-handbook/ 的内容必须从**源码**生成，不是从已有�
 
 ### sync — 增量同步
 
-基于 git diff 将代码变更同步到 state/ 和 agent-handbook/。参考 [git-sync.md](references/git-sync.md)。
+基于 git diff 将代码变更同步到 state/ 和 agent-handbook/。完整流程见 [git-sync.md](references/git-sync.md)。
 
-通过 `<doc_root>/.sync-cursor` 记录上次同步点：
-1. 读取 `.sync-cursor` 获取上次同步 commit
-2. `git diff <last_commit>..HEAD` + 未提交变更
-3. **同时更新两个目标**（不再有 design/）：
-   - `agent-handbook/`：代码地图（入口、接口、依赖）
-   - `state/`：系统现状（业务规则、状态、配置）——**若 state/ 不存在则首次 lazy 创建**
-4. 更新所有受影响 INDEX.md
-5. 更新 `.sync-cursor` 为当前 HEAD
-6. 汇报变更
+要点：
+1. 读 `.sync-cursor` 取上次同步 commit，范围 = `<last_commit>..HEAD`
+2. **工作区有脏变更时问用户三选一**（默认推荐：只取已提交增量，不扫脏变更；详见 git-sync.md）
+3. **diff 分析排除 `eo-doc/` 路径**（change/INDEX 等元数据提交直接跳过）
+4. 同时更新 `agent-handbook/`（代码地图）与 `state/`（系统现状，不存在则首次 lazy 建）
+5. 更新受影响 INDEX.md → cursor 推进到 HEAD，`sync_count` +1
+6. 汇报变更；`sync_count` 达到阈值（5）→ 提示做一次一致性抽查（见 [maintenance.md](references/maintenance.md)），完成后计数清零
+
+**触发点有两个**：用户手动 `/eo-doc-manager sync`，以及 `/eo-archive` 归档第四层的内嵌调用——同一机制、同一游标，无独立的按 change 定界模式。
 
 ### re-sync — 全量重建
 

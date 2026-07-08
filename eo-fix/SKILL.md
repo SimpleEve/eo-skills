@@ -1,190 +1,102 @@
 ---
 name: eo-fix
 description: |
-  发现 bug 但不确定是代码写错了、change 方案写偏了，还是 spec 基线本身就错了时，先用此 skill 做诊断路由。用 INDEX + frontmatter (tags/summary) 轻量定位相关 spec / change / state，再三方对比事实，给出「直接 fix」vs「追加 change」的建议。触发：修 bug / 不知道是实现错还是方案错 / 到底该 fix 还是开 change / /eo-fix。
-  NOT FOR: 已经定位清楚的实现 bug（直接走 /eo-implement）；明确的业务变更（走 /eo-change）。
+  bug 口喷入口：轻量定位 + 三方对比（AC ↔ state ↔ 代码）+ 直接修复；原因不明的难缠 bug 自动升级深挖模式；实为需求变更时转 /eo-change。触发：修 bug / 有个 bug / 行为不对 / fix / /eo-fix。
+  NOT FOR: 明确的业务变更（走 /eo-change）；implement-test-review 循环内的反馈修复（归 /eo-implement 模式二）。
 ---
 
-# eo-fix — Bug 发现后的诊断路由
+# eo-fix — Bug 修复
 
-用户发现一个"行为不对"，但说不清楚是**代码实现错了**、**change 方案错了**、还是**spec 基线错了**。本 skill 只做三件事：
-
-1. **轻量定位**：不全文 grep `eo-doc/`，靠 INDEX + frontmatter (tags/summary) 锁定候选 spec / change / state
-2. **三方对比**：凑齐 F-spec / F-change / F-code 三份事实再下结论
-3. **分叉建议**：告诉用户走哪条路（`/eo-implement` fix / 内联改 change / 开 enhance change），不亲自改文件
-
-## 前置
-
-**必须能找到 `.eo-project.json`**。找不到 → 报错退出，提示运行 `/eo-project-init`。`eo-doc/` 路径通过 `doc_root` 字段解析。
-
-## 定位（相对于其他 skill）
-
-| skill | 职责 | 本 skill 何时把球踢给它 |
-|-------|------|------------------------|
-| `/eo-fix` | **诊断路由**：不知道错在哪一层时先判断 | — |
-| `/eo-implement`（fix 模式）| 在当前 change 内循环修代码，不开新 change | 诊断为"代码没对齐" |
-| `/eo-change-review` | change.md 方案审查 | change §3 小修订后复审 |
-| `/eo-change` | 对已有模块发起新变更（含 enhance）| 诊断为"spec 基线就错了，是业务变更" |
-| `/eo-flow fix` | 把 fix 甩给 tmux 另一 pane 的 codex | 用户走多 pane 工作流时备选 |
-
-**fix 不开新 change** 是 `eo-implement` 的硬规则。本 skill 的价值正是判断这条硬规则是否适用——若是 spec 错了，那就不是 fix，是 enhance。
+用户口喷一个「行为不对」，本 skill 负责走完全程：**定位原因 → 判定归属 → 直接修复 → 验证**。只有「这其实是需求变更」才把球踢出去。
 
 ## 核心原则
 
-1. **先索引后全文**：禁止 `grep -r` spec/change 正文；用 INDEX 的表格摘要 + frontmatter 的 `tags`/`summary` 缩小候选集，锁定后再读正文对应小节
-2. **三方齐备才下结论**：spec / change / code 任一缺失都只能说"倾向"，不能说"是"
-3. **不动手改**：只出诊断 + 建议；改文件/改代码的动作由用户拍板后派给对应 skill
-4. **证据不足就追问**：宁可多问一轮，也不要硬猜
+1. **先索引后全文**：禁止全局 grep；用 changes/INDEX.md、state/INDEX.md、agent-handbook/INDEX.md 的表格摘要 + frontmatter（tags/summary）收敛候选，锁定后只读相关小节
+2. **三方对比**：F-ac（期望行为）/ F-state（文档记载的现状）/ F-code（实现事实）凑齐再下结论；证据不足只说「倾向」并追问
+3. **直接修复**：判定为实现 bug 就地修，不倒手给其他 skill
+4. **深挖有门**：常规手段定位不了才升级深挖模式，升级必须向用户宣告
+
+## 前置
+
+**必须能找到 `.eo-project.json`**。找不到 → 报错退出，提示运行 `/eo-project-init`。
 
 ## 工作流程
 
 ### 第一步：搜集现象
 
-向用户确认以下三项（用户描述里已含则跳过对应条）：
+确认三项（用户描述已含则不重复问）：期望行为（按哪个说法它本该怎样）、实际行为（表现 + 复现步骤）、猜测范围（粗略词即可）。同时检索 `<project_root>/lessons/`——同类坑踩过的直接引用结论。
 
-- **期望行为**：按哪份文档 / 哪次对话，它本该是什么样？
-- **实际行为**：当前表现 + 重现步骤？
-- **触及范围**：猜测涉及哪个模块 / 哪个功能？（粗略词即可，不强求精确）
+### 第二步：轻量定位
 
-### 第二步：轻量定位（Token 高效）
+1. 读 `eo-doc/changes/INDEX.md`：按关键词匹配摘要，锁定相关 change——**活跃（非 archived）优先**，其次最近 archived
+2. 读 `eo-doc/state/INDEX.md`（存在时）：挑一篇描述该功能现状的文档
+3. 读 `eo-doc/agent-handbook/INDEX.md`：定位实现代码的入口文件
+4. 候选 >3 或全无匹配 → 追问用户，不硬挑
 
-**绝不全局 grep spec/change/代码正文**。严格按下列三层逐步收敛：
+### 第三步：三方事实
 
-1. **模块层**：读 `eo-doc/dev/INDEX.md`
-   - 按关键词匹配 `Title` / `Tags` / `Summary` 列，找出 1–3 个候选模块
-   - 候选 > 3 → 向用户追问缩小范围，不要硬挑
+| 记号 | 来源 | 缺位时 |
+|------|------|--------|
+| **F-ac** | 相关 change 的 §2 验收清单（+ §1 已钉决策） | 无相关 change → 以用户口述的期望行为为准，并注明「无书面 AC」 |
+| **F-state** | state/ 对应篇目的规则/流程描述 | state 未建 → 跳过此方 |
+| **F-code** | 按 handbook 定位的实现（只读相关函数/行） | — |
 
-2. **模块内候选**：对每个候选模块
-   - 读 `eo-doc/dev/<module>/spec.md` 的 **frontmatter**（`tags` / `summary` / `status`），**不读正文**
-   - 读 `eo-doc/dev/<module>/changes/INDEX.md` 全表（每行含 change-id / type / status / 日期 / 摘要）
-   - 按"与现象最相关"挑 1–2 个候选 change
+### 第四步：路由判定（修复前）
 
-3. **state 交叉对照**（可选）：若存在 `eo-doc/state/INDEX.md`
-   - 按关键词匹配，挑一篇描述该功能"实际做了什么"的 state 文档作为第三方对照
+| 观察 | 判定 | 动作 |
+|------|------|------|
+| F-code ≠ F-ac（或明显缺陷：崩溃、数据错、显而易见的逻辑错） | **实现 bug** | 进第五步直接修复 |
+| F-ac 本身写漏/写偏，且 change 未 archived | **AC 写漏** | 告知用户，确认后先补 change.md §2/§3，再进第五步修 |
+| 期望行为变了 / 涉事 change 已 archived 且改动非平凡 | **需求变更** | 停手，建议 `/eo-change`（把已收集的现象与结论带过去） |
+| F-state ≠ F-code | **文档陈旧** | 顺手提示跑 `/eo-doc-manager sync`，以代码为准重判 |
+| 原因无法定位 / 无法稳定复现 | **难缠 bug** | 升级深挖模式（第六步） |
 
-输出定位摘要：
+**修复范围判断**（进第五步前）：预估改动若不再是 trivial 量级（判据见 [../eo-shared/granularity.md](../eo-shared/granularity.md) §2，如需要方案权衡、动对外接口）→ 停手建议开 change，不硬修。
 
-```
-候选定位：
-  - module: <module-name>   spec tags=[...]  summary=...
-  - change: <NNN-xxx>        type=enhance    status=archived   summary=...
-  - state:  <state-file>     （可选）
-```
+### 第五步：执行修复
 
-若定位失败（无匹配 / 用户否认）→ 向用户追问更多线索，不要硬猜。
+1. 修改代码，最小变更
+2. **验证**：用户给的复现步骤转成回归验证，跑通；相关 AC（若有）重新核对
+3. **落点**：
+   - 有相关**活跃 change** → 修复计入该 change：勾选涉及的 TODO/AC，commit 带 `[<change-id>]` 前缀
+   - 无活跃 change → 直改落地：commit 带 `fix:` 前缀（见 [../eo-shared/conventions.md](../eo-shared/conventions.md)），由 doc-manager 的下次 sync 兜底归档；顺带报告 cursor 落后量，超过 10 个 commit 建议顺手跑 `/eo-doc-manager sync`
 
-### 第三步：读事实（锁定后才读正文）
+### 第六步：深挖模式（自动升级）
 
-对锁定的候选，**只读与现象相关的小节**，不要通读：
+触发即向用户宣告：**「常规定位失败，进入深挖模式：会临时插桩/加日志/git bisect，结束后还原现场。」**
 
-- **spec.md**：读 §3（功能需求，尤其 §3.3 核心行为 / §3.4 业务规则）+ §6（AC）里对应小节
-- **change.md**：读 §3（Delta 或 bootstrap 实现范围）+ §5（AC）+ §4.3 里相关 TODO
-- **代码**：按 change.md §2.3 / §4.3 的"涉及文件"列表定位实际实现的函数/行
+1. 读 [references/investigation.md](references/investigation.md)，按四阶段执行（固定复现 → 假设清单 → 二分排除 → 验证还原）
+2. 调查记录写 `tmp/eo/fix/<date>-<slug>.md`（可丢弃工件，见 conventions.md）
+3. 根因确认后**回到第四步路由表**定归属，再走第五步修复
+4. 根因有普适教训 → 提议用户跑 `/eo-project-lesson` 沉淀（调查记录本身不是沉淀）
 
-凑齐三组事实：
-
-| 记号 | 含义 |
-|------|------|
-| **F-spec** | spec 声明的应有行为 |
-| **F-change** | change 对 spec 做了什么 Delta（或 bootstrap 认领了哪段） |
-| **F-code** | 代码实际行为 |
-
-### 第四步：诊断分叉
-
-按下表判断根因：
-
-| 观察 | 根因 | 建议路径 |
-|------|------|---------|
-| F-code ≠ F-change（代码没按 change §3/§5 实现）| **实现没对齐** | `/eo-implement` fix 循环（或 `/eo-flow fix`）；**不开新 change** |
-| F-change ≠ F-spec 且 change 未 archived（`status` ∈ `approved`/`implementing`/`done`）| **change 方案写偏了** | 内联改 change.md §3/§5 → `/eo-change-review` → 重跑 `/eo-implement` |
-| F-change ≠ F-spec 且 change **已 archived** | **已归档 change 的实施不符 spec** | 仍属 implement 补丁循环：`/eo-implement` fix；**不开新 change** |
-| F-spec 声明的业务意图与用户当前真实需求不一致 | **spec 基线错了（其实是业务变更）** | `/eo-change <module>` 开 `enhance` change |
-| F-spec / F-change / F-code 三方自洽，但用户说"现在不该这样" | 新需求伪装成 bug | 同上：`/eo-change` 开 `enhance` |
-| 现象不可复现 / 三方事实凑不齐 | 证据不足 | 追问用户；不下结论 |
-
-**关键判据**（用户原话语义线索）：
-
-- "实现得不对" / "跟 AC 不符" / "明明写了却没做" → 倾向**实现错**
-- "方案漏了 xxx" / "change 写偏了" / "应该还要 …" → 倾向 **change 方案错**
-- "需求变了" / "现在我想要…" / "当初没考虑到" → 倾向 **spec 错（=业务变更）**
-
-### 第五步：输出诊断报告
-
-给用户一份**短报告**（不要长篇），结构如下：
+### 第七步：收尾速报
 
 ```
-## 诊断：<一句话结论>
-
-### 证据
-- F-spec（<module>/spec.md §X.Y）:   ...
-- F-change（<NNN-xxx>/change.md §3）: ...
-- F-code（<file:line>）:              ...
-
-### 不一致项
-- [x] F-code ≠ F-change
-- [ ] F-change ≠ F-spec
-- [ ] F-spec 本身错
-
-### 建议路径
-→ /eo-implement <change-path>（或 /eo-flow fix，若用多 pane 工作流）
-
-### 备选
-若你认为真正问题在 spec（业务变更），走 /eo-change <module> 开 enhance。
+修复完成：<一句话根因>
+- 改动：<file:line 级别的简述>
+- 验证：<复现步骤回归结果 / AC 核对结果>
+- 落点：计入 <change-id> / 直改（fix: commit <hash>）
+- （深挖时）调查记录：tmp/eo/fix/<file>；建议沉淀 lesson：<是/否>
 ```
-
-**停手，等用户拍板**。不自动派发。
-
-### 第六步：用户确认后转交
-
-- 用户认同"实现错" → 提示 `/eo-implement <change-path>` 或 `/eo-flow fix`
-- 用户认同"change 方案错"且未归档 → 提示**本 pane 内联改 change.md**，改完跑 `/eo-change-review`（不走 `/eo-review`——代码还没改）
-- 用户认同"spec 错 / 业务变更" → 提示 `/eo-change <module>` 开 enhance（不走 implement fix 循环）
 
 ## 关键约束
 
 | 约束 | 说明 |
 |------|------|
-| 先索引后全文 | 禁止全局 `grep` spec/change 正文；用 INDEX + frontmatter `tags`/`summary` 收敛候选集 |
-| 候选 > 3 就追问 | 模块层匹配出 4+ 候选时不要硬挑，先问用户 |
-| 三方齐备才下结论 | F-spec / F-change / F-code 任一缺失只能说"倾向"，不能说"是" |
-| 不动手改 | 只做诊断 + 建议，不改 spec / change / code |
-| 不自动开新 change | 只在"spec 错了且属业务变更"时建议 `/eo-change` enhance；fix 不升格是 `/eo-implement` 的硬规则 |
-| change-review 对应 change-review | 内联改完 change.md 后复审用 `/eo-change-review`（方案审查），**不是** `/eo-review`（代码审查） |
-| 证据不足就问 | 现象说不清 / 候选太多 → 追问用户，不乱猜 |
+| 禁全局 grep | 定位只走 INDEX + frontmatter 收敛 |
+| 三方齐备才下结论 | 任一缺位只说「倾向」；证据不足追问，不乱猜 |
+| 修复范围守界 | 超出 trivial 量级 / 需要方案权衡 → 建议开 change，不硬修 |
+| 深挖必宣告、必还原 | 插桩/日志/bisect 结束后全部还原；调查记录只进 tmp/eo/fix/ |
+| 需求变更不伪装成 fix | 期望行为本身变了就是 /eo-change 的事，哪怕改动很小 |
+| 与 implement 的分工 | test/review 反馈的修复归 /eo-implement 模式二；本 skill 是流程外的口喷入口 |
 
 ## 典型场景
 
-### 场景 1：代码 bug（最常见）
+**场景 1 · 实现 bug**：「导出 CSV 字段顺序乱了」→ 定位 change `012`，F-ac 说顺序 [A,B,C,D]，F-code 是 [A,C,B,D] → 直接修，`012` 活跃则勾 AC 计入，否则 `fix:` 直改。
 
-> 用户："导出 CSV 时字段顺序乱了。"
+**场景 2 · AC 写漏**：「重试只在网络错误触发，超时不触发」→ F-ac 只写了网络错误（漏超时），change 未归档 → 确认后补 AC-3「超时同样重试」+ 对应 TODO，再修代码。
 
-- 定位 → `export` 模块
-- F-spec（spec §3.2）：字段顺序 [A, B, C, D]
-- F-change（`012-xxx` §3）：Delta 没动字段顺序
-- F-code：实际顺序 [A, C, B, D]
-- → **实现没对齐**。建议 `/eo-implement <012-xxx>` 或 `/eo-flow fix`
+**场景 3 · 需求变更伪装**：「积分过期改成 90 天了，现在还是 30 天」→ 三方自洽都是 30 天 → 这是业务变更，转 /eo-change（带上下文），本 skill 不动代码。
 
-### 场景 2：change 方案写偏
-
-> 用户："这个功能说是要加重试，但只在网络错误触发，超时不触发。"
-
-- F-spec（spec §3.3）：重试覆盖「网络错误 + 超时」
-- F-change（`007-retry` §3 ADDED）：只写了"网络错误重试"（漏了超时）
-- F-code：按 change 实现的，仅网络错误触发
-- → **change §3 写漏了一个条件**。若 `007-retry` 未归档 → 内联改 change.md §3 → `/eo-change-review` → `/eo-implement`
-
-### 场景 3：spec 错了（业务变更伪装）
-
-> 用户："现在规定积分过期 90 天，不是 30 天。"
-
-- F-spec（spec §3.4）：声明的就是 30 天
-- F-change + F-code：全按 30 天实现，三方自洽
-- → **spec 基线不符合现在的业务**——这是业务变更。建议 `/eo-change <module>` 开 `enhance`（把 30 改 90）
-
-## 与其它 skill 的关系
-
-- `/eo-implement`：本 skill 诊断为"代码错"后把球交给它（fix 循环不开新 change）
-- `/eo-change`：本 skill 诊断为"spec 错 / 业务变更"后交给它（开 enhance）
-- `/eo-change-review`：内联改完 change.md 后用它复审
-- `/eo-flow fix`：多 pane 工作流时的代码 fix 派发入口（等价 `/eo-implement`）
-- `/eo-review`：不相关。`/eo-review` 是代码审查，本 skill 不走这条路径
+**场景 4 · 难缠 bug**：「偶发卡死，复现不稳定」→ 三方对比无果 → 宣告进入深挖 → 固定复现 → 假设清单 → bisect 锁定引入点 → 回路由表：实现 bug → 修复 + 还原插桩 + 建议沉淀 lesson。

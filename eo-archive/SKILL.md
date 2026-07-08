@@ -1,191 +1,77 @@
 ---
 name: eo-archive
-description: 将已审查通过的 change 的 Spec Delta 合并回模块 spec.md，完成变更闭环。触发：归档 change / archive / 合并 delta / /eo-archive。
+description: |
+  归档已审查通过的 change：结算工作区为 commit、冻结 change 目录、触发文档同步（doc-manager sync）。触发：归档 change / archive / /eo-archive。
+  NOT FOR: 未通过 review 的 change（先走 /eo-review）；文档同步本身的细节（归 /eo-doc-manager）。
 ---
 
 # eo-archive — 变更归档
 
-> ⚠️ **v2 过渡状态**：本文件将在 v2 Batch 3 按 [docs/v2-design.md §6](../docs/v2-design.md) 重写为五步归档（AC 校验 → commit 区间 → doc sync → 冻结 change），**不再反写 spec**。下文的 Delta 合并流程为 v1 遗留。
-
-把已审查通过的 change 的 **Spec Delta** 机械合并回模块 `spec.md`，并更新索引、修改 change 状态。这是 change 生命周期的最后一步，也是保持 spec 常青的关键。
+归档的本质：**把世界结算成 commit，然后按 commit 更新文档**。change 目录归档后整体冻结为审计历史，**不合并回任何文档**——活文档（state/ + agent-handbook/）由 doc-manager 以代码为唯一信源维护，本 skill 只是它的触发点之一。
 
 ## 核心理念
 
-1. **Delta 驱动**：只消费 change.md 的 `## 3 Spec Delta` 章节，不重新理解业务
-2. **机械合并**：ADDED/MODIFIED/REMOVED 按声明直接落到 spec.md 对应章节
-3. **冲突不硬吞**：若 Delta 与现有 spec 冲突（如 MODIFIED 的"旧描述"在 spec 中找不到），停下来让用户裁决
-4. **一次性闭环**：归档后 change 状态变为 `archived`，不再允许修改
+1. **零同步逻辑**：本 skill 不拥有任何文档同步细节，第四层是对 `/eo-doc-manager sync` 的内嵌调用（加载并执行其流程）
+2. **AC 是归档门**：验收清单全勾才能归档；豁免必须显式记录
+3. **冻结不可逆**：`status: archived` 之后 change 目录只读；后续问题按性质走 /eo-fix 或新 change
+4. **commit 区间只是审计**：归集的区间写入 frontmatter 备查，不决定同步范围（同步永远是 cursor..HEAD）
 
 ## 前置条件
 
-- **必须能找到 `.eo-project.json`**（cwd 或父目录）。找不到 → 报错退出，提示运行 `/eo-project-init`。所有 `eo-doc/` 路径通过 `.eo-project.json` 的 `doc_root` 字段解析
-- 用户给定 `<module-name>` 和 `<change-id>`（如 `/eo-archive inventory 015-add-sort`）
-- `eo-doc/dev/<module-name>/spec.md` 存在
-- `eo-doc/dev/<module-name>/spec-history.md` 存在（旧模块若缺失，第五步会按模板补建，不视为前置失败）
-- `eo-doc/dev/<module-name>/changes/<change-id>/change.md` 存在且 `status: done`
-- 对应的 `review.md` 存在且审查通过（无 P0/P1 剩余）
-- 对应的 `test.md` 存在且通过（若 change 要求了测试）
+- **必须能找到 `.eo-project.json`**。找不到 → 报错退出，提示运行 `/eo-project-init`
+- 目标 `eo-doc/changes/<change-id>/change.md` 存在且 `status: done`
 
-若任一前置条件不满足 → 停止并告知用户原因。
+## 工作流程（五层）
 
-## 工作流程
+### 第一层：前置校验
 
-### 第一步：读取并验证
+1. `status: done`（不是 → 指出当前所处环节：draft/confirmed 回 /eo-change 或 /eo-implement；implementing 回 /eo-implement；已 archived 直接告知）
+2. `review.md` 存在且结论为通过（P0/P1 已清零）
+3. **验收清单全勾**：change.md §2 所有 `- [x]`。存在未勾项 → 列出并请用户三选一：回 /eo-implement 补齐 / 显式豁免（豁免项与理由写入 §8 开放问题）/ 终止归档
 
-1. 读 `changes/<change-id>/change.md`，验证 `status: done`
-2. **从 frontmatter 读取 `change_type`**，确定归档模式：
-   - `bootstrap` → **实现范围模式**（跳过 Delta 合并，只更新元信息与索引）
-   - `feature` / `enhance` / `refactor` → **Delta 合并模式**（执行后续所有步骤）
-3. 读 `changes/<change-id>/review.md`，确认结论为通过
-4. 读 `changes/<change-id>/test.md`（若存在），确认通过
-5. 读模块 `spec.md` —— **不整篇读**（spec 是活文档，可能超出单次读取上限）：
-   - 先读 frontmatter，再用 `Grep`（pattern `^#{1,3} `、带行号）取章节地图
-   - Delta 模式：按章节地图用 `Read` 的 offset/limit 定位到 Delta 涉及的章节，不读无关章节
-   - bootstrap 模式：spec.md 正文无需读，章节地图留作第八步"剩余未认领章节"汇报用
+### 第二层：工作区结算
 
-### 第二步：解析 Delta（仅 Delta 模式）
+cursor 基于 commit，sync 只能看见已提交内容，因此先结算：
 
-> **bootstrap 模式跳过此步**，直接进入第五步。
+1. `git status` 检查工作区
+2. **属于本 change 的未提交改动** → 提交，message 带 `[<change-id>]` 前缀（见 [../eo-shared/conventions.md](../eo-shared/conventions.md)）
+3. **无关脏改动** → 留在工作区不动（后续 sync 默认「只取已提交增量」不会碰它们）
+4. 两类混在同一文件无法分离 → 停下问用户如何拆分
 
-从 `change.md` 的 `## 3 Spec Delta` 提取三类条目：
-- **ADDED 列表**：每条含"能力名 + 描述 + spec 目标章节"
-- **MODIFIED 列表**：每条含"能力名 + 旧描述 + 新描述 + spec §X.Y"
-- **REMOVED 列表**：每条含"能力名 + spec §X.Y"
+### 第三层：冻结元数据并提交
 
-若 Delta 章节为空或格式不符 → 提示用户修复 change.md 后重跑。
+1. 从 `base_commit..HEAD` 按 `[<change-id>]` 前缀归集本 change 的提交；单 commit 直取，多 commit 列出请用户确认；存在无前缀夹杂提交时请用户圈定
+2. 写入 frontmatter：`commits: [<区间>]`（仅审计用）、`status: archived`（不可逆）
+3. 更新 `eo-doc/changes/INDEX.md` 对应行
+4. 以上文档改动提交入库——可与第二层合为同一个 commit（推荐一次 change 一次 commit）；implement 已按批提交时，这就是一个小的收尾 meta commit
 
-**⚠️ 拒绝跨模块 Delta**：所有 Delta 条目的目标章节必须位于**本模块**的 `spec.md`。若出现以下任一信号，**停止归档**并要求用户拆 change：
+### 第四层：文档同步（内嵌调用）
 
-- 条目声明的 spec 路径指向其他模块（如 change 在 `inventory/` 下但 Delta 写"合并到 building/spec.md §3"）
-- 条目描述中出现"同时修改 X 模块的 spec"之类措辞
-- change frontmatter `module` 字段与目录路径中的模块名不一致
+执行 `/eo-doc-manager sync` 的完整流程（读其 SKILL.md 与 references 照做）：cursor..HEAD 增量更新 state/ + agent-handbook/，完成后 cursor 推进到 HEAD。
 
-反馈模板：
-> ⚠️ 本 change 的 Delta 含跨模块条目（`<条目名>` 指向 `<其他模块>/spec.md`）。
-> eo-archive 只能合并单一模块的 Delta。请按 `/eo-change` 的"单模块 vs 跨模块"规则：
->   1. 将跨模块部分抽出为另一个 change（归属对方模块）
->   2. 用 `depends_on` frontmatter 关联两个 change
->   3. 按依赖顺序分别归档
-> 详见 `eo-change/SKILL.md` 的"判断边界：单模块 vs 跨模块"。
+- 把 change.md 路径作为业务语境提示带入（帮助 sync 理解「为什么改」）；**信源永远是代码**，不按 change 说的写、按代码是的写
+- 同步范围覆盖第二/三层的提交与期间累积的直改提交，一并吸收
+- 若 sync 中途失败：change 已冻结、cursor 未推进——直接手动重跑 `/eo-doc-manager sync` 续上，不需要回滚归档
 
-**bootstrap 额外校验**：若 change_type = bootstrap 但 §3 写了 ADDED/MODIFIED/REMOVED → 停止归档，要求作者把类型改一致（或改为 feature/enhance），两者二选一。
+### 第五层：收尾速报
 
-### 第三步：冲突预检（仅 Delta 模式）
-
-> **bootstrap 模式跳过此步**。
-
-**MODIFIED 项**：在 spec.md 对应章节搜索"旧描述"，若找不到（可能 spec 在这之间被其他 change 改过）→ 列出冲突项，让用户选择：
-- 跳过该条
-- 手动指定合并位置
-- 终止归档
-
-**REMOVED 项**：在 spec.md 对应章节搜索待删除内容，若找不到 → 同上处理。
-
-**ADDED 项**：确认目标章节存在；若目标章节不存在，提示用户先修 change.md 或允许追加到章节末尾。
-
-### 第四步：执行合并（仅 Delta 模式）
-
-> **bootstrap 模式跳过此步**，spec.md 内容保持不变。
-
-对 spec.md 逐条应用 Delta：
-- **ADDED**：在指定章节末尾追加新条目
-- **MODIFIED**：定位旧描述，替换为新描述
-- **REMOVED**：删除指定条目
-
-所有合并操作用 Edit 工具逐条执行，保持 diff 清晰。
-
-### 第五步：更新 spec-history.md 与 spec.md 元信息
-
-> **bootstrap 与 Delta 模式均执行此步。** 归档流水统一落到 `spec-history.md`，不再写入 spec.md 正文。
-
-1. **定位 `eo-doc/dev/<module-name>/spec-history.md`**：
-   - 存在 → 直接使用
-   - 不存在（本次改造前建的旧模块）→ 按 spec-template.md 的 spec-history.md 模板补建；若旧 `spec.md` 仍内联 `## 9 关联变更` / `## 10 变更记录`，把已有表行整体迁入新文件后，再从 spec.md 删除这两个章节（其余正文不动）
-2. 在 spec-history.md 的 `## 关联变更` 表末尾追加一行：
-   ```
-   | [<change-id>](changes/<change-id>/change.md) | YYYY-MM-DD | <change summary> |
-   ```
-   bootstrap 模式下 summary 前缀加 `[bootstrap]`，如 `[bootstrap] 实现 §3.1 / §3.3`
-3. 在 spec-history.md 的 `## 变更记录` 表末尾追加一行：
-   - Delta 模式：`| YYYY-MM-DD | 归档 <change-id>: <一句话描述> | eo-archive |`
-   - bootstrap 模式：`| YYYY-MM-DD | bootstrap 实现 <认领章节列表> (<change-id>) | eo-archive |`
-4. spec-history.md frontmatter `updated` 改为今天日期
-5. **spec.md frontmatter `updated`**：
-   - Delta 模式 → 改为今天日期（第四步已改动 spec.md 正文）
-   - bootstrap 模式 → **不动 spec.md**（正文与元信息均不变，归档活动只记录在 spec-history.md；唯一例外是步骤 1 对旧模块的一次性 §9/§10 迁移）
-
-### 第六步：更新 change.md
-
-1. frontmatter `status` 从 `done` 改为 `archived`
-2. frontmatter `updated` 改为今天日期（即归档日期）
-
-### 第七步：更新索引
-
-1. 更新 `eo-doc/dev/<module-name>/changes/INDEX.md`：找到对应行把 status 列改为 `archived`
-2. 更新 `eo-doc/dev/INDEX.md`：若该模块条目需要刷新最近活动时间，同步
-
-### 第八步：汇报结果 + 可选复检建议
-
-向用户汇报：
-
-**Delta 模式**：
-- 合并的 Delta 条数（ADDED N / MODIFIED N / REMOVED N）
-- spec.md 受影响的章节列表
-- 冲突处理记录（若有）
-- spec-history.md 已追加本次归档记录
-- change 状态已改为 archived
-
-**bootstrap 模式**：
-- 实现的 spec 章节列表（来自 §3.B.1）
-- 该模块剩余未被任何 bootstrap 认领的 spec 章节（提示用户后续可继续拆 bootstrap change）
-- spec.md 未变更；归档记录已追加到 spec-history.md
-- change 状态已改为 archived
-
-**spec 复检建议**：根据本次归档对 spec 的影响给出建议：
-
-| 触发条件 | 建议文案 |
-|---------|---------|
-| MODIFIED ≥ 3 条 或 REMOVED ≥ 1 条 | 💡 本次 Delta 对 spec 做了 N 条 MODIFIED / M 条 REMOVED，建议跑一次 `/eo-spec-review <module-name>` 验证新基线仍然自洽 |
-| 涉及 spec 章节 ≥ 3 个 | 💡 本次 Delta 触及 spec 的 N 个章节，建议跑一次 `/eo-spec-review` 确认跨章节一致性 |
-| 仅少量 ADDED | 无需复检建议 |
-| bootstrap 模式（任何规模） | 无需复检（spec 未变） |
-
-**提示但不强制**：复检是可选的，用户决定是否跑。
-
----
-
-## 冲突处理模板
-
-当遇到无法自动合并的 Delta 时，向用户呈现：
+对话中输出（不写额外文件）：
 
 ```
-⚠️ Delta 冲突：
-
-[MODIFIED-2] 库存上限逻辑
-  - 预期的旧描述（change.md 声明）：
-    "玩家最多持有 100 件同类物品"
-  - spec.md §3.4 当前实际内容：
-    "玩家最多持有 120 件同类物品（v1.5 提升）"
-
-可能原因：本 change 与之前某个 change 对 §3.4 有并发修改。
-
-请选择：
-  1. 跳过此条（Delta 不合并，由用户手动处理）
-  2. 强制替换（用新描述覆盖当前实际内容）
-  3. 终止归档
+归档完成：<change-id>
+- commit 区间：<...>（N 个提交）
+- 文档同步：state/ 更新 X 篇、agent-handbook/ 更新 Y 篇（跳过 Z 篇）
+- AC：全勾 / 豁免 N 项（已记 §8）
+- 后续建议：<doc-manager 若提示一致性校验到期，转达；否则省略此行>
 ```
-
----
 
 ## 关键约束
 
-- **只做合并，不做二次澄清**：归档阶段不问业务问题，所有澄清应在 change 阶段完成
-- **冲突必须停下**：绝不自作主张解决冲突
-- **归档不可逆**：archived 状态的 change 不再修改；若需修正，发起新的 change 来覆盖
-- **§3 完整性校验**：
-  - Delta 模式：§3 没写 Delta 或格式错误 → 拒绝归档
-  - bootstrap 模式：§3.B.1 没写认领章节 → 拒绝归档
-- **类型内容一致**：change_type 与 §3 内容必须匹配（bootstrap 不能有 Delta，反之亦然），错配 → 拒绝归档
-- **单一目标 spec**：一个 change 只能归档到单一模块的 `spec.md`。Delta 含跨模块条目 → 拒绝归档，要求拆 change（见第二步）
-- **bootstrap 不动 spec.md**：归档记录只追加到 spec-history.md，spec.md 正文与元信息均不变
-- **保持 diff 可读**：用 Edit 逐条合并，不要 Write 整文件覆盖 spec.md
+| 约束 | 说明 |
+|------|------|
+| 不反写任何文档 | change 内容不合并回 state/handbook/其他文件；活文档更新只经由第四层的 sync |
+| 零同步逻辑 | 第四层是内嵌调用 /eo-doc-manager，本文件不复述其任何步骤 |
+| AC 门禁 | 未全勾必须走「补齐 / 显式豁免 / 终止」三选一，不得静默放行 |
+| 归档不可逆 | archived 后不回退 status；后续问题走 /eo-fix 或新 change |
+| 区间 ≠ 范围 | commit 区间只写 frontmatter 审计；同步范围永远是 cursor..HEAD |
+| 一次一个 | 一次归档一个 change；多个待归档时逐个走完五层 |

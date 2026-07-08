@@ -17,31 +17,48 @@
 {
   "last_sync_commit": "abc1234def5678",
   "last_sync_date": "2026-03-31",
-  "sync_type": "sync"
+  "sync_type": "sync",
+  "sync_count": 3,
+  "archive_count": 12
 }
 ```
+
+- `sync_count`：距上次一致性抽查的 sync 次数，达到 5 提示抽查（见 maintenance.md），抽查完成后清零
+- `archive_count`：累计归档次数（由 /eo-archive 触发的 sync +1），仅统计用
 
 ### 工作原理
 
 1. **首次 sync**：若 `.sync-cursor` 不存在，提示用户选择起点（某个 commit / 分支基点 / 全部历史）
-2. **后续 sync**：读取 `last_sync_commit`，从该点到当前 HEAD 的变更 + 未提交变更
-3. **sync 完成后**：将当前 HEAD 写入 `.sync-cursor`
+2. **后续 sync**：读取 `last_sync_commit`，范围为该点到当前 HEAD 的**已提交变更**；工作区脏变更的处理见下方「脏变更三选一」
+3. **sync 完成后**：当前 HEAD 写入 `.sync-cursor`，`sync_count` +1（archive 触发时 `archive_count` 也 +1）
 4. **用户指定范围时**：优先使用用户指定的范围，但仍更新 `.sync-cursor`
 
 `.sync-cursor` 是本地状态文件，init 时自动追加到 `.gitignore`。
+
+### 脏变更三选一
+
+sync 启动时若 `git status` 显示工作区有未提交/已暂存变更，**问用户一次**（AskUserQuestion，三选项）：
+
+| 选项 | 语义 | 适用 |
+|------|------|------|
+| **只取已提交增量（推荐默认）** | 范围 = cursor..HEAD，脏变更完全不扫 | 常态。脏变更提交后自然被下次 sync 覆盖——避免「同一改动被扫两次」和「revert 后文档描述幽灵代码」 |
+| 含脏变更一起同步 | cursor..HEAD + `git diff` + `git diff --cached` | 明知这批改动即将原样提交、又急需文档先行时 |
+| 全部重扫 | 等价小型 re-sync（当前作用域） | 怀疑文档已明显漂移时 |
+
+工作区干净时不问，直接走 cursor..HEAD。由 /eo-archive 触发时通常已在归档第二层结算干净；若仍有无关脏变更，同样按本表处理（默认第一项）。
 
 ## 完整流程
 
 ### Step 1: 获取变更范围
 
-**默认行为**（基于 sync-cursor）：
+**默认行为**（基于 sync-cursor，脏变更按上方三选一处理，默认只取已提交）：
 
 ```bash
 LAST_COMMIT=$(cat <doc_root>/.sync-cursor | jq -r '.last_sync_commit')
-git diff ${LAST_COMMIT}..HEAD --name-only
-git diff --name-only
-git diff --cached --name-only
+git diff ${LAST_COMMIT}..HEAD --name-only -- . ':(exclude)eo-doc'
 ```
+
+**排除 `eo-doc/` 路径**：change.md / INDEX / 归档元数据的提交是纯文档变更，不进入影响分析（`:(exclude)eo-doc` 已在命令中体现；doc_root 非默认值时替换为实际路径）。
 
 **用户指定范围时**：
 
@@ -124,9 +141,13 @@ src/actions/sync.ts                  → actions/sync 模块
 {
   "last_sync_commit": "<当前 HEAD commit hash>",
   "last_sync_date": "YYYY-MM-DD",
-  "sync_type": "sync"
+  "sync_type": "sync",
+  "sync_count": <原值 +1>,
+  "archive_count": <archive 触发时 +1，否则不变>
 }
 ```
+
+同时给每篇本次更新过的文档 frontmatter 写 `updated` 日期（既有规则），作为文档侧的同步痕迹。
 
 ### Step 8: 汇报变更
 
@@ -144,8 +165,10 @@ state/ 更新:
   ⏭️ agent-handbook/utils.md
 
 INDEX.md 已同步: agent-handbook/, state/
-sync-cursor 已更新: def5678 (2026-03-31)
+sync-cursor 已更新: def5678 (2026-03-31)，sync_count: 4/5
 ```
+
+`sync_count` 达到 5 时在汇报末尾追加：「距上次一致性抽查已 5 次 sync，建议现在做一次（maintenance.md 的 state↔agent-handbook 抽查），要跑吗？」用户同意并完成后 `sync_count` 清零。
 
 ## 批量同步注意事项
 
