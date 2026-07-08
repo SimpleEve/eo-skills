@@ -3,11 +3,9 @@
 本规范覆盖 eo-skills 体系内所有 mermaid 图的类型选择、样式约定、维护规则。
 
 被以下 skill 引用：
-- `eo-spec` / `eo-change` — 流程图、状态图
-- `eo-module-init` — 模块架构图
+- `eo-change` — 流程图、状态图（条件节：画比说清楚时才画）
 - `eo-project-init` / `eo-project-update` — 项目级 ARCHITECTURE.md 依赖图
-- `eo-archive` — 合并 change 流程图回 spec 时的 classDef 清理
-- `eo-spec-review` / `eo-change-review` / `eo-review` — 一致性审查
+- `eo-change-review` / `eo-review` — 一致性审查
 
 ## 1. 图类型选择矩阵
 

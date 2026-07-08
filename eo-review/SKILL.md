@@ -2,18 +2,17 @@
 name: eo-review
 description: |
   对已实施的代码做审查，产出 P0/P1/P2 分级报告（前提：代码已实现）。触发：review / 代码审查 / /eo-review。
-  NOT FOR: spec 审查（/eo-spec-review）、change 方案审查（/eo-change-review，代码还没写时用）。
+  NOT FOR: change 方案审查（/eo-change-review，代码还没写时用）。
 ---
 
 # eo-review — 代码审查
 
-根据模块 spec 和 change 文档对**已实施的代码**进行审查，产出结构化的审查报告。
+根据 change 文档（验收清单 + TODO）对**已实施的代码**进行审查，产出结构化的审查报告。
 
-> **定位**：`eo-review` 只审代码。审查范围前移（审 spec / 审 change 方案）请用 `/eo-spec-review` / `/eo-change-review`。三种 review 关注点、上下文、产出物都不同，不要混用。
+> **定位**：`eo-review` 只审代码。审查范围前移（审 change 方案）请用 `/eo-change-review`。两种 review 关注点、上下文、产出物都不同，不要混用。
 >
 > | Skill | 审查对象 | 产出 |
 > |-------|---------|------|
-> | `/eo-spec-review` | 模块 spec.md | `spec-review.md` |
 > | `/eo-change-review` | change.md（implement 前） | `change-review.md` |
 > | **`/eo-review`**（本技能） | change 实施后的代码 | `review.md` |
 

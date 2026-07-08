@@ -7,6 +7,8 @@ description: |
 
 # eo-change — 模块变更
 
+> ⚠️ **v2 过渡状态**：本文件将在 v2 Batch 2 按 [docs/v2-design.md §3](../docs/v2-design.md) 重写（AC 前置、提问纪律、粒度校验、trivial 短路；spec / 模块 / Delta 概念移除）。下文中对 spec.md、/eo-module-init、跨模块判界的引用均为 v1 遗留，重写时一并消化。
+
 对某个模块发起一次变更。change 文档是**单一真相载体**：既是需求澄清（Delta），又是实施方案（TODO）。归档时 Delta 自动合并回模块 spec。
 
 ## 核心理念
@@ -190,7 +192,7 @@ description: |
      - building/012-crafting-system
    ```
 3. **change.md 顶部加"跨模块关联"小节**：互相链接，说明依赖方向
-4. **实施时序**：被依赖方先 approve → implement → archive → 再 approve 依赖方。`/eo-workflow implement` 一次只跑一个 change，天然强制顺序
+4. **实施时序**：被依赖方先 approve → implement → archive → 再 approve 依赖方，一次只实施一个 change，天然强制顺序
 
 ### 反模式
 

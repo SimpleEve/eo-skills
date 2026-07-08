@@ -1,8 +1,8 @@
 ---
 name: eo-flow
 description: |
-  单点 handoff：把 eo-* 任务（review/test/implement/change-review/spec-review）甩给 tmux 里的 codex pane 执行，回包后决定"甩回去修"或"暂停问用户"。触发：eo-flow / 甩给 codex / /eo-flow。
-  NOT FOR: 完整流水线（用 /eo-workflow）。
+  单点 handoff：把 eo-* 任务（review/test/implement/change-review）甩给 tmux 里的 codex pane 执行，回包后决定"甩回去修"或"暂停问用户"。触发：eo-flow / 甩给 codex / /eo-flow。
+  NOT FOR: 完整流水线编排（一次只 handoff 一个动作）。
 ---
 
 # eo-flow — Claude ↔ Codex 一次性 handoff
@@ -13,8 +13,7 @@ description: |
 
 ## 定位
 
-- `/eo-workflow` = 多 pane 全流程编排（cron / 状态机 / 自动流转）——重
-- `/eo-flow` = **单点 handoff**：「当前上下文这件事，甩给 codex，我等你回来决策」——轻
+`/eo-flow` = **单点 handoff**：「当前上下文这件事，甩给 codex，我等你回来决策」——轻。
 
 不是 pipeline，只负责一个动作。
 
@@ -25,11 +24,10 @@ description: |
 | `review` | `$eo-review` | high | `review-$P` |
 | `test` | `$eo-test` | medium | `test-$P` |
 | `implement` | `$eo-implement` | high | `impl-$P` |
-| `spec-review` | `$eo-spec-review` | high | `review-$P` |
 | `change-review` | `$eo-change-review` | high | `review-$P` |
 | `fix` | `$eo-implement`（附反馈） | high | `impl-$P` |
 
-⚠️ **`fix` 只用于 `review → 代码修订` 这一条路径**。`spec-review` / `change-review` 的修订是文档修订（改 `spec.md` / `change.md`），不派发 codex，本 pane 内联改（见第 4 步分叉）。
+⚠️ **`fix` 只用于 `review → 代码修订` 这一条路径**。`change-review` 的修订是文档修订（改 `change.md`），不派发 codex，本 pane 内联改（见第 4 步分叉）。
 
 `$P` = 项目短名，从 `git rev-parse --show-toplevel` 或 CWD basename 取，超 12 字符截断，且只保留 `[a-zA-Z0-9_-]`（避免特殊字符破坏 tmux-bridge 解析）。多项目挂同 tmux session 时，label 带作用域（`review-rabbit` vs `review-kitten`）自然不冲突。
 
@@ -119,13 +117,12 @@ codex 按合约会回 `[tmux-bridge from:... ] done: ...` 到本 pane。**必须
 **档位选择**（在上游路径之上，决定自动 or 停手）：
 
 - **自动修**（按上面路径走）：明确 P0 bug、测试失败、AC 未覆盖、规范违反——客观、有标准答案的。
-- **暂停问用户**：架构取舍、接口命名、跨模块影响、需要改 spec / change §3、同一问题反复 2 轮没收敛。
+- **暂停问用户**：架构取舍、接口命名、影响面外溢、需要改 change 方案、同一问题反复 2 轮没收敛。
 - **通过可合**：零 P0/P1 或仅 P2 → 告知用户进入**对应 action 的下一步**（见下表，**不要无脑建议 `/eo-archive`**）：
 
   | 刚跑完的 action | 通过后的下一步（提示给用户） |
   |----------------|------------------------------|
-  | `spec-review` | 用户把 `spec.md` 的 `status` 改为 `confirmed` → 进入 `/eo-change` 或 `/eo-module-init` 后续流程 |
-  | `change-review` | 用户把 `change.md` 的 `status` 改为 `approved` → `/eo-flow implement`（或直接 `/eo-implement`） |
+  | `change-review` | 用户确认后 `change.md` 进入 `confirmed` → `/eo-flow implement`（或直接 `/eo-implement`） |
   | `implement` | `/eo-flow test`（或 `/eo-test`） |
   | `test` | `/eo-flow review`（或 `/eo-review`） |
   | `review` | `/eo-archive <module> <change-id>` ← **只有这里才是归档入口** |
@@ -179,10 +176,9 @@ Claude:
 
 假设第 6 步 review 发现的是"Agent 层跨层访问 UI 状态"（架构问题），则跳过 7-9，停下问用户：
 
-> P1 架构问题（Agent 跨层）不是改两行能搞定，需要你定：调分层 or 开 enhance change 改 spec？
+> P1 架构问题（Agent 跨层）不是改两行能搞定，需要你定：调分层 or 开 enhance change？
 
 ## 与其它 skill 的关系
 
 - `/smux`：tmux-bridge 通信基建，本 skill 完全依赖
-- `/eo-workflow`：完整流水线编排（本 skill 不做流程）
 - `/eo-change` / `/eo-implement` / `/eo-review` 等：本 skill 不替代它们，只是远程调用（`$` 前缀在 codex 端执行）

@@ -78,9 +78,9 @@ eo-doc/
 - 模板可选，不存在时 eo-* 技能使用内置默认行为
 - sync / re-sync 不处理 templates/（它们不是从源码生成的）
 
-**dev/**：
-- 子目录由 eo-module-init、eo-change、eo-implement、eo-review、eo-archive 等技能按约定产出
-- dev/ 不参与 sync / re-sync，由开发流程技能管理
+**changes/**（v2，取代原 dev/）：
+- 子目录由 eo-change、eo-implement、eo-review、eo-archive 等技能按约定产出
+- changes/ 不参与 sync / re-sync，由开发流程技能管理
 
 ## 代码优先原则
 

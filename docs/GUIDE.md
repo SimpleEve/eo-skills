@@ -1,6 +1,8 @@
 # eo-skills 详解
 
 > 上手指南见 [README](../README.md)。本文是详解：每个 skill 的职责、典型流程、关键约束、设计权衡。
+>
+> ⚠️ **v2 重构进行中**：本文正在按 [v2-design.md](v2-design.md) 迁移（spec 归为 change、归档不反写、验收驱动）。与设计稿冲突处以设计稿为准。
 
 ---
 
@@ -13,12 +15,11 @@
   - [Skill 职责速查](#skill-职责速查)
   - [典型流程图](#典型流程图)
   - [关键约束](#关键约束)
-- [三种 review 的边界](#三种-review-的边界)
+- [两种 review 的边界](#两种-review-的边界)
 - [跨 agent 协作（eo-flow）](#跨-agent-协作eo-flow)
 - [会话交接（eo-handoff）](#会话交接eo-handoff)
 - [项目管理 skill](#项目管理-skill)
 - [文档体系（eo-doc-manager）](#文档体系eo-doc-manager)
-- [实验中的 skill](#实验中的-skill)
 - [Skill 安装结构](#skill-安装结构)
 
 ---
@@ -46,10 +47,10 @@
 
 ```
 eo-doc/
-├── agent-handbook/   # 必建，代码架构（AI 地图）
-├── dev/              # 必建，spec / change / review 流
+├── agent-handbook/   # 必建，代码架构（AI 地图），活文档
+├── changes/          # 必建，change 工件流（v2：项目级扁平目录，取代 dev/<module>/）
 ├── templates/        # 必建（空），eo-* 扩展点
-└── state/            # 按需，系统当前状态（原 doc/，首次 sync 时建）
+└── state/            # 按需，系统当前状态（首次 sync 时建），活文档
 ```
 
 ### 项目管理侧（vault 模式在 vault 下，local 模式在 `.eo-project/`，由 `eo-project-*` 维护）
@@ -70,31 +71,27 @@ eo-doc/
 
 ## 开发工作流（Dev Track）
 
-一套基于 **OpenSpec 风格 Delta 机制**的代码侧开发流水线：**模块（module）是一等公民**，每个模块在 `eo-doc/dev/<module-name>/` 下有一份活文档 `spec.md`；每次业务变更以 `change.md` 的形式独立归档，归档时由 `eo-archive` 把 Delta 机械合并回 spec。
+一条以 **change 工件**为中心的代码侧开发流水线：每次变更以 `change.md`（验收清单 + TODO）独立承载，归档时更新活文档（state / agent-handbook）并冻结 change 目录——**不反写任何 spec**。
 
-### 设计理念
+### 设计理念（v2）
 
-1. **模块是一等公民** — 所有开发产物归属到 `eo-doc/dev/<module-name>/`
-2. **spec 是活文档** — 不重写，只增量演化（ADDED / MODIFIED / REMOVED）
-3. **change = proposal + plan** — 一份文档同时承载需求澄清、技术方案、TODO 拆解
-4. **fix ≠ change** — bug 修复是 `eo-implement` 的内嵌职责，不开新 change、不产生 Delta
-5. **change 无独立 review** — 作者自澄清即可发起；实施后的 `/eo-review` 是唯一正式审查
+1. **代码是唯一真相源** — state/ 与 agent-handbook/ 是活文档，永远可从代码再生；change 是过程工件，归档即冻结
+2. **验收驱动** — change 的第一个产出物是用户视角验收清单（AC），它是 implement 的完成判据、review 的检查表、fix 的期望行为锚点
+3. **渐进式严谨** — 文档重量与变更粒度挂钩：必填仅 4 节，方案/流程图/风险等条件化；trivial 改动直改不开 change
+4. **量化粒度** — TODO 3-7 理想 / 10 硬上限，超标拆 change 序列
+5. **fix 直接修复** — bug 口喷给 `/eo-fix`，定位后直接修；难缠 bug 自动升级深挖模式；实为需求变更才转 change
 
 ### 产物目录（代码侧）
 
 ```
-eo-doc/dev/
-└── <module-name>/              ← 一个业务模块 = 一个目录
-    ├── spec.md                 ← 活文档：模块当前能力快照（工程视角）
-    ├── spec-history.md         ← 归档流水（关联变更 / 变更记录），从 spec.md 剥离
-    ├── spec-review.md          ← 仅模块初始化时一次性审查（可选）
-    └── changes/
-        ├── INDEX.md            ← 模块内 change 时间线
-        └── <NNN-change-id>/    ← 数字前缀 + kebab-case（无 fix- 前缀）
-            ├── change.md       ← Spec Delta + 技术方案 + TODO + AC
-            ├── implement.md    ← 偏差记录（可选）
-            ├── test.md         ← 测试报告
-            └── review.md       ← 代码审查结论
+eo-doc/changes/
+├── INDEX.md                ← 项目级 change 时间线
+└── <NNN-change-id>/        ← 三位连号 + kebab-case
+    ├── change.md           ← 意图 + AC + TODO（+ 条件节）
+    ├── change-review.md    ← 方案审查（可选）
+    ├── test.md             ← 测试报告
+    ├── review.md           ← 代码审查结论
+    └── design/             ← 本 change 的高保真稿（可选）
 ```
 
 ### Skill 职责速查
@@ -102,45 +99,41 @@ eo-doc/dev/
 | Skill | 触发时机 | 产出 | 备注 |
 |-------|---------|------|------|
 | `/eo-project-init` | 项目首次使用 eo-skills | `.eo-project.json` + 双侧骨架 | **所有 skill 的前置** |
-| `/eo-module-init` | 新模块首次落地 | `spec.md` + `spec-review.md`（一次性） | 内部调用 `eo-spec` + `eo-spec-review` |
-| `/eo-spec` | 模块内部：撰写 spec | 被 `eo-module-init` 调用 | 一般不直接调 |
-| `/eo-spec-review` | 模块初始化时**必须**；archive 后 Delta 大改时**可选** | `spec-review.md` | 复检可选 |
-| `/eo-change` | 已有模块的业务变更 | `changes/<NNN-xxx>/change.md` | 支持 bootstrap / feature / enhance / refactor |
+| `/eo-brainstorming` | 想法不成形 / 新项目从零起步 | 已钉决策 + 首批 change 草案（捕获出口） | 可选前置 |
+| `/eo-change` | 发起变更（bootstrap / feature / enhance / refactor） | `changes/<NNN-xxx>/change.md`（AC 前置 + TODO 分批） | trivial 主动短路成直改 |
 | `/eo-change-review` | change draft 完成后、implement 前的方案审查 | `change-review.md` | ✅ 可选 |
-| `/eo-implement` | 按 change.md TODO 实施（含 bug 修复循环） | 代码 + 可选 `implement.md` | — |
-| `/eo-fix` | 发现 bug 但不确定是实现错、方案错还是 spec 错 | 诊断报告 + 下一步建议 | 只诊断，不改文件 |
-| `/eo-test` | 运行测试 / 场景验证 | `test.md` | 失败 → 回 implement |
+| `/eo-implement` | 按 change.md TODO 分批实施（含 bug 修复循环） | 代码 + 勾选 TODO/AC | 批末 checkpoint |
+| `/eo-fix` | 发现 bug（口喷即可） | 定位 + **直接修复**；难缠 bug 自动升级深挖模式 | 需求变更转 change |
+| `/eo-test` | 运行测试 / 场景验证 | `test.md`（以 AC 为锚） | 失败 → 回 implement |
 | `/eo-review` | 实施后的**代码**审查 | `review.md` | 强制 |
-| `/eo-archive` | 代码审查通过后归档 | Delta 合并回 `spec.md` + 更新 INDEX | bootstrap 仅元信息更新 |
+| `/eo-archive` | 代码审查通过后归档 | 触发 doc sync 更新 state/handbook + 冻结 change | 不反写 spec |
 
 ### 典型流程图
 
 ```
 项目启动：  /eo-project-init      →  .eo-project.json + 双侧最小骨架
             │
-新模块：    /eo-module-init       →  spec.md（含 spec-review 一次性）
+（可选）：  /eo-brainstorming     →  已钉决策 + 首批 change 草案（新项目 = 多个 bootstrap change）
             ▼
-首批实现：  /eo-change (bootstrap)→  changes/NNN-xxx/change.md
-            │                         §3 写"实现范围"，认领 spec 章节
-            ▼
-后续演化：  /eo-change (feature/  →  changes/NNN-xxx/change.md
-            enhance/refactor)        §3 写 Delta（ADDED/MODIFIED/REMOVED）
+发起变更：  /eo-change            →  changes/NNN-xxx/change.md
+            │                         AC 前置 + TODO 分批 + 粒度校验
+            │                         （trivial → 主动短路成直改，不产生工件）
             ▼
 方案审查：  /eo-change-review     →  change-review.md（可选）
             │                         P0/P1 → 回 eo-change 修
             ▼
-approve：   （用户改 status: approved）
+确认：      （对话确认，skill 自动置 status: confirmed）
             ▼
-实施：      /eo-implement         →  代码 + 勾选 TODO
+实施：      /eo-implement         →  按 Batch 写代码 + 勾 TODO/AC，批末 checkpoint
             ▼
-测试：      /eo-test              →  test.md（失败 → 回 implement）
+测试：      /eo-test              →  test.md（以 AC 为锚，失败 → 回 implement）
             ▼
-代码审查：  /eo-review            →  review.md
+代码审查：  /eo-review            →  review.md（AC 覆盖 + 代码质量）
             │                         P0/P1 → 回 implement 修
             ▼
-归档：      /eo-archive           →  bootstrap：仅元信息更新（spec 不动）
-                                     其他类型：Delta 合并回 spec.md
-                                     status: archived
+归档：      /eo-archive           →  AC 全勾校验 → commit 区间 → doc sync
+                                     更新 state/ + agent-handbook/
+                                     冻结 change（status: archived，不反写 spec）
 ```
 
 ### 关键约束
@@ -148,22 +141,20 @@ approve：   （用户改 status: approved）
 | 约束 | 说明 |
 |------|------|
 | `.eo-project.json` 存在 | 所有 eo-* skill 的前置。找不到 → 报错 |
-| `change-id` 命名 | `NNN-kebab-name`（3 位数字前缀，按模块内递增）；**拒绝 `fix-` 前缀** |
+| `change-id` 命名 | `NNN-kebab-name`（3 位数字前缀，项目级递增）；**拒绝 `fix-` 前缀** |
 | `change_type` 枚举 | `bootstrap` / `feature` / `enhance` / `refactor`（**无 `fix`**） |
-| §3 内容由 type 决定 | `bootstrap` 写"实现范围"；其余三类写 Delta |
-| 单次聚焦 | 一个 change 只做一件事 |
-| 状态流转 | `draft → approved → implementing → done → archived` |
-| spec 只由 archive 修改 | change 期间不直接改 `spec.md` |
-| 跨模块 | 一个 change 只能归一个模块；跨模块需求拆多个 change，用 `depends_on` 串联 |
+| 粒度硬指标 | TODO 3-7 理想 / 10 硬上限；change.md 500 行软 / 700 行硬；超标拆序列 |
+| 状态流转 | `draft → confirmed → implementing → done → archived`（**skill 自动流转**，用户不手改 frontmatter） |
+| trivial 直改 | 满足硬判据（不改行为/接口/数据、无方案权衡、单会话）→ 不开 change，直改 + commit |
+| 归档不反写 | archive 只更新活文档 + 冻结 change；spec 概念已移除 |
 
 ---
 
-## 三种 review 的边界
+## 两种 review 的边界
 
 | Skill | 审查对象 | 核心问题 | 上下文 | 强制 / 可选 |
 |-------|---------|---------|-------|------------|
-| `/eo-spec-review` | 模块 `spec.md`（活文档基线） | **需求**对不对？业务自洽吗？ | 模块整体能力 | module-init 时强制；后续可选 |
-| `/eo-change-review` | 某个 change 的 `change.md` | **方案**对不对？Delta 和实施方案一致吗？ | 单 change | 全程可选（高风险建议走） |
+| `/eo-change-review` | 某个 change 的 `change.md` | **方案**对不对？AC 质量、粒度合规、TODO↔AC 映射？ | 单 change | 全程可选（高风险建议走） |
 | `/eo-review` | change 实施后的代码 | **代码**对不对？实现 vs AC？ | 单 change 的 diff | 每个 change 强制 |
 
 关注点、上下文、回退动作完全不同，**不要混用**。
@@ -257,17 +248,6 @@ eo-flow 会：
 - `init` — 初始化骨架（一般由 `eo-project-init` 触发，单独跑用于补建缺失目录）
 
 详细维护策略见各 reference 文档：[git-sync](../eo-doc-manager/references/git-sync.md) / [re-sync](../eo-doc-manager/references/re-sync.md) / [maintenance](../eo-doc-manager/references/maintenance.md) / [splitting](../eo-doc-manager/references/splitting.md) / [templates](../eo-doc-manager/references/templates.md)。
-
----
-
-## 实验中的 skill
-
-以下 skill 仍在调试，**暂不推荐用于生产工作流**：
-
-- `/eo-brainstorming` — 头脑风暴 / 想法对抗与拆解；产出在项目内 `brainstorm/`。
-- `/eo-workflow` — 多 pane tmux 全流程自动编排（比 `/eo-flow` 更重）。
-
-如果只想做"单点把一步甩给另一个 pane"，请用 `/eo-flow`（已稳定）。
 
 ---
 

@@ -5,6 +5,8 @@ description: 将已审查通过的 change 的 Spec Delta 合并回模块 spec.md
 
 # eo-archive — 变更归档
 
+> ⚠️ **v2 过渡状态**：本文件将在 v2 Batch 3 按 [docs/v2-design.md §6](../docs/v2-design.md) 重写为五步归档（AC 校验 → commit 区间 → doc sync → 冻结 change），**不再反写 spec**。下文的 Delta 合并流程为 v1 遗留。
+
 把已审查通过的 change 的 **Spec Delta** 机械合并回模块 `spec.md`，并更新索引、修改 change 状态。这是 change 生命周期的最后一步，也是保持 spec 常青的关键。
 
 ## 核心理念

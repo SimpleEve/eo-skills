@@ -2,7 +2,7 @@
 name: eo-change-review
 description: |
   对 change.md 做方案级审查（Delta 正确性、TODO 完整性、AC 覆盖）。触发：审查 change / change 审查 / 审方案 / /eo-change-review。
-  NOT FOR: 代码审查（/eo-review）、spec 审查（/eo-spec-review）、implement 内的回归审查。
+  NOT FOR: 代码审查（/eo-review）、implement 内的回归审查。
 ---
 
 # eo-change-review — Change 方案审查
@@ -13,11 +13,10 @@ description: |
 
 | Skill | 审查对象 | 问的问题 |
 |-------|---------|---------|
-| `eo-spec-review` | 模块 `spec.md`（活文档基线） | 需求对不对？业务自洽吗？ |
-| **`eo-change-review`**（本技能） | 某个 change 的 `change.md` | 方案对不对？Delta 和实施方案一致吗？ |
+| **`eo-change-review`**（本技能） | 某个 change 的 `change.md` | 方案对不对？AC 质量、TODO 完整性？ |
 | `eo-review` | change 实施后的代码 | 代码对不对？实现 vs AC？ |
 
-三者关注点、上下文、回退动作完全不同，**不要混用**。
+两者关注点、上下文、回退动作完全不同，**不要混用**。
 
 ## 核心原则
 
