@@ -2,7 +2,7 @@
 
 一套面向 **Claude Code / Codex** 的开发工作流 skill 集合。围绕"change 工件 + 活文档（state / agent-handbook）"机制，把从构思、变更、实施、测试、审查到归档的全流程拆成可独立调用的 skill，并支持跨 agent（Claude ↔ Codex）协作。
 
-> ⚠️ **v2 重构进行中**：本分支正在按 [docs/v2-design.md](docs/v2-design.md) 改造（spec 归为 change、归档不再反写 spec、验收驱动、粒度硬指标等）。部分 skill 内容仍是 v1 口径，以设计稿为准。
+> 从 v1 升级？破坏性变更与迁移步骤见 [docs/migration-v1-to-v2.md](docs/migration-v1-to-v2.md)。
 
 > 想直接看每个 skill 的详细用法、典型流程、设计权衡？请看 [docs/GUIDE.md](docs/GUIDE.md)。
 
@@ -143,7 +143,7 @@ flowchart TD
 | 审查通过后归档 | `/eo-archive` | 更新 state/handbook + 冻结 change（不反写 spec） |
 | 把一步甩给另一个 pane 的 codex | `/eo-flow <action>` | 需 tmux + smux |
 | 定设计系统 / 出视觉方案 / 高保真页面 | `/eo-design <mode>` | init / variants / apply / audit，真相源 `DESIGN.md` |
-| 即将 `/clear` 但要保留进度 | `/eo-handoff` | 写到 `tmp/<topic>-handoff.md`，下个会话载入即续 |
+| 即将 `/clear` 但要保留进度 | `/eo-handoff` | 写到 `tmp/eo/handoff/<topic>.md`，下个会话载入即续 |
 | 维护 `eo-doc/` 文档体系 | `/eo-doc-manager` | sync / re-sync |
 | 项目进度 / 决策 / 经验 | `/eo-project-update` `/eo-project-lesson` | 项目管理侧 |
 | 加一条 backlog 待办 / 灵感 | `/eo-backlog` | 仅追加到 `backlog.md` |

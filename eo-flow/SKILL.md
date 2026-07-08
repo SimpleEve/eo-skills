@@ -44,7 +44,7 @@ description: |
 
 ### 1. 识别目标
 
-从上下文推断要 handoff 的目标（最近在聊的 change.md / spec.md / TODO 勾选区域）。推不出来再问用户一次。
+从上下文推断要 handoff 的目标（最近在聊的 change.md / TODO 勾选区域）。推不出来再问用户一次。
 
 ### 2. 找 / 起 codex pane（自动）
 
@@ -98,7 +98,7 @@ codex 按合约会回 `[tmux-bridge from:... ] done: ...` 到本 pane。**必须
 
 | action | 读什么 |
 |--------|-------|
-| review / spec-review / change-review | 对应 `*-review.md` |
+| review / change-review | 对应 `*-review.md` |
 | test | `test.md` |
 | implement / fix | `git diff` + change.md 的 TODO 勾选 + 可选 `implement.md` |
 
@@ -110,7 +110,6 @@ codex 按合约会回 `[tmux-bridge from:... ] done: ...` 到本 pane。**必须
 |------------|-------------|-------|
 | `review` | 甩 `$eo-implement`（`/eo-flow fix`，异步 codex） | 改代码，量大、需执行环境 |
 | `change-review` | **本 pane 内联改 `change.md`** | 文档修订，量小；且 `$eo-implement` 不消费 `change-review.md` |
-| `spec-review` | **本 pane 内联改 `spec.md`** | 同上；`$eo-spec` 是新建流程，不适合小幅修订 |
 
 内联改之前，先标出有决策空间的条目（命名、抽象粒度、策略选择）给用户确认，纯字面/规范校订直接改。改完告知用户"已内联修订 X 条，另 Y 条待你定"。
 
@@ -152,7 +151,7 @@ codex 按合约会回 `[tmux-bridge from:... ] done: ...` 到本 pane。**必须
 | 回包合约必注入 | 每次派发附言末尾带**三步**回包：`read` → `message` → `keys Enter`。**漏 Enter 就卡在对方输入框**。`CALLBACK` 从 `tmux-bridge id` 取，**不硬编码 `"claude"`** |
 | 合约在 eo-flow 不在 eo-* | 不改 `~/.claude/skills/eo-*/SKILL.md` 加回包逻辑，eo-* 要能脱离 smux 独立跑 |
 | fix 不开新 change | 这是 `$eo-implement` 自己的硬规则 |
-| fix 载体随上游 | `review → fix` 甩 `$eo-implement`（代码）；`spec-review` / `change-review` 的修订**本 pane 内联改**文档，不派 codex。默认行为，别反向派发 |
+| fix 载体随上游 | `review → fix` 甩 `$eo-implement`（代码）；`change-review` 的修订**本 pane 内联改**文档，不派 codex。默认行为，别反向派发 |
 | 读产出再决策 | 不光看 tmux 回包字面，必须读 `review.md` / `test.md` |
 | 争议停手 | 架构/接口/跨模块/反复修不过 → 停下问用户 |
 
@@ -161,7 +160,7 @@ codex 按合约会回 `[tmux-bridge from:... ] done: ...` 到本 pane。**必须
 ```
 用户: /eo-flow review
 Claude:
-  1. 定位 change = eo-doc/dev/transport/changes/002-offline-sync/change.md
+  1. 定位 change = eo-doc/changes/002-offline-sync/change.md
   2. 找 review-rabbit pane → 无 → split 新 pane 跑 codex high
   3. CALLBACK=$(tmux-bridge id)  # %40
   4. 发 "$eo-review <change.md> 【回包合约】完成后 tmux-bridge message %40 ..."

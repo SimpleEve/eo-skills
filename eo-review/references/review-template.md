@@ -1,11 +1,10 @@
 # review.md 固定模板
 
-eo-review 按下方模板写入 `eo-doc/dev/<module-name>/changes/<change-id>/review.md`。
+eo-review 按下方模板写入 `eo-doc/changes/<change-id>/review.md`。
 
 ```markdown
 ---
 title: <功能名称>代码审查报告
-module: <module-name>
 change_id: <NNN-change-id>
 tags: [标签1, 标签2]
 created: YYYY-MM-DD
@@ -17,8 +16,7 @@ summary: >
 
 # <功能名称> 代码审查报告
 
-> 模块 spec：[spec.md](../../spec.md)
-> 关联 Change：[change.md](change.md)
+> 关联 Change：[change.md](change.md)（检查表：其 §2 验收清单）
 > 审查日期：YYYY-MM-DD
 > 审查范围：列出审查涉及的文件或模块
 

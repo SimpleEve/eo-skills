@@ -42,13 +42,9 @@ classDef extern fill:#e9ecef,stroke:#6c757d,stroke-dasharray:5 5
 | 依赖的外部模块节点（非本模块内部） | `NodeId:::extern` |
 | 本 change 删除的节点 | **不画在图里**，在图下方用 `> 移除：<原节点名> —— <原因>` 说明 |
 
-### 合并回 spec 的规则
+### 归档后的去向
 
-`eo-archive` 把 change 流程图合并回 spec.md 时：
-- 保留图结构
-- **删除所有 `:::new` / `:::changed` 标注**（spec 描述的是当前稳定态，不需要"谁改的"痕迹）
-- 保留 `:::extern`（它描述的是"这是外部依赖"，在 spec 里依然有效）
-- 保留 `classDef` 定义行（方便后续 change 复用）
+流程图随 change 目录一起归档冻结，**无任何合并动作**；`:::new` / `:::changed` 标注原样保留——它们是该次变更的历史痕迹。state/ 里若需要「当前稳定态」流程图，由 doc-manager sync 从代码推导重画（不带 Delta 标注）。
 
 ## 3. 命名规则
 
@@ -59,7 +55,7 @@ classDef extern fill:#e9ecef,stroke:#6c757d,stroke-dasharray:5 5
 
 ## 4. 最小示例
 
-### 示例 A — spec §3 业务状态机
+### 示例 A — 业务状态机（示意：某审核流的领域状态）
 
 ```mermaid
 stateDiagram-v2
@@ -71,7 +67,7 @@ stateDiagram-v2
     archived --> [*]
 ```
 
-### 示例 B — change §2 业务流程图（带 Delta 高亮）
+### 示例 B — change §6 流程图（带变更高亮）
 
 ```mermaid
 flowchart TD

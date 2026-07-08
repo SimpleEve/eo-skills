@@ -1,8 +1,6 @@
 # eo-skills 详解
 
 > 上手指南见 [README](../README.md)。本文是详解：每个 skill 的职责、典型流程、关键约束、设计权衡。
->
-> ⚠️ **v2 重构进行中**：本文正在按 [v2-design.md](v2-design.md) 迁移（spec 归为 change、归档不反写、验收驱动）。与设计稿冲突处以设计稿为准。
 
 ---
 
@@ -164,7 +162,7 @@ eo-doc/changes/
 
 ## 跨 agent 协作（eo-flow）
 
-`/eo-flow <action>` 把单个步骤甩给另一个 tmux pane 里的 codex agent 执行，本 pane 继续做别的。典型场景：Claude pane 做 spec/change，Codex pane 做 implement/test/review。
+`/eo-flow <action>` 把单个步骤甩给另一个 tmux pane 里的 codex agent 执行，本 pane 继续做别的。典型场景：Claude pane 做 change 起草，Codex pane 做 implement/test/review。
 
 **前置**：
 
@@ -192,7 +190,7 @@ eo-flow 会：
 
 ## 会话交接（eo-handoff）
 
-`/eo-handoff` 在 `/clear` 之前生成最小可恢复快照到 `<repo>/tmp/<topic>-handoff.md`，让下一个会话载入这一个文件就能从当前节点继续。**不是对话总结**，而是定向提取「当前状态 + 决策口径 + 下一步动作」，主动丢弃探索过程。
+`/eo-handoff` 在 `/clear` 之前生成最小可恢复快照到 `<repo>/tmp/eo/handoff/<topic>.md`，让下一个会话载入这一个文件就能从当前节点继续。**不是对话总结**，而是定向提取「当前状态 + 决策口径 + 下一步动作」，主动丢弃探索过程。
 
 和容易混淆的两个东西的边界：
 

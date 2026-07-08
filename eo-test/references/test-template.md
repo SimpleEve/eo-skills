@@ -1,11 +1,10 @@
 # test.md 固定模板
 
-eo-test 按下方模板写入 `eo-doc/dev/<module-name>/changes/<change-id>/test.md`。
+eo-test 按下方模板写入 `eo-doc/changes/<change-id>/test.md`。
 
 ```markdown
 ---
 title: <功能名称>测试报告
-module: <module-name>
 change_id: <NNN-change-id>
 tags: [标签1, 标签2]
 created: YYYY-MM-DD
@@ -17,8 +16,7 @@ summary: >
 
 # <功能名称> 测试报告
 
-> 关联 模块：[spec.md](../../spec.md)
-> 关联 Change：[change.md](change.md)
+> 关联 Change：[change.md](change.md)（验收锚点：其 §2 验收清单）
 > 测试日期：YYYY-MM-DD
 > 测试环境：运行时 / OS / 版本 / 其他相关信息
 

@@ -1,7 +1,7 @@
 ---
 name: eo-handoff
 description: |
-  在 /clear 之前生成最小可恢复快照到 tmp/<topic>-handoff.md，让下一个会话载入这一个文件就能从当前节点继续。优先记录任务状态、关键口径、下一步分叉，主动丢弃探索过程。触发：handoff / 存一下进度 / 我要 clear / /eo-handoff。
+  在 /clear 之前生成最小可恢复快照到 tmp/eo/handoff/<topic>.md，让下一个会话载入这一个文件就能从当前节点继续。优先记录任务状态、关键口径、下一步分叉，主动丢弃探索过程。触发：handoff / 存一下进度 / 我要 clear / /eo-handoff。
   NOT FOR: 跨 agent 任务派发（用 /eo-flow）；机械压缩对话流（用内置 /compact）。
 ---
 
@@ -9,7 +9,7 @@ description: |
 
 ## 定位
 
-**clear 前的最后一步**：把"下次会话要立刻接着干"所需的最少信息写到 `<repo>/tmp/<topic>-handoff.md`。
+**clear 前的最后一步**：把"下次会话要立刻接着干"所需的最少信息写到 `<repo>/tmp/eo/handoff/<topic>.md`。
 
 和容易混淆的两个东西的边界：
 
@@ -23,14 +23,14 @@ description: |
 
 ## 不依赖 .eo-project.json
 
-`tmp/` 是工作区机制，任何 git 仓库都能用，不归 `eo-doc/` 体系管。即使没跑过 `/eo-project-init` 也能用本 skill。
+`tmp/eo/handoff/` 是工作区机制（eo 临时工件命名空间的一个域，见 [../eo-shared/conventions.md](../eo-shared/conventions.md)），任何 git 仓库都能用，不归 `eo-doc/` 体系管。即使没跑过 `/eo-project-init` 也能用本 skill。
 
 ## 输入
 
 - **topic 名**：从最近上下文推断（最近聊的 module / change-id / 任务名）。推不出再问用户一次。
-  - 文件名：`tmp/<topic>-handoff.md`，`<topic>` 用 kebab-case
+  - 文件名：`tmp/eo/handoff/<topic>.md`，`<topic>` 用 kebab-case
 - **可选口头加权**：用户说"重点记 X / 别记 Y / 把这段对话原文带上" → 写入时按指示偏置
-- **tmp/ 目录**：不存在则建。**已存在的同名文件直接覆盖**（默认行为；老的 handoff 已经过期没价值）。如果用户希望保留历史，自行加日期后缀。
+- **tmp/eo/handoff/ 目录**：不存在则建。**已存在的同名文件直接覆盖**（默认行为；老的 handoff 已经过期没价值）。如果用户希望保留历史，自行加日期后缀。
 
 ## 文件骨架（6 段固定）
 
@@ -45,7 +45,7 @@ description: |
 ## 1. 当前状态
 
 - 在做什么、卡在哪个节点
-- 关键产物路径 + status（spec / change / review 等的 frontmatter status）
+- 关键产物路径 + status（change / review 等的 frontmatter status）
 - 上下游依赖是否就绪
 
 ## 2. 基线
@@ -121,14 +121,14 @@ clear 后新会话该做的第一组动作（有序）：
 
 ### 5. 落盘 + 提示
 
-写到 `<repo>/tmp/<topic>-handoff.md`。`tmp/` 不存在先建。
+写到 `<repo>/tmp/eo/handoff/<topic>.md`。`tmp/` 不存在先建。
 
 完成后告知用户**三件事**：
 1. 文件路径
 2. 关键口径条数（密度自检）
 3. clear 后的开机指令模板，例如：
    ```
-   读 tmp/<topic>-handoff.md，按 §5 开机动作序列执行
+   读 tmp/eo/handoff/<topic>.md，按 §5 开机动作序列执行
    ```
 
 不要在终端里把整个 md 内容贴出来——文件已经写进去了，贴一遍是噪音。
@@ -142,7 +142,7 @@ clear 后新会话该做的第一组动作（有序）：
 | 每条口径带「为什么」 | 没有原因的口径就是规则，规则在边界情况会被滥用 |
 | §4 密度第一 | 口径太少（<5 条）多半是漏了，重新扫对话 |
 | 不复制文件内容到 handoff | 只写路径，新会话自己读；handoff 是地图不是百科 |
-| tmp/ 用户管 | 默认覆盖同名文件；不自动清理历史；不进 .gitignore（由项目自决） |
+| tmp/eo/ 用户管 | 默认覆盖同名文件；不自动清理历史；`tmp/eo/` 由 /eo-project-init 写入 .gitignore（未跑过 init 的仓库由项目自决） |
 | 不依赖 eo-doc/ | 工作区级机制，任何项目能用，不读 .eo-project.json |
 | 不替代 /compact 或 /eo-flow | 看「定位」表格，三者职责互不重叠 |
 
@@ -155,11 +155,11 @@ Claude:
 2. 不问加权（用户没给特殊指示）
 3. 拉 HEAD = `243ebcf` on `main`，clean
 4. 起草 6 段，§4 收敛 13 条口径（候补池存储 / 合批硬约束 / IsActive 过滤 / Proto 锁死方案 …）
-5. 写到 `tmp/residence-handoff.md`
+5. 写到 `tmp/eo/handoff/residence.md`
 6. 告知用户：
    ```
-   已写 tmp/residence-handoff.md（§4 关键口径 13 条）。
-   clear 后第一句话发：读 tmp/residence-handoff.md，按 §5 开机动作序列执行。
+   已写 tmp/eo/handoff/residence.md（§4 关键口径 13 条）。
+   clear 后第一句话发：读 tmp/eo/handoff/residence.md，按 §5 开机动作序列执行。
    ```
 
 ## 与其它 skill 的关系
@@ -167,4 +167,4 @@ Claude:
 - 内置 `/compact`：续命当前会话，保留全量；本 skill 是清空当前会话前的状态导出
 - `/eo-flow`：跨 agent 任务派发；本 skill 是跨会话状态交接，不涉及第二个 agent
 - `/eo-project-update` / `/eo-project-lesson`：项目级长期记录（roadmap / 经验），活在 `eo-doc/` 或 vault；本 skill 是工作区临时快照，活在 `tmp/`
-- 任何 eo-* 流程节点（spec/change/implement/test/review/archive）都可以在中途调用本 skill 做 clear 前快照
+- 任何 eo-* 流程节点（brainstorming/change/implement/test/review/archive）都可以在中途调用本 skill 做 clear 前快照
