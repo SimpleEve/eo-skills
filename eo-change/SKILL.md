@@ -1,224 +1,103 @@
 ---
 name: eo-change
 description: |
-  对已有模块发起业务变更，产出 spec Delta + 技术方案 + TODO 的单一载体。触发：新增 / 加功能 / 增强 / 重构 / change / /eo-change。
-  NOT FOR: bug 修复（走 /eo-implement，不开新 change）。
+  发起变更，产出「验收清单（AC）+ 分批 TODO」的 change 工件。触发：新增 / 加功能 / 增强 / 重构 / change / /eo-change。
+  NOT FOR: bug 修复（走 /eo-fix）；trivial 小改（本 skill 会主动短路成直改，不产生工件）。
 ---
 
-# eo-change — 模块变更
+# eo-change — 发起变更
 
-> ⚠️ **v2 过渡状态**：本文件将在 v2 Batch 2 按 [docs/v2-design.md §3](../docs/v2-design.md) 重写（AC 前置、提问纪律、粒度校验、trivial 短路；spec / 模块 / Delta 概念移除）。下文中对 spec.md、/eo-module-init、跨模块判界的引用均为 v1 遗留，重写时一并消化。
-
-对某个模块发起一次变更。change 文档是**单一真相载体**：既是需求澄清（Delta），又是实施方案（TODO）。归档时 Delta 自动合并回模块 spec。
+发起一次变更。change 是**过程工件**：起草期承载澄清与拆解，实施期承载进度，归档即冻结为审计历史——**不合并回任何文档**（活文档 state/agent-handbook 由 doc-manager 以代码为信源另行维护）。
 
 ## 核心理念
 
-1. **模块是一等公民**：所有 change 归属到 `eo-doc/dev/<module-name>/changes/` 下
-2. **spec 是活文档**：change 不重写 spec，只声明 Delta（ADDED / MODIFIED / REMOVED）
-3. **change = proposal + plan**：合并原 spec 澄清和 plan 技术方案，消除中间交接
-4. **无独立 proposal-review**：作者自澄清，实施后的 code review 是唯一正式审查环节
-5. **固定产出**：`eo-doc/dev/<module-name>/changes/<NNN-change-id>/change.md`
-
-## 模板发现
-
-启动时读 `eo-doc/templates/project-profile.md` 和 `plan-layers.md`（兼容 `change-layers.md`；存在则启用层级 Part 模式，否则用默认 S/C/G 三分类）。
+1. **验收驱动**：AC 先于 TODO 产出，是 implement 的完成判据、review 的检查表、fix 的期望行为锚点
+2. **渐进式严谨**：必填仅 4 节，方案/流程图/风险/开放问题全部条件化；trivial 改动直接短路成直改
+3. **量化粒度**：TODO 3-7 理想 / 10 硬上限，change.md 500 行软 / 700 行硬，超标拆序列
+4. **提问有预算**：事实自查、决策上抛、决策台账钉结论——规则见 [../eo-shared/questioning.md](../eo-shared/questioning.md)
+5. **状态自动流转**：用户在对话里确认，skill 落盘 status，用户永不手改 frontmatter
 
 ## 前置条件
 
-- **必须能找到 `.eo-project.json`**。找不到 → 报错退出，提示运行 `/eo-project-init`。`eo-doc/` 路径通过 `doc_root` 字段解析
-- 目标模块目录 `eo-doc/dev/<module-name>/` 必须存在且含 `spec.md`（`status: confirmed`）
-- 如果模块不存在 → 提示用户先执行 `/eo-module-init <module-name>` 完成模块初始化
-- 如果模块 spec 存在但 `status: draft` → 提示用户先完成 spec-review
+- **必须能找到 `.eo-project.json`**（cwd 或父目录）。找不到 → 报错退出，提示运行 `/eo-project-init`。`eo-doc/` 路径由 `doc_root` 解析
+- `eo-doc/changes/` 不存在时 lazy 创建（含 INDEX.md 骨架）
 
 ## 工作流程
 
-### 第一步：识别模块（单模块 vs 跨模块判定）
+### 第一步：意图理解与复杂度定级
 
-1. 阅读用户的变更描述
-2. **扫描 `eo-doc/dev/` 下所有模块的 `spec.md` frontmatter**（title / module_name / tags / summary）
-3. 语义匹配出涉及的模块（可能多于 1 个），向用户确认
-4. 若无匹配：提示用户走 `/eo-module-init` 创建新模块，暂停本流程
-5. **关键决策：以"是否要动别人的 spec"为界**（详见下方"判断边界：单模块 vs 跨模块"）
-   - 只调用别的模块、不改对方 spec → **单 change**，归主模块
-   - 多个模块 spec 都需要 Delta → **拆多个 change**，每模块一个，用 `depends_on` 关联
-6. 若判定为跨模块拆分 → 向用户明确说明"会产出 N 个 change"，并按 `depends_on` 顺序依次产出
+1. 读用户的变更描述。**若来自 /eo-brainstorming 捕获出口**：直接继承其已钉决策与 change 草案，跳过已钉项的一切重复提问，从第四步续起
+2. 按 [../eo-shared/questioning.md](../eo-shared/questioning.md) §2 定级：trivial / simple / complex / critical
+3. **trivial → 主动短路**：告知用户「这不值得开 change，直接改」，按 [../eo-shared/granularity.md](../eo-shared/granularity.md) §2 的直改模式执行（改 → 验证 → `fix:`/`ui:` 前缀 commit），本流程终止。判据任何一条不满足则回到 change 模式
+4. **critical → 建议升级**：「这个方向本身还没定，建议先 /eo-brainstorming 把决策钉了再回来」；用户坚持则继续，但澄清预算放宽到 5+
+5. **update vs new**：若变更明显是某个未归档 change 的意图精化 → 提议就地更新那个 change 而非新开（决策表见 granularity.md §3）
 
-### 第二步：理解变更意图
+### 第二步：事实自查（静默执行）
 
-1. 读目标模块的 `spec.md`（了解"当前能力基线"）——先读 frontmatter + 用 `Grep` 取章节地图（`^#{1,3} `），再 `Read`（offset/limit）变更涉及的章节（通常 §3 功能需求 / §5 边界 / §6 AC）；spec 较大时不要整篇读
-2. 阅读该模块 `changes/` 下最近的 3 个历史 change（了解演化方向，避免重复/冲突）
-3. 识别变更类型，按以下矩阵判断：
+提问之前先自答：
 
-   | 问题 | change_type | 说明 |
-   |------|-------------|------|
-   | spec 有，代码**无** → 首次把 spec 实现出来 | `bootstrap` | module-init 后首批落地，或空能力首次实现 |
-   | spec **无**，代码无 → 加一个 spec 里不存在的新能力 | `feature` | 真正的"加 spec"（Delta ADDED） |
-   | spec 有，代码有 → 调整现有能力 | `enhance` | Delta MODIFIED 为主 |
-   | spec 有，代码有 → 内部重构、对外能力不变 | `refactor` | Delta 以内部章节的 MODIFIED 为主，对外能力表不动 |
+1. 读 `eo-doc/state/` 相关篇目（系统现状）与 `eo-doc/agent-handbook/INDEX.md` 索引到的相关代码地图
+2. 读 `eo-doc/changes/INDEX.md` 最近 3 条（演化方向，避免重复/冲突）
+3. 检索项目管理侧 `<project_root>/lessons/`（frontmatter tags/summary 匹配），相关教训带入起草上下文（**lessons 消费**）
+4. 涉及 UI 且仓库根有 `DESIGN.md` → 读入作为默认设计约束
+5. 能从以上信源回答的问题，**禁止问用户**
 
-   - **`bootstrap` 的核心区别**：不改 spec，只把 spec 已声明的章节落成代码。§3 不写 Delta，改写"实现范围"（见 §3 模板的 bootstrap 分支）
-   - **不接受 `fix` 作为类型**：若用户描述是"修 bug"——属于对某个已归档 change 的实施缺陷修复，不是新 change：
-     - 若相关 change 尚未归档 → 让用户回到 `/eo-implement` 继续修
-     - 若已归档但确实是"实现不符合 spec" → 仍走 eo-implement 开补丁式实施（不建新 change）
-     - 若归档后发现的是 spec 本身错了（业务语义变化）→ 那就是真正的 `enhance`，按 enhance 处理
-4. **执行模板发现**（见上方）
+### 第三步：预算内澄清
 
-### 第三步：澄清（不要假设）
+按 [../eo-shared/questioning.md](../eo-shared/questioning.md) 全文执行：预算配比、每轮 1-2 问、封闭选择走 AskUserQuestion（带推荐项）、内部决策台账（已钉/未钉/defer）、UI/UX 问题附「生成 HTML 对比页」选项、疲劳信号立即降级用默认。defer 上限 3 条，落入 §8 开放问题。
 
-逐项列出模糊点，向用户澄清：
-- 范围边界（In / Out of Scope）
-- 对 spec 的 Delta 具体是什么
-- 技术选型偏好
-- 跨层协作的数据/接口细节（如多层项目）
-- 回滚策略
+### 第四步：产出验收清单（先于 TODO）
 
-**反复澄清直到 95% 确信**。宁可多问一轮，不要用"可能"、"应该"这类词。
+按 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md) 撰写：用户视角、可独立验证、技术无关、覆盖异常路径。**这是 change 的第一个产出物**——AC 定不下来说明澄清还没到位，回第三步。
 
-### 第四步：分配 change-id
+### 第五步：TODO 拆解与分批
 
-1. `cd eo-doc/dev/<module-name>/changes/` 扫描现有子目录
-2. 取最大数字前缀 + 1，3 位补零（如 `001` / `002` / `037`）
-3. 用户给语义名（小写 kebab-case），拼接为 `<NNN>-<kebab-name>`
-4. 示例：`001-add-queue`、`002-enhance-overflow-handling`、`015-refactor-cache-layer`
-5. 不接受以 `fix-` 开头的 change-id——bug 修复不应产生新 change
+- 每条 TODO 四要素（描述/文件/对应 AC/完成判据），逐条映射 AC，**禁止占位符**（granularity.md §4）
+- 按 Batch 分组，**Batch 1 = MVP**：跑完即可独立验证其对应的 AC（批间 STOP and VALIDATE 由 eo-implement 执行）
+- 不写具体函数体；接口签名/数据结构可以描述
 
-### 第五步：撰写 change.md
+### 第六步：粒度自检（自动校验）
 
-创建目录 `eo-doc/dev/<module-name>/changes/<NNN-change-id>/`，按下方模板写入 `change.md`。
+对照 [../eo-shared/granularity.md](../eo-shared/granularity.md) §1：数 TODO、`wc -l` 全文。超软标（>7 条 / >500 行）→ 建议按 AC 分组拆成 change 序列（第一个 = MVP，其余排队或进 backlog）；超硬标（>10 条 / >700 行）→ **拒绝进入确认**，必须拆。
 
-### 第六步：用户确认
+### 第七步：写入 change.md 并确认
 
-交付用户确认。根据反馈修订到用户满意后，保持 `status: draft`（暂不改 approved）。
+1. **分配 change-id**：扫描 `eo-doc/changes/` 现有目录，最大数字前缀 +1（3 位补零），用户给语义名，拼成 `<NNN>-<kebab-name>`。拒绝 `fix-` 前缀
+2. 按 [references/change-template.md](references/change-template.md) 写入 `eo-doc/changes/<NNN-id>/change.md`（`status: draft`）；已钉决策落 §1，条件节按触发条件取舍
+3. 交付用户确认，按反馈修订
+4. **用户在对话中确认后，skill 自动置 `status: confirmed`**——不要求用户手改 frontmatter
 
-### 第七步：更新索引
+### 第八步：更新索引 + 提示后续
 
-1. 更新 `eo-doc/dev/<module-name>/changes/INDEX.md`（模块内 change 时间线），若不存在则创建
-2. 不需要立刻回写 module 的 `spec.md`——合并动作由 `eo-archive` 在归档时执行
+更新 `eo-doc/changes/INDEX.md`。然后按场景提示：
 
-### 第八步：提示后续流程
+**场景 A — 首次产出**（目录下无含未解决 P0/P1 的 change-review.md）：
 
-**关键分派**：先判断"这是首次产出还是返工修订"，两种场景提示完全不同。
+> change 已就绪（status: confirmed）。后续：
+> 🟡（可选，建议：AC ≥ 5 条 / 有条件节 §5 / type=refactor 时）`/eo-change-review` — 方案审查
+> 1. `/eo-implement <change-path>` — 按 Batch 实施
+> 2. `/eo-test <change-path>` → `/eo-review <change-path>`
+> 3. `/eo-archive <change-id>` — review 通过后归档
 
-#### 场景 A — 首次产出 change（本轮是作者第一次让它落地）
+**场景 B — 返工修订**（存在未解决 P0/P1 的 change-review.md）：修订后**必须**再跑 `/eo-change-review` 复审（此时代码未写，**严禁**走 /eo-review 或直接 implement），直到无 P0/P1。复审通过前保持 `status: draft`。
 
-根据规模和风险判断是否建议走 change-review：
-
-- **高风险 / 大规模 / 多层协作 change**（Delta ≥ 5 条，或跨 2 个以上层，或含 MODIFIED/REMOVED，或 change_type = bootstrap 认领章节 ≥ 3 个）：**建议**用户先跑 `/eo-change-review`
-- **小型 / 低风险 change**（Delta ≤ 2 条，单层，全是 ADDED）：可直接 approved 进入 implement
-
-统一提示模板：
-> change 文档已就绪（`status: draft`）。后续流程：
->
-> 🟡 **（可选，建议）** `/eo-change-review <change-path>` — 方案级审查（§3 合规、TODO 完整、AC 覆盖），通过后再 approve
-> 1. 将 change.md `status` 改为 `approved`
-> 2. `/eo-implement <change-path>` — 按 TODO 实施代码
-> 3. `/eo-test <change-path>` — 测试与验证
-> 4. `/eo-review <change-path>` — **实施后代码审查**（仅当 implement 已跑过）
-> 5. `/eo-archive <module-name> <change-id>` — 代码审查通过后归档
-
-#### 场景 B — 返工修订（作者根据 change-review 的 P0/P1 回来改 change.md）
-
-⚠️ **关键：此时代码尚未实施，必须走 `/eo-change-review` 复审，不要走 `/eo-review`。**
-
-`/eo-review` 是实施后的代码审查，需要代码已经写出来；此时根本没代码，路径走错会让 reviewer 空审。
-
-统一提示模板（场景 B）：
-> change 重写完成（`status: draft`）。既然前一轮 change-review 发现了问题，修订后请**再跑一次** `/eo-change-review <change-path>` 确认问题已收敛。
->
-> 🔁 `/eo-change-review <change-path>` — 复审方案（**不是 /eo-review**；代码还没写，没东西给 /eo-review 审）
-> 🔁 直到 change-review 无 P0/P1 → 用户改 `status: approved` → 进入 `/eo-implement`
->
-> **禁止**此时直接改 `status: approved` 跳过复审，也**禁止**跳到 `/eo-implement` 或 `/eo-review`。
-
-#### 如何判断是 A 还是 B
-
-- 本 change 目录下存在 `change-review.md` 且含未解决的 P0/P1 → **场景 B**
-- 否则 → **场景 A**
-
----
-
-## 固定模板 — change.md
-
-见 [references/change-template.md](references/change-template.md)。
-
----
+若 GitHub 联动开启（`.eo-project.json` 的 `github.issue`）：confirmed 时创建 issue，issue 号回写 frontmatter（见设计稿 §14；未配置时首次问一次并写回配置）。
 
 ## changes/INDEX.md 模板
 
 ```markdown
-# <module-name> 变更时间线
+# 变更时间线
 
 | 编号 | 标题 | 类型 | 状态 | 日期 | 摘要 |
 |------|------|------|------|------|------|
-| [001-xxx](001-xxx/change.md) | ... | feature | archived | YYYY-MM-DD | ... |
+| [014-batch-export](014-batch-export/change.md) | 批量导出 | feature | confirmed | YYYY-MM-DD | 一句话 |
 ```
-
----
-
-## 判断边界：change vs module-init
-
-| 信号 | 走 eo-change | 走 eo-module-init |
-|------|--------------|-------------------|
-| 目标模块已存在 spec | ✅ | ❌ |
-| 目标模块完全不存在 | ❌（先 init） | ✅ |
-| 是对已有能力的修改 | ✅ | ❌ |
-| 是全新模块的首次落地 | ❌ | ✅ |
-
-当模块 spec 需要大规模结构性重写（Delta 占 spec 80% 以上）时，不要跳回 `eo-module-init`，而是用 `change_type: refactor` 发一个 change，逐步演化。
-
----
-
-## 判断边界：单模块 vs 跨模块
-
-**核心准则：以"是否要动别人的 spec"为界。**
-一个 change 结构上只能归属一个模块，Delta 只能合并到一份 `spec.md`。跨模块需求按下表处理：
-
-| 场景 | 归属 | 做法 |
-|------|------|------|
-| **A. 只调用不改契约** — 新 change 只是调用对方模块已有的接口/能力，对方 spec 不动 | **单 change**，归主模块 | §2.3 或 §4.2 列出"依赖的外部模块"；对方 spec 不产生 Delta |
-| **B. 多模块 spec 都要动** — 新功能需要在多个模块的 spec 同时 ADDED/MODIFIED/REMOVED | **拆多个 change**，每模块一个 | 用 `depends_on` frontmatter 和共享命名关联 |
-| **C. 只动 Proto/Config，不改业务模块 spec** | 归调用方模块 | Proto/Config 不是一等模块，归属消费侧 |
-
-### 场景 B 的协调手段
-
-1. **命名共享后缀**：不同模块里的 change 用相同语义尾缀，数字前缀按各自模块内递增
-   - `dev/inventory/changes/007-crafting-system/`
-   - `dev/building/changes/012-crafting-system/`
-2. **frontmatter 加 `depends_on` / `related`**：
-   ```yaml
-   depends_on:
-     - inventory/007-crafting-system
-   related:
-     - building/012-crafting-system
-   ```
-3. **change.md 顶部加"跨模块关联"小节**：互相链接，说明依赖方向
-4. **实施时序**：被依赖方先 approve → implement → archive → 再 approve 依赖方，一次只实施一个 change，天然强制顺序
-
-### 反模式
-
-- ❌ **建 `dev/cross/` 虚拟模块**把跨模块需求塞进去 — 破坏"模块一等公民"，archive 无法定位目标 spec
-- ❌ **建 umbrella change 引用多个子 change** — 多一层没带来收益，Delta 合并该拆还是得拆
-- ❌ **单个 change 挂多个模块的 Delta** — `/eo-archive` 会拒绝（它只认单一目标 spec，见 eo-archive 的"拒绝跨模块 Delta"规则）
-
----
-
-## 流程图（§2.4）
-
-- **必画条件**：涉及用户操作流程、状态流转、多模块交互；或 Delta 含 MODIFIED / REMOVED
-- **跳过条件**：纯配置/文案/样式；Delta 仅 1 条 ADDED 且不涉及流程分支。跳过时在 §2.4 写一行理由
-- **画法**：完整的"变更后流程"（非 diff），用 classDef `:::new` / `:::changed` / `:::extern` 高亮本次动了的节点；删除节点不画，在图下方用 `> 移除：...` 文字补注
-- **目的**：优先服务"对齐需求"（让有文字障碍的用户也能一眼读懂），其次服务 change-review 的审查快扫
-- 规范统一见 [eo-doc-manager/references/mermaid.md](../eo-doc-manager/references/mermaid.md)
-- 归档时由 eo-archive 清除 `:::new/:::changed` 后并入 spec.md §3.5
 
 ## 关键约束
 
-- **change-id 命名**：`NNN-kebab-name`，NNN 按模块内现有 change 最大编号 +1，3 位补零
-- **§3 必须填写**：
-  - `feature` / `enhance` / `refactor` → 必须写至少一条 Delta（ADDED/MODIFIED/REMOVED 任一）；产生不了 Delta 大概率是 bug fix，归 implement 循环
-  - `bootstrap` → 必须写"实现范围"（认领的 spec 章节列表）；不允许写 ADDED/MODIFIED/REMOVED
-- **bootstrap 不重复认领**：同一模块多个 bootstrap change 不能认领同一 spec 章节；§3.B.2 必须显式声明边界
-- **不写详细实现代码**：TODO 可描述接口签名 / 数据结构 / 模块职责，但不写具体函数体
-- **单次聚焦**：一个 change 只做一件事；若发现混入多个不相关改动，拆成多个 change
-- **状态流转**：draft → approved（用户确认）→ implementing（eo-implement 启动时改）→ done（审查通过）→ archived（eo-archive 完成）
-- **不改模块 spec**：change 阶段不直接修改 `spec.md`，合并由 `eo-archive` 负责
+- **AC 先于 TODO**；每条 TODO 必须映射到 AC
+- **粒度硬上限拒绝确认**（10 条 TODO / 700 行）
+- **无 `fix` 类型**；bug 走 /eo-fix
+- **status 由 skill 流转**（conventions.md §3），用户不手改
+- **change 阶段不写代码**、不改活文档；归档不反写（由 eo-archive 触发 doc sync）
+- 提问纪律、AC 规范、粒度判据的正文**只在 eo-shared/**，本文件不复述

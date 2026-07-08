@@ -427,7 +427,7 @@ install.sh 是逐目录软链，跨 skill 相对路径引用不可靠。方案�
 
 ## 12. 开放问题
 
-1. eo-shared/ 软链在三个 agent 环境的兼容性（Batch 2 前验证，有降级方案）。
+1. ~~eo-shared/ 软链兼容性~~ 已验证：install.sh 按 `eo-*` 通配无条件软链、不检查 SKILL.md，eo-shared/ 自动分发；无 SKILL.md 目录对各 agent 无副作用（Batch 5 安装实测再确认一次 codex/antigravity）。
 2. 一致性校验阈值（暂定 sync_count=5，用数据调）。
 3. change-id 项目级连号与 v1 存量模块级编号并存时 INDEX 的呈现方式。
 4. eo-design 竞品调研步骤与用户环境 web-access skill 的对接方式（可选步骤，不阻塞）。
