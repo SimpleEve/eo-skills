@@ -274,8 +274,8 @@ created: 2026-07-07
 ### 6.1 eo-archive v2 五步
 
 1. **前置校验**：status done、review.md 通过、AC 全勾（未全勾需用户显式豁免并把豁免记入 change.md §8）。
-2. **确定 commit 区间**：从 `base_commit..HEAD` 中按 change-id 前缀归集本 change 的提交；单 commit 直取，多 commit 列出让用户确认区间；存在无前缀夹杂提交时让用户圈定。
-3. **触发 eo-doc-manager sync --range <区间>**：以该区间代码变更为增量更新 state/ + agent-handbook/（代码为唯一信源，change.md 只作参考上下文不作信源）。
+2. **确定 commit 区间**：从 `base_commit..HEAD` 中按 change-id 前缀归集本 change 的提交；单 commit 直取，多 commit 列出让用户确认区间；存在无前缀夹杂提交时让用户圈定。**区间只用于审计记录（frontmatter `commits`）与 PR body，不决定同步范围。**
+3. **触发 eo-doc-manager 常规 cursor sync**（cursor..HEAD → 推进 cursor）：更新 state/ + agent-handbook/（代码为唯一信源，change.md 只作参考上下文不作信源）。同步范围是 cursor 以来的全部提交——包括本 change、期间累积的直改提交、其他已合入的工作，一并吸收，不做按 change 定界的 range 同步（单游标单机制，杜绝重复扫描）。
 4. **冻结**：change frontmatter 写入 `commits`、status → `archived`（不可逆）；更新 changes/INDEX.md。
 5. **汇报**：sync 触达的文档清单 + 一致性校验建议（见 §6.2 阈值）。
 
@@ -284,7 +284,7 @@ created: 2026-07-07
 ### 6.2 eo-doc-manager v2 增强
 
 - **移除 dev/**：不再管理模块 spec 目录；changes/ 由开发流程技能管理、不参与 sync（同 v1 约定）。
-- **sync --range <a>..<b>**：供 archive 调用的定界增量模式，不动 cursor 之外的范围。
+- **archive 作为 sync 触发点（无独立 range 模式）**：archive 第 3 步触发的就是常规 cursor sync（cursor..HEAD，完成后推进 cursor）。不提供按 change 定界的 range 同步——若 range 同步不动 cursor，被同步的 commit 会在下次 cursor sync 被重扫；若动 cursor，又会跳过区间外交错的提交（直改、其他 change）。单游标、单机制，archive 与手动 sync 只是同一机制的两个触发点。
 - **脏变更三选项**（常规 sync 检测到工作区脏时询问）：
   1. 只取 cursor..HEAD 增量，不扫脏变更（默认推荐——脏变更提交后自然会被下次 sync 覆盖，根治 v1 的二次同步与 revert 幽灵文档问题）；
   2. 含脏变更一起同步（明知代码即将定稿时用）；
@@ -401,7 +401,7 @@ install.sh 是逐目录软链，跨 skill 相对路径引用不可靠。方案�
 |---|---|---|
 | 1 拆骨 | 移除 eo-workflow/eo-spec/eo-spec-review/eo-module-init + 全部交叉引用清理；README/GUIDE 流程图初步改写 | 全仓库 grep 无残留引用 |
 | 2 核心 | eo-change 重构（新模板、提问纪律、AC 前置、粒度校验、trivial 短路）+ eo-brainstorming 捕获出口 + eo-shared/ 建立 + lessons 消费注入 | 新 change 全流程可走通 |
-| 3 闭环 | eo-archive 重构 + eo-doc-manager 增强（range/脏变更/计数/校验）+ eo-implement 调整 + eo-fix 重构（直接修复 + 深挖模式） | 一个 change 从 confirmed 到 archived 全链路可走通，state/handbook 被正确增量更新 |
+| 3 闭环 | eo-archive 重构 + eo-doc-manager 增强（archive 触发点/脏变更/计数/校验）+ eo-implement 调整 + eo-fix 重构（直接修复 + 深挖模式） | 一个 change 从 confirmed 到 archived 全链路可走通，state/handbook 被正确增量更新，重复 sync 不发生 |
 | 4 design | eo-design 四模式 + project-init 注入更新 | init→DESIGN.md→CLAUDE.md 注入链可走通 |
 | 5 收尾 | eo-test/eo-review/eo-change-review 微调、迁移文档、install.sh 验证 eo-shared、README/GUIDE 定稿 | 远程安装后新老项目均可用 |
 | 6 联动 | board stub 写入（change/implement/archive 钩子）+ project-init 的 board 开关与历史同步 + GitHub issue/PR 注入 + .base 三视图配置指南 | 开启开关的项目：Obsidian 看板可用、issue/PR 全链路可走通 |
