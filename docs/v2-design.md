@@ -99,6 +99,19 @@ eo-doc/
 
 gstack 模式：不到百行的「token + rationale + 决策日志」单文件。结构：Product Context / Aesthetic Direction / Typography / Color / Spacing / Layout / Motion / Decisions Log（日期｜决策｜理由，追加式）。约束链见 §8。
 
+### 2.3 tmp 工件约定（tmp/eo/）
+
+所有 skill 的临时产物收进统一命名空间，按域分子目录：
+
+```
+tmp/eo/
+├── handoff/<topic>.md        # 会话交接快照（目录已表意，去掉 -handoff 后缀）
+├── fix/<date>-<slug>.md      # 深挖模式调查记录
+└── design/<date>-<topic>/    # 设计变体与预览 HTML
+```
+
+纪律：① tmp/eo/ 下一切**可丢弃**，任何 skill 不得当信源引用——有长期价值的结论在产生时即沉淀到正式位置（根因 → change / lessons；design 选中结论 → DESIGN.md 决策日志；handoff 被下个会话消费后即弃）；② project-init 负责把 `tmp/eo/` 写入 .gitignore；③ 文件名带日期/topic 前缀，清理按 mtime，无需登记表。多包一层 `eo/` 的理由：不侵占项目自己的 tmp/，且 `rm -rf tmp/eo` 即全量清理。
+
 ---
 
 ## 3. eo-change（核心重构）
@@ -263,7 +276,7 @@ created: 2026-07-07
 | F-state 与 F-code 矛盾 | 文档陈旧 → 触发 doc-manager sync 后重判 |
 | 原因无法定位 / 无法稳定复现 | **自动升级深挖模式** |
 
-**深挖模式（自动升级，替代原 eo-investigate 候选）**：升级时向用户显式宣告；方法论全文在 `references/investigation.md`（固定复现 → 假设清单 → 二分排除 → 验证，借 superpowers systematic-debugging 四阶段），**仅升级时才加载**；约束信封切换——允许临时插桩、加日志、git bisect，结束后还原现场；产出调查记录（tmp/，若关联 change 则附到其目录）；根因确认后回到普通模式路由表定归属。
+**深挖模式（自动升级，替代原 eo-investigate 候选）**：升级时向用户显式宣告；方法论全文在 `references/investigation.md`（固定复现 → 假设清单 → 二分排除 → 验证，借 superpowers systematic-debugging 四阶段），**仅升级时才加载**；约束信封切换——允许临时插桩、加日志、git bisect，结束后还原现场；产出调查记录（`tmp/eo/fix/<date>-<slug>.md`，见 §2.3，若关联 change 则附到其目录）；根因确认后回到普通模式路由表定归属。
 
 保留 v1 的轻量定位纪律（INDEX + frontmatter 收敛，禁全局 grep）。
 
@@ -271,20 +284,23 @@ created: 2026-07-07
 
 ## 6. eo-archive / eo-doc-manager（归档闭环）
 
-### 6.1 eo-archive v2 五步
+### 6.1 eo-archive v2 五层
+
+归档的本质：**把世界结算成 commit，然后按 commit 更新文档**——archive 自己不拥有任何同步逻辑。
 
 1. **前置校验**：status done、review.md 通过、AC 全勾（未全勾需用户显式豁免并把豁免记入 change.md §8）。
-2. **确定 commit 区间**：从 `base_commit..HEAD` 中按 change-id 前缀归集本 change 的提交；单 commit 直取，多 commit 列出让用户确认区间；存在无前缀夹杂提交时让用户圈定。**区间只用于审计记录（frontmatter `commits`）与 PR body，不决定同步范围。**
-3. **触发 eo-doc-manager 常规 cursor sync**（cursor..HEAD → 推进 cursor）：更新 state/ + agent-handbook/（代码为唯一信源，change.md 只作参考上下文不作信源）。同步范围是 cursor 以来的全部提交——包括本 change、期间累积的直改提交、其他已合入的工作，一并吸收，不做按 change 定界的 range 同步（单游标单机制，杜绝重复扫描）。
-4. **冻结**：change frontmatter 写入 `commits`、status → `archived`（不可逆）；更新 changes/INDEX.md。
-5. **汇报**：sync 触达的文档清单 + 一致性校验建议（见 §6.2 阈值）。
+2. **工作区结算**：cursor 基于 commit，sync 只能看见已提交内容。属于本 change 的未提交改动 → 提交（带 change-id 前缀）；**无关脏改动留在工作区**（sync 默认「只取已提交增量」不会碰它们）；两类混在同一文件无法分离时问用户一次。
+3. **冻结元数据并提交**：从 `base_commit..HEAD` 按 change-id 前缀归集本 change 提交、写入 frontmatter `commits`（**仅审计与 PR body 用，不决定同步范围**）；status → `archived`（不可逆）；更新 changes/INDEX.md。这些文档改动本身提交入库——单 commit 纪律下与第 2 步合为同一个 commit，implement 已按批提交时这就是一个小的收尾 meta commit。
+4. **文档同步（内嵌调用，零自有逻辑）**：执行 `/eo-doc-manager sync` 的完整流程（cursor..HEAD → 推进 cursor），archive 的 SKILL.md 不复述任何同步细节——同步语义只存在于 doc-manager 一处（v1 的教训：一套逻辑多处描述必然漂移）。范围覆盖第 2/3 步的提交与期间累积的直改提交，结束时 cursor == HEAD。change.md 作为业务语境提示传入，但信源永远是代码。若中途失败：change 已冻结、cursor 未推进，手动重跑 `/eo-doc-manager sync` 即可续上（archive 只是 sync 的两个触发点之一）。
+5. **收尾**：issue/PR（§14）、看板 stub（§13）、对话速报（sync 触达文档清单 + 一致性校验建议，见 §6.2 阈值）。
 
 对比 v1 八步：Delta 解析、旧文本精确匹配、冲突三选一裁决、spec-history 双表记账全部消失。
 
 ### 6.2 eo-doc-manager v2 增强
 
 - **移除 dev/**：不再管理模块 spec 目录；changes/ 由开发流程技能管理、不参与 sync（同 v1 约定）。
-- **archive 作为 sync 触发点（无独立 range 模式）**：archive 第 3 步触发的就是常规 cursor sync（cursor..HEAD，完成后推进 cursor）。不提供按 change 定界的 range 同步——若 range 同步不动 cursor，被同步的 commit 会在下次 cursor sync 被重扫；若动 cursor，又会跳过区间外交错的提交（直改、其他 change）。单游标、单机制，archive 与手动 sync 只是同一机制的两个触发点。
+- **archive 作为 sync 触发点（无独立 range 模式）**：archive 触发的就是常规 cursor sync（cursor..HEAD，完成后推进 cursor）。不提供按 change 定界的 range 同步——若 range 同步不动 cursor，被同步的 commit 会在下次 cursor sync 被重扫；若动 cursor，又会跳过区间外交错的提交（直改、其他 change）。单游标、单机制，archive 与手动 sync 只是同一机制的两个触发点。
+- **diff 分析排除 `eo-doc/` 路径**：归档元数据提交（change.md / INDEX）是纯文档变更，sync 扫到直接跳过，不做影响分析。
 - **脏变更三选项**（常规 sync 检测到工作区脏时询问）：
   1. 只取 cursor..HEAD 增量，不扫脏变更（默认推荐——脏变更提交后自然会被下次 sync 覆盖，根治 v1 的二次同步与 revert 幽灵文档问题）；
   2. 含脏变更一起同步（明知代码即将定稿时用）；
@@ -338,7 +354,7 @@ P2（可后置）：
 ### 8.2 产物存放
 
 - `DESIGN.md`：仓库根，唯一设计真相源。
-- 变体/预览 HTML：`tmp/design/<date>-<topic>/`，不入库；选中变体的结论（含关键 token）写入 DESIGN.md Decisions Log。
+- 变体/预览 HTML：`tmp/eo/design/<date>-<topic>/`（约定见 §2.3），不入库；选中变体的结论（含关键 token）写入 DESIGN.md Decisions Log。
 - 服务具体 change 的高保真稿：`changes/<id>/design/`，随 change 归档冻结。
 
 ### 8.3 约束链（gstack 五重引用的 eo 版）
@@ -372,7 +388,8 @@ install.sh 是逐目录软链，跨 skill 相对路径引用不可靠。方案�
 
 - `questioning.md` — 提问纪律全文（eo-change / eo-brainstorming / eo-design 引用）
 - `ac-spec.md` — 验收清单规范（eo-change / eo-test / eo-review / eo-fix 引用）
-- `granularity.md` — 粒度指标与拆分决策表
+- `granularity.md` — 粒度指标、trivial 硬判据与拆分决策表
+- `conventions.md` — 横切约定：tmp/eo/ 工件命名空间（§2.3）、commit 前缀（change-id / fix: / ui:）、状态自动流转
 
 各 SKILL.md 以稳定路径 `~/.claude/skills/eo-shared/<file>` 引用。**实施时需先验证**：无 SKILL.md 的目录在三个 agent 环境（claude/codex/antigravity）的 skills 目录下均无副作用；install.sh 的 `has_skill_dirs` 过滤逻辑需放行该目录。若验证失败，降级方案是各 skill 内嵌精简版 + 构建脚本同步。
 
@@ -403,7 +420,7 @@ install.sh 是逐目录软链，跨 skill 相对路径引用不可靠。方案�
 | 2 核心 | eo-change 重构（新模板、提问纪律、AC 前置、粒度校验、trivial 短路）+ eo-brainstorming 捕获出口 + eo-shared/ 建立 + lessons 消费注入 | 新 change 全流程可走通 |
 | 3 闭环 | eo-archive 重构 + eo-doc-manager 增强（archive 触发点/脏变更/计数/校验）+ eo-implement 调整 + eo-fix 重构（直接修复 + 深挖模式） | 一个 change 从 confirmed 到 archived 全链路可走通，state/handbook 被正确增量更新，重复 sync 不发生 |
 | 4 design | eo-design 四模式 + project-init 注入更新 | init→DESIGN.md→CLAUDE.md 注入链可走通 |
-| 5 收尾 | eo-test/eo-review/eo-change-review 微调、迁移文档、install.sh 验证 eo-shared、README/GUIDE 定稿 | 远程安装后新老项目均可用 |
+| 5 收尾 | eo-test/eo-review/eo-change-review 微调、eo-handoff 路径迁移 tmp/eo/handoff/、迁移文档、install.sh 验证 eo-shared、README/GUIDE 定稿 | 远程安装后新老项目均可用 |
 | 6 联动 | board stub 写入（change/implement/archive 钩子）+ project-init 的 board 开关与历史同步 + GitHub issue/PR 注入 + .base 三视图配置指南 | 开启开关的项目：Obsidian 看板可用、issue/PR 全链路可走通 |
 
 每批一个（或一组）commit，批间可停可评审——v2 改造本身按 v2 的节奏做。
