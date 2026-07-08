@@ -300,9 +300,9 @@
       <tr><th>东西</th><th>落在哪</th><th>谁写</th><th>谁消费</th></tr>
       <tr><td>需求与验收</td><td>eo-doc/changes/&lt;id&gt;/change.md（§2 AC）</td><td class="who">eo-change</td><td>implement 当判据 · review 当检查表 · fix 取证时的书面证据</td></tr>
       <tr><td>系统现状</td><td>eo-doc/state/ + agent-handbook/</td><td class="who">doc-manager（代码为信源）</td><td>下一个 change 的事实自查 · fix 的取证 · /eo-recall 的回忆问答</td></tr>
-      <tr><td>已钉决策</td><td>change.md §1（brainstorming 移交）</td><td class="who">brainstorming / change</td><td>下游不重问、不隐式推翻</td></tr>
+      <tr><td>已钉决策</td><td>change.md §1（brainstorming 移交）；流程外重大决策 → decisions/</td><td class="who">brainstorming / change / eo-project-record</td><td>下游不重问；recall 回答「当初为什么」</td></tr>
       <tr><td>设计口径</td><td>DESIGN.md（token + 决策日志）</td><td class="who">eo-design</td><td>一切 UI 改动前必读 · review 一致性维度</td></tr>
-      <tr><td>教训</td><td>&lt;项目&gt;/lessons/ + INDEX</td><td class="who">eo-project-lesson</td><td>change / implement / fix 启动时按 trigger 命中</td></tr>
+      <tr><td>教训</td><td>&lt;项目&gt;/lessons/ + INDEX</td><td class="who">eo-project-record</td><td>change / implement / fix 启动时按 trigger 命中</td></tr>
       <tr><td>待办与灵感</td><td>&lt;项目&gt;/backlog.md</td><td class="who">eo-backlog</td><td>被采纳时升级为 change（顺带升级成 issue）</td></tr>
       <tr><td>临时现场</td><td>tmp/eo/{handoff,fix,design}/</td><td class="who">各 skill</td><td>用完即弃，永不当信源</td></tr>
     </table>
@@ -312,7 +312,7 @@
 <!-- ================= 图鉴 ================= -->
 <section id="catalog"><div class="wrap">
   <div class="sec-head"><span class="sec-no">04</span><h2>Skill 图鉴</h2></div>
-  <p class="sec-lede">18 个目录，但你日常只会喊主链上那几个。点开看细节。</p>
+  <p class="sec-lede">17 个目录，但你日常只会喊主链上那几个。点开看细节。</p>
   <div id="cat"></div>
 </div></section>
 
@@ -467,8 +467,7 @@ const CAT=[
   ["eo-handoff","会话交接","/clear 前把「状态 + 口径 + 下一步」写成开机指令，新会话 5 分钟接上。","tmp/eo/handoff/<topic>.md"]]],
  ["项目管理 · 落在 vault",[
   ["eo-backlog","待办池","一句话灵感 / 以后再说的事，追加进 backlog.md；被采纳时升级成 change。","backlog.md"],
-  ["eo-project-update","进度与决策","roadmap / 阶段 / 决策记录 / 项目看板同步。","roadmap · decisions · log"],
-  ["eo-project-lesson","经验教训","结论前置格式（规则→适用条件→背景）+ trigger/summary 锚点 + INDEX——写下来是为了被自动消费。","lessons/ + INDEX.md"]]]];
+  ["eo-project-record","项目记忆","统一写入口：<b>教训</b>（结论前置 + trigger 锚点，下次相关任务自动回响）与<b>决策</b>（背景/候选/裁定/理由，recall 的「当初为什么」信源）。流程内的决策不进来——change 已钉决策、brainstorming 决策表各有其家；这里只收流程外的重大裁定。","lessons/ + decisions/，各带 INDEX"]]]];
 const catEl=document.getElementById('cat');
 catEl.innerHTML=CAT.map(g=>`<div class="cat-group reveal"><div class="gt">${g[0]}</div><div class="cards">${
   g[1].map(c=>`<details class="card"><summary><span class="nm">${c[0]}</span><span class="one">${c[1]}</span></summary>

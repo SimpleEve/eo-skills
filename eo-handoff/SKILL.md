@@ -166,5 +166,5 @@ Claude:
 
 - 内置 `/compact`：续命当前会话，保留全量；本 skill 是清空当前会话前的状态导出
 - `/eo-flow`：跨 agent 任务派发；本 skill 是跨会话状态交接，不涉及第二个 agent
-- `/eo-project-update` / `/eo-project-lesson`：项目级长期记录（roadmap / 经验），活在 `eo-doc/` 或 vault；本 skill 是工作区临时快照，活在 `tmp/`
+- `/eo-project-record`：项目级长期记录（决策 / 经验），活在 vault；本 skill 是工作区临时快照，活在 `tmp/eo/`
 - 任何 eo-* 流程节点（brainstorming/change/implement/test/review/archive）都可以在中途调用本 skill 做 clear 前快照

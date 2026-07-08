@@ -41,7 +41,10 @@
 | eo-design | **新增** | 四模式：init / variants / apply / audit（参考 gstack 全链路） |
 | eo-recall | **新增** | 活文档消费入口：回忆/解释问答（检索瀑布 + 分层作答带出处 + 按需 mermaid/HTML 解释页）；吸收 doc-manager 的 query |
 | eo-flow | **保留，延后修改** | 本次只清理其中 eo-workflow 与 spec 相关引用 |
-| eo-backlog / eo-handoff / eo-project-update / eo-project-lesson / eo-miniapp-ideation | 不动 | |
+| eo-project-update | **移除**（后续决策） | 旧看板刷新随手工看板体系退役；log.md 移除必建；roadmap 推进属 trivial 直改；decisions 记录并入 eo-project-record |
+| eo-project-lesson | **改名 eo-project-record 并扩展**（后续决策） | 双模板：lesson（trigger 锚点）+ decision（裁定格式）；双目录各带 INDEX；旧看板计数删除 |
+| eo-backlog / eo-handoff | 不动 | |
+| eo-miniapp-ideation | **移除**（后续决策） | |
 
 ### 1.2 文档口径：3 → 2 + 1
 

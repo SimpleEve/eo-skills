@@ -1,7 +1,9 @@
 ---
 type: roadmap
 project: "{{project_name}}"
-status: "{{status}}"
+status: "{{status}}"        # active | paused | done —— Bases 项目总览按此聚合
+phase: "{{当前阶段一句话}}"
+summary: "{{项目目标一句话}}"
 created: "{{date}}"
 updated: "{{date}}"
 ---

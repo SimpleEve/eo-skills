@@ -114,8 +114,7 @@ flowchart TD
 
     Init --> Doc["/eo-doc-manager<br/>维护 eo-doc/"]
     Init --> Rec["/eo-recall<br/>回忆：当时怎么设计的?"]
-    Init --> PU["/eo-project-update<br/>项目进度 / 决策"]
-    Init --> PL["/eo-project-lesson<br/>项目经验"]
+    Init --> PRec["/eo-project-record<br/>项目记忆：决策 + 教训"]
 
     Imp -.clear 前快照.-> Hand["/eo-handoff<br/>tmp/eo/handoff/&lt;topic&gt;.md"]:::cross
 
@@ -146,7 +145,7 @@ flowchart TD
 | 定设计系统 / 出视觉方案 / 高保真页面 | `/eo-design <mode>` | init / variants / apply / audit，真相源 `DESIGN.md` |
 | 即将 `/clear` 但要保留进度 | `/eo-handoff` | 写到 `tmp/eo/handoff/<topic>.md`，下个会话载入即续 |
 | 维护 `eo-doc/` 文档体系 | `/eo-doc-manager` | sync / re-sync |
-| 项目进度 / 决策 / 经验 | `/eo-project-update` `/eo-project-lesson` | 项目管理侧 |
+| 记录决策 / 经验教训 | `/eo-project-record` | lessons/ + decisions/，带 INDEX 供自动消费 |
 | 加一条 backlog 待办 / 灵感 | `/eo-backlog` | 仅追加到 `backlog.md` |
 
 不在表里的 skill（`eo-change-review`）是可选增强，详见 [GUIDE](docs/GUIDE.md)。

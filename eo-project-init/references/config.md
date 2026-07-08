@@ -38,7 +38,6 @@ mv ~/.eo-skills.json ~/.eo/config.json
 {
   "vault_root": "/Users/xxx/EveOS",
   "projects_subdir": "30-我的项目",
-  "kanban_path": "00-Wiki/项目看板.md",
   "create_symlink": true,
   "default_mode": "vault"
 }
@@ -48,7 +47,6 @@ mv ~/.eo-skills.json ~/.eo/config.json
 |------|------|------|------|
 | `vault_root` | string | — | vault 根路径（绝对）。不配 → 默认 `local` 模式 |
 | `projects_subdir` | string | `"projects"` | vault 下的项目子目录（vault 模式才用到） |
-| `kanban_path` | string \| null | `null` | 项目看板路径（**相对 `vault_root`**）。`null` → 不维护看板 |
 | `create_symlink` | bool | `true` | vault 模式下是否在代码仓库建 `<repo>/<doc_root>/vault` 软链指向 `<project_root>` |
 | `default_mode` | `"vault"` \| `"local"` | 由 `vault_root` 推断 | 新项目默认模式；配了 `vault_root` → `vault`，否则 `local` |
 
@@ -62,7 +60,7 @@ mv ~/.eo-skills.json ~/.eo/config.json
   "mode": "vault",
   "project_root": "/Users/xxx/EveOS/30-我的项目/my-project",
   "doc_root": "eo-doc",
-  "kanban_path": "/Users/xxx/EveOS/00-Wiki/项目看板.md",
+  "kanban_path": null,
   "board": { "enabled": false },
   "github": { "issue": false, "pr": "never" }
 }
@@ -74,7 +72,7 @@ mv ~/.eo-skills.json ~/.eo/config.json
 | `mode` | `"vault"` \| `"local"` | ✅ | 运行模式 |
 | `project_root` | string（绝对路径） | ✅ | **项目管理侧根**。vault 模式=vault 项目目录；local 模式=`<repo>/.eo-project` |
 | `doc_root` | string（相对 repo root） | ✅ | **代码侧根**，默认 `"eo-doc"` |
-| `kanban_path` | string（绝对路径） \| null | ❌ | 看板绝对路径；缺省/`null` = 不维护看板 |
+| `kanban_path` | null | ❌ | **已废弃**（旧手工看板体系退役）。新配置一律 `null`；存量值被所有 skill 忽略。项目级总览 = Bases 聚合各项目 roadmap.md frontmatter |
 | `board.enabled` | bool | ❌（默认 `false`） | change 看板 stub 联动开关（vault 模式才有意义）。开启后状态流转时向 `<project_root>/board/` upsert stub 卡片，见 `eo-shared/board-github.md` |
 | `board.stub_dir` | string | ❌（默认 `"board"`） | stub 目录名（相对 `project_root`） |
 | `github.issue` | bool | ❌（默认 `false`） | change ↔ GitHub issue 联动开关 |
@@ -93,7 +91,6 @@ mv ~/.eo-skills.json ~/.eo/config.json
 | 触发条件 | `~/.eo/config.json` 里有 `vault_root`，且用户选 vault | 反之 |
 | `project_root` 落在哪 | `<vault_root>/<projects_subdir>/<project_name>/` | `<repo>/.eo-project/` |
 | 是否建软链 | 默认建 `<repo>/<doc_root>/vault` → `<project_root>`（整个 vault 项目目录单点挂进来；`create_symlink` 控制） | 不建 |
-| 是否维护看板 | 看 `kanban_path` 是否配置 | 始终不维护 |
 | `.eo-project/`（local 模式目录）入 git | — | **默认进 `.gitignore`** |
 
 ## Skill 启动时的配置解析流程
@@ -136,8 +133,7 @@ eo-doc/
 
 ```
 <project_root>/
-├── roadmap.md     # 必建
-├── log.md         # 必建
+├── roadmap.md     # 必建（frontmatter 含 status/phase/summary，Bases 项目总览按此聚合）
 ├── backlog.md     # 必建（待办池 + 灵感）
 ├── phases/        # 按需，roadmap 拆解后生成
 ├── decisions/     # 按需，首次记录决策时建

@@ -1,6 +1,6 @@
 # Lessons 生产与消费规范（单一来源）
 
-> 生产方：eo-project-lesson。消费方：eo-change / eo-implement / eo-fix（启动时）。目标：教训在**下次相关任务开始时自动出现**，而不是躺在目录里等人想起。
+> 生产方：eo-project-record（lesson 类型）。消费方：eo-change / eo-implement / eo-fix（启动时）。目标：教训在**下次相关任务开始时自动出现**，而不是躺在目录里等人想起。
 
 ## 1. 消费流程（eo-change / eo-implement / eo-fix 启动时执行）
 
@@ -10,7 +10,7 @@
 4. `status: superseded` 的条目跳过
 5. **显式消费**：把采纳的教训带进产出——change 的 §1 已钉决策可标注「（源自 lesson: <文件名>）」；fix 直接引用规则作为假设先验。不采纳也不必解释
 
-## 2. 生产格式（eo-project-lesson 写入）
+## 2. 生产格式（eo-project-record 写入）
 
 文件：`<project_root>/lessons/<YYYY-MM-DD>-<slug>.md`。**结论前置**：给 agent 的部分在前，给人的叙事在后。
 
@@ -57,4 +57,4 @@ summary: <一句话教训本体>
 ```
 
 - 一行 ≈ 50 token，消费方扫一次即覆盖全集
-- 存量 lessons 无 INDEX / 缺 trigger·summary 时：eo-project-lesson 的 `reindex` 动作负责补建（读各文件正文提炼 trigger/summary 回填 frontmatter + 生成 INDEX，正文不动）
+- 存量 lessons 无 INDEX / 缺 trigger·summary 时：eo-project-record 的 `reindex` 动作负责补建（读各文件正文提炼 trigger/summary 回填 frontmatter + 生成 INDEX，正文不动）

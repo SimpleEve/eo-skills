@@ -13,7 +13,10 @@
 | status 流转 | 用户手改 frontmatter（approved 等） | skill 自动流转：draft → confirmed → implementing → done → archived |
 | bug 修复 | eo-fix 只诊断，implement 修 | **eo-fix 直接修复**（含深挖模式）；implement 只管 test/review 反馈循环 |
 | 小改动 | 也要开 change | trivial 直改模式（判据见 eo-shared/granularity.md），cursor sync 兜底 |
-| 移除的 skill | — | eo-workflow、eo-spec、eo-spec-review、eo-module-init |
+| 移除的 skill | — | eo-workflow、eo-spec、eo-spec-review、eo-module-init、eo-project-update |
+| 项目记录 | eo-project-lesson（仅教训） | **eo-project-record**（教训 + 决策统一入口，各带 INDEX） |
+| 项目看板 | kanban_path 手工看板（init 注册/update 刷新/lesson 计数） | **退役**。change 级观测 → board stub + Bases；项目级总览 → Bases 聚合各项目 roadmap.md frontmatter |
+| log.md | 必建，update/lesson 追加 | 移除必建（时间线由 changes/INDEX + git log 承担；存量 log.md 保留不再写入） |
 | 新增 | — | eo-design（DESIGN.md）、eo-shared/（共享规范） |
 | 临时文件 | `tmp/<topic>-handoff.md` 等散放 | 统一 `tmp/eo/<域>/`（handoff / fix / design） |
 
@@ -31,6 +34,7 @@
 5. **更新注入段**：重跑 `/eo-project-init`（幂等）——刷新 CLAUDE.md 的 eo-doc 目录表（dev → changes）、行为钩子新口径、`tmp/eo/` 进 .gitignore。
 6. **首次 sync**：跑 `/eo-doc-manager sync`。若此前从未建过 state/，会 lazy 生成首批文档；此后 state + agent-handbook 就是「系统现在是什么样」的唯一口径。
 7. （可选）`/eo-design init` 建立 DESIGN.md。
+8. **项目管理侧迁移**：`kanban_path` 字段从此被忽略（旧手工看板文件可归档删除，如 00-Wiki/项目看板.md）；roadmap.md frontmatter 补 `status/phase/summary` 三字段后可被 Bases 聚合成项目总览；`/eo-project-lesson` 的残留软链手动清理（`rm ~/.claude/skills/eo-project-lesson` 等三端），新入口是 `/eo-project-record`。
 
 ## 语义速查（旧习惯 → 新做法）
 

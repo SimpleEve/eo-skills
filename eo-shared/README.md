@@ -9,7 +9,7 @@
 | [granularity.md](granularity.md) | 粒度硬指标、trivial 判据、拆分决策表 | eo-change / eo-fix / eo-change-review / eo-brainstorming |
 | [conventions.md](conventions.md) | 横切约定：tmp/eo/、commit 前缀、状态流转 | 主链各 skill |
 | [board-github.md](board-github.md) | 看板 stub 与 GitHub issue/PR 联动（opt-in） | eo-change / eo-implement / eo-review / eo-fix / eo-archive / eo-project-init |
-| [lessons.md](lessons.md) | lessons 生产格式（结论前置 + trigger/summary 锚点）与消费流程（INDEX 匹配） | eo-project-lesson（产）/ eo-change / eo-implement / eo-fix（消费） |
+| [lessons.md](lessons.md) | lessons 生产格式（结论前置 + trigger/summary 锚点）与消费流程（INDEX 匹配） | eo-project-record（产）/ eo-change / eo-implement / eo-fix（消费） |
 
 各 skill 以相对路径引用（`../eo-shared/<file>`，相对 skill 自身目录，软链与仓库内均可解析）。
 

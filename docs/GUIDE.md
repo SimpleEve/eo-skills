@@ -25,14 +25,14 @@
 
 ## 运行模式：local vs vault
 
-| 模式 | 触发条件 | 项目管理侧落在哪 | 软链 | 看板 |
-|------|---------|---------------|------|------|
-| **local**（默认） | `~/.eo/config.json` 不存在 或不配 `vault_root` | 仓库内 `.eo-project/`（默认进 `.gitignore`） | 不建 | 不维护 |
-| **vault** | `~/.eo/config.json` 有 `vault_root` | `<vault_root>/<projects_subdir>/<project_name>/` | 默认在 `<repo>/<doc_root>/vault` 建指向 `<project_root>`（整目录单点挂，`create_symlink` 控制） | `kanban_path` 配了才维护 |
+| 模式 | 触发条件 | 项目管理侧落在哪 | 软链 |
+|------|---------|---------------|------|
+| **local**（默认） | `~/.eo/config.json` 不存在 或不配 `vault_root` | 仓库内 `.eo-project/`（默认进 `.gitignore`） | 不建 |
+| **vault** | `~/.eo/config.json` 有 `vault_root` | `<vault_root>/<projects_subdir>/<project_name>/` | 默认在 `<repo>/<doc_root>/vault` 建指向 `<project_root>`（整目录单点挂，`create_symlink` 控制） |
 
 配置约定：
 
-- **用户级**：`~/.eo/config.json`（`vault_root` / `projects_subdir` / `kanban_path` 等；同时承载 eo-platform 等生态侧状态）
+- **用户级**：`~/.eo/config.json`（`vault_root` / `projects_subdir` 等；同时承载 eo-platform 等生态侧状态）
 - **项目级**：`.eo-project.json`（每项目一份，所有 skill 读它）
 - 旧路径 `~/.eo-skills.json` 由 `/eo-project-init` 首次运行时自动迁移到 `~/.eo/config.json`。
 
@@ -56,13 +56,14 @@ eo-doc/
 
 ```
 <project_root>/
-├── roadmap.md     # 必建
-├── log.md         # 必建
-├── backlog.md     # 必建（待办 + 未接入的未来规划）
+├── roadmap.md     # 必建（frontmatter 含 status/phase/summary——项目级总览由 Bases 聚合它，旧手工看板已退役）
+├── backlog.md     # 必建（待办池 + 灵感）
 ├── phases/        # 按需
-├── decisions/     # 按需
-├── lessons/       # 按需（项目级，替代原全局 _lessons/）
+├── decisions/     # 按需（eo-project-record 维护，带 INDEX）
+├── lessons/       # 按需（eo-project-record 维护，带 INDEX）
 ├── brainstorm/    # 按需
+├── board/         # 按需（change 看板 stub，board.enabled 时自动维护）
+├── research/      # 按需（调研沉淀，recall/change 消费）
 └── docs/          # 按需（PRD、设计、规划）
 ```
 
@@ -216,8 +217,7 @@ eo-doc/changes/
 
 | Skill | 用途 | 落到哪 |
 |-------|------|-------|
-| `/eo-project-update` | 进度、阶段、决策、阻塞 | `roadmap.md` / `phases/` / `decisions/` / `log.md` |
-| `/eo-project-lesson` | 经验教训 | `lessons/` |
+| `/eo-project-record` | 项目记忆：关键决策 + 经验教训 | `decisions/` + `lessons/`（各带 INDEX，供 recall/change/fix 消费） |
 
 ---
 

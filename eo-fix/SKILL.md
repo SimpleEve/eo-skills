@@ -74,7 +74,7 @@ description: |
 1. 读 [references/investigation.md](references/investigation.md)，按四阶段执行（固定复现 → 假设清单 → 二分排除 → 验证还原）
 2. 调查记录写 `tmp/eo/fix/<date>-<slug>.md`（可丢弃工件）
 3. 根因确认后回第一步分诊定路，再走修复
-4. 根因有普适教训 → 提议 `/eo-project-lesson` 沉淀
+4. 根因有普适教训 → 提议 `/eo-project-record` 沉淀
 
 ### 第六步：落点记账（任何路都不豁免，~30 秒）
 

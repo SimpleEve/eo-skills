@@ -9,7 +9,7 @@ description: "往项目 backlog.md 追加待办、灵感或未接入的未来规
 
 往 `<project_root>/backlog.md` 追加一条条目，分类落到对应小节。
 
-**只做"追加"**。决策记录走 `eo-project-update`，经验教训走 `eo-project-lesson`，本 skill 不越界。
+**只做"追加"**。决策与经验教训走 `/eo-project-record`，本 skill 不越界。
 
 配置与目录约定见 [eo-project-init/references/config.md](../eo-project-init/references/config.md)。
 
@@ -75,7 +75,7 @@ description: "往项目 backlog.md 追加待办、灵感或未接入的未来规
 ## 约束
 
 - **只追加，不修改已有条目**。要改/划掉/删除，让用户自己动手或用编辑器。
-- **不建 `decisions/` / `lessons/`**（那是 `eo-project-update` / `eo-project-lesson` 的职责）
+- **不建 `decisions/` / `lessons/`**（那是 `eo-project-record` 的职责）
 - 所有路径通过 `.eo-project.json` 解析，不硬编码
 - `project_root` 不可达 → 报错提示检查配置
 - 分类拿不准时默认"待办"+ 明示分类，让用户纠正，不要反复追问

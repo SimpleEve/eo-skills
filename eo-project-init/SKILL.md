@@ -1,6 +1,6 @@
 ---
 name: eo-project-init
-description: "eo-skills 在当前仓库的总入口：生成 .eo-project.json、初始化项目管理侧（roadmap/log/backlog）和代码侧最小骨架（eo-doc/），按需建 vault 软链和 agent 配置注入。触发：启动项目 / 初始化项目 / 新建项目 / /eo-project-init。"
+description: "eo-skills 在当前仓库的总入口：生成 .eo-project.json、初始化项目管理侧（roadmap/backlog）和代码侧最小骨架（eo-doc/），按需建 vault 软链和 agent 配置注入。触发：启动项目 / 初始化项目 / 新建项目 / /eo-project-init。"
 ---
 
 # eo-project-init
@@ -51,11 +51,11 @@ description: "eo-skills 在当前仓库的总入口：生成 .eo-project.json、
 
 对已有 `.eo-project.json` 的项目，重跑是**幂等的补齐动作**，逐项执行、已达标项静默跳过：
 
-1. **配置校验**：读现有 `.eo-project.json`，对照 [references/config.md](references/config.md) 的 schema——基础字段（project_name/mode/project_root/doc_root/kanban_path）缺失按默认补写，已有字段一律不改；**`board` / `github` 段缺失时不在本步补写**（补了默认关闭值会吞掉第 5 步的询问），只记录缺段，留给第 5 步问答后落盘
-2. **骨架补齐**：项目管理侧三必建（roadmap/log/backlog）与代码侧 `eo-doc/` 骨架缺什么补什么；**不触碰任何已有文件的内容**
+1. **配置校验**：读现有 `.eo-project.json`，对照 [references/config.md](references/config.md) 的 schema——基础字段（project_name/mode/project_root/doc_root）缺失按默认补写；存量配置的 `kanban_path` 字段忽略不改（旧看板体系已退役），已有字段一律不改；**`board` / `github` 段缺失时不在本步补写**（补了默认关闭值会吞掉第 5 步的询问），只记录缺段，留给第 5 步问答后落盘
+2. **骨架补齐**：项目管理侧两必建（roadmap/backlog）与代码侧 `eo-doc/` 骨架缺什么补什么；**不触碰任何已有文件的内容**
 3. **注入段刷新**：按标记对整段替换 agent 配置文件中的 `eo-project` / `eo-doc` 注入段；仓库根存在 `DESIGN.md` 时核对 `eo-design` 注入段
-4. **.gitignore 与软链核对**：`tmp/eo/`、`<doc_root>/.sync-cursor`、（local 模式）`.eo-project/`、（vault 模式）`<doc_root>/vault` 缺项补写；vault 模式且 `create_symlink: true` 时核对 `<doc_root>/vault` **软链本体**存在且指向 `project_root`，缺失/指错按「10. 建立软链」重建
-5. **联动两问**（仅对应段缺失时，规则见「9. 生成 .eo-project.json」的 board/github 小节）：开启 board → 立即做 stub 历史同步
+4. **.gitignore 与软链核对**：`tmp/eo/`、`<doc_root>/.sync-cursor`、（local 模式）`.eo-project/`、（vault 模式）`<doc_root>/vault` 缺项补写；vault 模式且 `create_symlink: true` 时核对 `<doc_root>/vault` **软链本体**存在且指向 `project_root`，缺失/指错按「9. 建立软链」重建
+5. **联动两问**（仅对应段缺失时，规则见「8. 生成 .eo-project.json」的 board/github 小节）：开启 board → 立即做 stub 历史同步
 6. **输出摘要**：列出本次补齐/刷新/跳过了什么，然后结束——不执行首次创建流程的其余步骤
 
 ### 2. 询问运行模式（必须问，不默认）
@@ -63,23 +63,22 @@ description: "eo-skills 在当前仓库的总入口：生成 .eo-project.json、
 **不要直接默认到 local**。按封闭选择协议（[../eo-shared/questioning.md](../eo-shared/questioning.md) §4）呈现两个选项（用户级配置有 `default_mode` 时标为推荐），选项说明取自下方要点：
 
 ```
-这个项目的"项目管理侧"（roadmap / log / backlog / decisions / lessons 等）放在哪里？
+这个项目的"项目管理侧"（roadmap / backlog / decisions / lessons 等）放在哪里？
 
 A) vault 模式 —— 集中到 Obsidian/文档 vault，跨项目统一浏览
    • project_root = <vault_root>/<projects_subdir>/<项目名>/
    • 默认把整个 vault 项目目录软链挂到代码侧 eo-doc/vault/（单点整挂，vault 侧新增子目录代码侧自动可见）
-   • 可选挂到全局项目看板（kanban_path）统一追踪进度
    • 适合：多个项目并行、用 Obsidian 做 PKM、想在一处看所有项目状态
 
 B) local 模式 —— 放在仓库自己的 .eo-project/ 下，跟代码走
    • project_root = <repo>/.eo-project/
    • 默认进 .gitignore（不提交），也可选随仓库提交
-   • 不建软链、不挂看板
+   • 不建软链
    • 适合：单个项目、没有统一 vault、不想跨目录跳转
 ```
 
 用户回答后：
-- 若选 vault 但用户级配置无 `vault_root` → 当场询问 `vault_root` 路径（以及可选的 `projects_subdir` / `kanban_path` / `create_symlink`），写入 `$EO_CONFIG`（必要时先 `mkdir -p "${EO_HOME:-$HOME/.eo}"`）
+- 若选 vault 但用户级配置无 `vault_root` → 当场询问 `vault_root` 路径（以及可选的 `projects_subdir` / `create_symlink`），写入 `$EO_CONFIG`（必要时先 `mkdir -p "${EO_HOME:-$HOME/.eo}"`）
 - 若用户级已有推荐值，展示并让用户确认或覆盖
 
 最终落定 `mode = "vault" | "local"` 进入 §3。
@@ -101,24 +100,17 @@ B) local 模式 —— 放在仓库自己的 .eo-project/ 下，跟代码走
 - 存在但无 `roadmap.md` → 异常，提示补全后进入拆解
 - 不存在 → 正常创建
 
-### 5. 检查活跃项目数（仅 vault + 有看板）
-
-若 `kanban_path` 已配置，读取看板，「进行中」已有 3 个项目时提醒用户考虑搁置或归档。
-
-### 6. 创建项目管理侧骨架（最小）
+### 5. 创建项目管理侧骨架（最小）
 
 ```
 <project_root>/
 ├── roadmap.md     # 必建
-├── log.md         # 必建
 └── backlog.md     # 必建
 ```
 
 **按需目录一律不预建**（phases / decisions / lessons / brainstorm / docs），等对应 skill 首次写入时由那个 skill 创建。
 
 写入 `roadmap.md`（读 [templates/roadmap.md](templates/roadmap.md)），填充项目名、目标、阶段概览占位。
-
-写入 `log.md`（读 [templates/log.md](templates/log.md)）。
 
 写入 `backlog.md`：
 
@@ -138,7 +130,7 @@ updated: "{{date}}"
 ## 灵感 & 以后再说
 ```
 
-### 7. Roadmap 拆解（可选）
+### 6. Roadmap 拆解（可选）
 
 如果用户提供了 PRD/MVP 或愿意拆解：
 1. 读取 [references/roadmap-breakdown.md](references/roadmap-breakdown.md) 方法论
@@ -148,7 +140,7 @@ updated: "{{date}}"
 
 仅"快速创建空骨架"时可跳过此步。
 
-### 8. 初始化代码侧 `eo-doc/`（内部调用 eo-doc-manager init 子流程）
+### 7. 初始化代码侧 `eo-doc/`（内部调用 eo-doc-manager init 子流程）
 
 在代码仓库根目录创建**最小骨架**：
 
@@ -167,9 +159,9 @@ eo-doc/
 - 将 `eo-doc/.sync-cursor` 与 `tmp/eo/` 追加到 `.gitignore`（tmp/eo/ 是各 skill 的临时工件命名空间，见 [../eo-shared/conventions.md](../eo-shared/conventions.md)）
 - CLAUDE.md 注入（详见 [../eo-doc-manager/references/claude-injection.md](../eo-doc-manager/references/claude-injection.md)）
 
-**注意**：如果用户本次只想要项目管理侧（例如纯规划项目，没代码），可用 `--skip-code-side` 跳过 §8。此时 `doc_root` 字段仍写入配置，留待将来补建。
+**注意**：如果用户本次只想要项目管理侧（例如纯规划项目，没代码），可用 `--skip-code-side` 跳过本节。此时 `doc_root` 字段仍写入配置，留待将来补建。
 
-### 9. 生成 `.eo-project.json`
+### 8. 生成 `.eo-project.json`
 
 在**代码仓库根目录**写入：
 
@@ -179,13 +171,11 @@ eo-doc/
   "mode": "vault" | "local",
   "project_root": "{{absolute_path_to_project_root}}",
   "doc_root": "eo-doc",
-  "kanban_path": "{{absolute_kanban_path_or_null}}"
+  "kanban_path": null
 }
 ```
 
-`kanban_path` 填入规则：
-- vault 模式 + 用户级 `kanban_path` 有值 → 拼接为绝对路径 `<vault_root>/<kanban_path>`
-- 否则 → `null`
+`kanban_path`：**已废弃**（旧手工看板体系退役，项目级总览由 Bases 聚合各项目 roadmap.md 的 frontmatter 承担）。新配置一律写 `null`；存量配置该字段被所有 skill 忽略。
 
 **board / github 段**（联动开关，规范见 [../eo-shared/board-github.md](../eo-shared/board-github.md)）：按封闭选择协议各问一次——
 - `board.enabled`（仅 vault 模式提供此问；推荐开启）：开启则写 `{"enabled": true}` 并**立即做历史同步**——扫描 `eo-doc/changes/` 全部 change，按 board-github.md 的 stub 写法批量 upsert 到 `<project_root>/board/`（幂等，可随时重跑）；同时提示用户按 [references/board-setup.md](references/board-setup.md) 在 Obsidian 配置看板视图（一次性）
@@ -193,7 +183,7 @@ eo-doc/
 
 用户跳过 → 写显式关闭值（`false` / `"never"`），后续 skill 不再询问。**后开场景**：对已初始化项目重跑本 skill 走「1.5 更新/修复分支」，其第 5 步提供这两问，开启 board 即触发历史同步。
 
-### 10. 建立软链（vault 模式 + `create_symlink: true`）
+### 9. 建立软链（vault 模式 + `create_symlink: true`）
 
 Obsidian 侧（vault）是**源**。把整个 vault 项目目录作为一个软链挂进代码侧：
 
@@ -212,7 +202,7 @@ ln -s <project_root> <repo>/<doc_root>/vault
 
 local 模式**不建软链**。
 
-### 11. 处理 `.eo-project/`（仅 local 模式）
+### 10. 处理 `.eo-project/`（仅 local 模式）
 
 `.eo-project/` 即 `project_root`。默认追加到 `.gitignore`：
 
@@ -223,7 +213,7 @@ local 模式**不建软链**。
 
 若用户明确想让管理侧随仓库提交，当场询问后跳过 gitignore 追加。
 
-### 12. Agent 配置注入
+### 11. Agent 配置注入
 
 检测代码仓库使用的 agent 配置文件（顺序）：
 1. `CLAUDE.md`
@@ -249,8 +239,8 @@ local 模式**不建软链**。
 仅当**用户明确表达**要记录时响应（不做关键词嗅探，避免误触发）：
 
 - 用户明确说「加个待办 / 记到 backlog / 以后做」→ 调用 `/eo-backlog` 追加到 `{{project_root}}/backlog.md`
-- 用户明确说「把这个决策记下来」→ 在 `{{project_root}}/decisions/` 创建决策记录（首次 lazy 建目录）
-- 用户明确说「记一条经验 / 踩坑记录一下」→ 调用 `/eo-project-lesson` 写入 `{{project_root}}/lessons/`
+- 用户明确说「把这个决策记下来」→ 调用 `/eo-project-record` 写入 `{{project_root}}/decisions/`
+- 用户明确说「记一条经验 / 踩坑记录一下」→ 调用 `/eo-project-record` 写入 `{{project_root}}/lessons/`
 
 对话中出现疑似待办/决策/教训但用户未明说时，**至多在当前话题收尾处轻提一句**「要不要记入 backlog/decisions/lessons？」，不打断进行中的工作。
 <!-- eo-project:end -->
@@ -258,26 +248,19 @@ local 模式**不建软链**。
 
 **DESIGN.md 检查**：若仓库根存在 `DESIGN.md` 但 agent 配置文件中无 `<!-- eo-design:start -->` 标记段，执行 `/eo-design` 的约束注入子步骤补上（注入模板见 [../eo-design/references/design-md-template.md](../eo-design/references/design-md-template.md)）。
 
-### 13. 注册到项目看板（仅 `kanban_path` 非空时）
-
-在 `kanban_path` 指向的看板对应状态分区添加初始条目——**条目格式以 [../eo-project-update/SKILL.md](../eo-project-update/SKILL.md) 第 4 步为单一来源**，各字段填初始值（状态 `active`、下一步「第一个任务或待拆解」、阻塞「无」、决策/经验为空）。
-
-`kanban_path: null` 时跳过整步。
-
-### 14. 输出摘要
+### 12. 输出摘要
 
 展示：
 - 运行模式
 - `.eo-project.json` 路径和内容
 - 项目管理侧骨架结构
 - 代码侧骨架结构
-- 软链 / gitignore / agent 配置 / 看板 状态
+- 软链 / gitignore / agent 配置 状态
 
 ## 输出
 
 - **代码仓库**：`.eo-project.json` + `eo-doc/` 最小骨架 + agent 配置注入（+ 可选软链）
-- **项目管理侧**：`<project_root>/` 含 `roadmap.md` / `log.md` / `backlog.md`（+ 可选 `phases/`）
-- **看板**（可选）：`{{kanban_path}}` 对应条目
+- **项目管理侧**：`<project_root>/` 含 `roadmap.md` / `backlog.md`（+ 可选 `phases/`）
 
 ## 约束
 
@@ -285,7 +268,6 @@ local 模式**不建软链**。
 - 按需目录（phases / decisions / lessons / brainstorm / docs）**init 时不预建**，由对应 skill 首次写入时 lazy 创建
 - 项目名用用户给的原始名称，不转换
 - 原始 PRD/MVP 若提供，存到 `<project_root>/docs/`（lazy 建）
-- 活跃项目上限 3 个（仅看板维护时检查）
 - 软链仅 vault 模式 + `create_symlink: true` 才建
 - `.eo-project/` 默认进 `.gitignore`；用户可当场覆盖
 - agent 配置注入使用 `<!-- eo-project:start/end -->` 标记，幂等可重复执行
