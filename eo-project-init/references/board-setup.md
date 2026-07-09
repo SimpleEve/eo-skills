@@ -1,27 +1,31 @@
-# Obsidian 看板配置（starter 自动生成 + 可选升级）
+# Obsidian 看板配置（starter 自动生成 + 数据层备忘）
 
-> 数据层（`<project_root>/board/` 的 stub 卡片）由各流程 skill 自动维护；呈现层的 **starter 看板由 skill 自动创建**（本文件含模板），只有「并排列 kanban 视图」这一项可选升级需要用户在 UI 点几下。
+> 数据层（`<project_root>/board/` 的 stub 卡片）由各流程 skill 自动维护；呈现层的 **starter 看板由 skill 自动创建**（本文件含模板）。
 
 ## starter 看板（skill 自动创建）
 
-开启 board 时，若 `<vault_root>/eo-change-board.base` 不存在，按下方模板创建（**仅官方 Bases 语法**——table/cards 是 Obsidian 1.9+ 内置视图，无插件依赖；文件存在则绝不触碰，用户在 UI 的调整由 Obsidian 写回）：
+开启 board 时，若 `<vault_root>/eo-project-board.base` **不存在**则按下方模板创建；**已存在绝不触碰**——用户在 Obsidian UI 的一切调整（视图增删、列序、颜色等）由 Obsidian 写回该文件。
 
 ```yaml
 filters:
   and:
     - file.hasTag("eo-change")
+    - file.path.contains("/board/")
 views:
-  - type: cards
+  - type: kanban-view
     name: 看板（按状态分组）
-    order:
-      - file.name
-      - project
-      - type
-      - todo_done
-      - todo_total
     groupBy:
       property: status
       direction: ASC
+    groupByProperty: note.status
+    order:
+      - file.name
+      - title
+      - project
+      - type
+      - tags
+      - todo_done
+      - todo_total
   - type: table
     name: 盘点
     order:
@@ -34,15 +38,10 @@ views:
       - updated
 ```
 
-- 过滤锚点是 stub frontmatter 的 `eo-change` 标签——**全 vault 聚合**，多项目的 board/ 卡片自动进同一看板
-- 文件放 vault 根，用户可在 Obsidian 里拖到任意位置（不影响功能）
-- cards 按 `status` 分组是「纵向分节」的准看板；分组顺序为字母序（官方限制）
-
-## 可选升级：并排列 kanban 视图（用户 UI 操作，一次性）
-
-1. 设置 → 第三方插件 → 浏览 → 安装并启用 **Kanban Bases View**（为官方 Bases 提供并排状态列视图；官方 kanban 视图发布后可把视图类型一换切官方，数据零迁移）
-2. 打开 `eo-change-board.base` → 添加视图 → 类型选 Kanban Bases View → Group by `status`，卡片属性勾 `project` / `type` / `todo_done` / `todo_total`；多项目泳道设 `project`
-3. 社区插件的 YAML 键名随版本变动——这一步**只在 UI 配置**，由 Obsidian 写回文件，skill 不代写
+- 过滤器 = `eo-change` 标签 **且** 路径含 `/board/`——双条件对 vault 里偶然出现的行内 `#eo-change` hashtag 免疫；全 vault 聚合，多项目 board/ 卡片进同一看板
+- 主视图 `kanban-view` 来自社区插件 **Kanban Bases View**（设置 → 第三方插件安装启用；并排状态列 + 泳道）。**未装插件时**该视图显示不可用——在 UI 把视图类型换成官方 `cards`（同样支持按 status 分组）即可，或装上插件
+- 模板只含插件的最小稳定键；columnOrders / cardOrders / columnColors 等机器状态由插件运行时自行写回，skill 不生成
+- 文件放 vault 根，可在 Obsidian 里拖到任意位置
 
 ## 数据层备忘
 
