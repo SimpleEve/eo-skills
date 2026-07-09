@@ -149,6 +149,7 @@ eo-doc/changes/
 | 状态流转 | `draft → confirmed → implementing → done → archived`（**skill 自动流转**，用户不手改 frontmatter） |
 | trivial 直改 | 满足硬判据（不改行为/接口/数据、无方案权衡、单会话）→ 不开 change，直改 + commit |
 | 归档不反写 | archive 只更新活文档 + 冻结 change；spec 概念已移除 |
+| 人工验收门 | manual 类 AC（「人工:」标记）只有用户能勾；implement 完成时输出极简验收指引（只列人工项），全 auto 的 change 不打扰 |
 
 ### 为什么修 bug 要喊 /eo-fix，而不是直接改？
 

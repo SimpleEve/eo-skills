@@ -149,6 +149,7 @@ tmp/eo/
 - **用户视角、可独立验证**，每条一个可勾选项，附验证方式。Success Criteria 风格要求技术无关（正例「用户 3 步内完成导出」，反例「API 200ms 返回」）。
 - 复杂行为可附 Given/When/Then 场景（可选，不强制）。
 - AC 的三重身份：implement 的完成判据（全勾才算 done）、review 的检查表、fix 的期望行为锚点（接替 v1 的 F-spec）。
+- **两级验证归属（后续决策）**：auto（agent 可验，批末自动勾）/ manual（「人工:」标记，只有用户能勾）——implement 完成时的人工验收门只把 manual 项推给用户（极简指引速报），archive 门禁校验 manual 勾的来源；解决「过度自动化导致用户不知何时/如何验收」。
 - AC 先于 TODO 产出——TODO 拆解必须逐条映射到 AC（每条 TODO 标注「对应 AC-x」）。
 
 ### 3.4 TODO 拆解与分批

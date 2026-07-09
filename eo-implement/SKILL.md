@@ -45,13 +45,24 @@ description: |
    - 发现 TODO/AC 写漏：告知用户，经确认后就地补进 change.md（意图不变的精化），再继续
 
 5. **批末 checkpoint（STOP and VALIDATE）**
-   - 验证该批对应的 AC：按 §2 的「验证」栏逐条执行，通过则勾选 AC
+   - 验证该批对应的 **auto 类 AC**：按 §2 的「验证」栏逐条执行，通过则勾选；**manual 类（「人工:」标记）不代勾**，留给完成时的人工验收门
    - 提交本批代码：commit message 带 `[<change-id>]` 前缀（见 [../eo-shared/conventions.md](../eo-shared/conventions.md)；推荐一次 change 一次 commit，分批时一批一 commit）
    - 联动钩子：刷新看板 stub 进度（[../eo-shared/board-github.md](../eo-shared/board-github.md)，未开启跳过）
    - 汇报：本批完成的 TODO / 勾掉的 AC / 验证结果，询问「继续下一批 / 停」
 
-6. **全部完成**
-   - TODO 全勾 + AC 全部验证通过 → 告知用户进入 `/eo-test`
+6. **全部完成 → 人工验收门**
+   - TODO 全勾、auto AC 全部验证通过后，若存在 **manual 类 AC**（「人工:」标记），输出**验收指引速报**并等待用户表态：
+
+     ```
+     ✅ 自动验证通过 <n>/<n>（<测试/回归摘要一句>）
+     👀 需要你过目 <m> 条：
+       AC-x <做什么> → <看什么>
+       AC-y …
+     回「通过」或说哪条不对。
+     ```
+
+     每条一行、只列 manual 项；用户确认后代其勾选（勾的备注即「用户确认」）；用户指出问题 → 回本 skill 修复循环。**无 manual 项的 change 跳过此门，不打扰**
+   - 全部 AC 落定 → 告知用户进入 `/eo-test`
    - `status` 保持 `implementing`——`done` 由 review 通过后设置
 
 ### 模式二：修复循环（test/review 反馈）

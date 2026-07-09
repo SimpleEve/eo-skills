@@ -34,6 +34,8 @@ status: confirmed        # 与 change.md 同步
 type: feature
 todo_done: 2
 todo_total: 6
+ac_done: 1
+ac_total: 4
 issue: 42                # 无则省略
 pr: https://github.com/...   # 无则省略
 created: 2026-07-07
@@ -46,7 +48,7 @@ tags: [eo-change]          # eo-change 是看板过滤锚点,必含;可再附加
 
 正文的 change 路径**必须是纯文本（inline code），禁止写成 markdown 链接**——change 在代码仓库内、vault 之外，Obsidian 无法解析这种链接，点了也打不开；纯文本路径供人复制到 IDE 打开。
 
-- `todo_done/todo_total` 数 change.md §3 的 checkbox
+- `todo_done/todo_total` 数 change.md §3 的 checkbox；`ac_done/ac_total` 数 §2 的 checkbox（看板一眼看验收进度）
 - **starter 看板自动创建**：开启 board 时（含历史同步），若 `<vault_root>/eo-project-board.base` **不存在**则按 [../eo-project-init/references/board-setup.md](../eo-project-init/references/board-setup.md) 的模板创建（kanban-view 主视图 + table 盘点，双条件过滤，全 vault 聚合）；**已存在则绝不触碰**——用户在 Obsidian UI 的一切调整由 Obsidian 写回该文件。kanban-view 依赖社区插件 Kanban Bases View，未装时用户可在 UI 把视图类型换官方 cards
 - stub 是投影：允许随时全量重建（`/eo-project-init` 开启开关时做历史同步就是批量执行本节写法）
 

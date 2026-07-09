@@ -27,7 +27,7 @@ description: |
 
 1. `status: done`（不是 → 指出当前所处环节：draft/confirmed 回 /eo-change 或 /eo-implement；implementing 回 /eo-implement；已 archived 直接告知）
 2. `review.md` 存在且结论为通过（P0/P1 已清零）
-3. **验收清单全勾**：change.md §2 所有 `- [x]`。存在未勾项 → 列出并按封闭选择协议（[../eo-shared/questioning.md](../eo-shared/questioning.md) §4）请用户三选一：回 /eo-implement 补齐（推荐）/ 显式豁免（豁免项与理由写入 §8 开放问题）/ 终止归档
+3. **验收清单全勾**：change.md §2 所有 `- [x]`，且 **manual 类 AC（「人工:」标记）的勾必须来自用户确认**（implement 人工验收门的记录；agent 代勾的 manual 项视为未勾）。存在未勾/未确认项 → 列出并按封闭选择协议（[../eo-shared/questioning.md](../eo-shared/questioning.md) §4）请用户三选一：回 /eo-implement 补齐（推荐）/ 显式豁免（豁免项与理由写入 §8 开放问题）/ 终止归档
 
 ### 第二层：工作区结算
 
