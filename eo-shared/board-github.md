@@ -38,11 +38,13 @@ issue: 42                # 无则省略
 pr: https://github.com/...   # 无则省略
 created: 2026-07-07
 updated: 2026-07-08
-tags: [eo-change]
+tags: [eo-change]          # eo-change 是看板过滤锚点,必含;可再附加内容标签
 ---
 
-[change.md](<仓库内 change.md 的绝对路径或可点击引用>) ｜ <一句话意图摘要>
+`<仓库内 change.md 的相对路径>` ｜ <一句话意图摘要>
 ```
+
+正文的 change 路径**必须是纯文本（inline code），禁止写成 markdown 链接**——change 在代码仓库内、vault 之外，Obsidian 无法解析这种链接，点了也打不开；纯文本路径供人复制到 IDE 打开。
 
 - `todo_done/todo_total` 数 change.md §3 的 checkbox
 - **skill 永不写 `.base` 文件**——看板视图由用户在 Obsidian 里配置一次（指南见 [../eo-project-init/references/board-setup.md](../eo-project-init/references/board-setup.md)）
