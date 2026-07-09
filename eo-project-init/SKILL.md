@@ -179,7 +179,7 @@ eo-doc/
 `kanban_path`：**已废弃**（旧手工看板体系退役，项目级总览由 Bases 聚合各项目 roadmap.md 的 frontmatter 承担）。新配置一律写 `null`；存量配置该字段被所有 skill 忽略。
 
 **board / github 段**（联动开关，规范见 [../eo-shared/board-github.md](../eo-shared/board-github.md)）：按封闭选择协议各问一次——
-- `board.enabled`（仅 vault 模式提供此问；推荐开启）：开启则写 `{"enabled": true}` 并**立即做历史同步**——扫描 `eo-doc/changes/` 全部 change，按 board-github.md 的 stub 写法批量 upsert 到 `<project_root>/board/`（幂等，可随时重跑）；同时提示用户按 [references/board-setup.md](references/board-setup.md) 在 Obsidian 配置看板视图（一次性）
+- `board.enabled`（仅 vault 模式提供此问；推荐开启）：开启则写 `{"enabled": true}` 并——① **立即做历史同步**（扫描 `eo-doc/changes/` 全部 change，按 board-github.md 的 stub 写法批量 upsert 到 `<project_root>/board/`，幂等可重跑）；② `<vault_root>/eo-change-board.base` 不存在时按 [references/board-setup.md](references/board-setup.md) 模板创建（存在则不碰）；③ 提示用户可选升级：装 Kanban Bases View 插件后在该 base 里加一个并排列视图（见 board-setup.md）
 - `github.issue` + `github.pr`（检测到 git remote 指向 GitHub 时才问；pr 推荐 `auto`）
 
 用户跳过 → 写显式关闭值（`false` / `"never"`），后续 skill 不再询问。**后开场景**：对已初始化项目重跑本 skill 走「1.5 更新/修复分支」，其第 5 步提供这两问，开启 board 即触发历史同步。

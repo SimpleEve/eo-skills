@@ -20,6 +20,13 @@ tmp/eo/
 - `tmp/eo/` 由 eo-project-init 写入 .gitignore。
 - 文件名带日期或 topic 前缀；清理按 mtime，无登记表。`rm -rf tmp/eo` 即全量清理。
 
+## 1.5 vault 写入的链接纪律
+
+skill 写入 vault（board stub、brainstorm 记录、lessons/decisions、backlog 等）的内容中：
+
+- **代码仓库内的路径一律纯文本**（inline code，如 `` `eo-doc/changes/014-x/change.md` ``），**禁止写成 markdown 链接**——vault 之外的路径 Obsidian 无法解析，点了打不开；纯文本供人复制到 IDE
+- vault 内部互链用 `[[wikilink]]`
+
 ## 2. commit 前缀
 
 | 场景 | 前缀 | 示例 |

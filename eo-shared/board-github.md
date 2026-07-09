@@ -47,7 +47,7 @@ tags: [eo-change]          # eo-change 是看板过滤锚点,必含;可再附加
 正文的 change 路径**必须是纯文本（inline code），禁止写成 markdown 链接**——change 在代码仓库内、vault 之外，Obsidian 无法解析这种链接，点了也打不开；纯文本路径供人复制到 IDE 打开。
 
 - `todo_done/todo_total` 数 change.md §3 的 checkbox
-- **skill 永不写 `.base` 文件**——看板视图由用户在 Obsidian 里配置一次（指南见 [../eo-project-init/references/board-setup.md](../eo-project-init/references/board-setup.md)）
+- **starter 看板自动创建**：开启 board 时（含历史同步），若 `<vault_root>/eo-change-board.base` **不存在**则按 [../eo-project-init/references/board-setup.md](../eo-project-init/references/board-setup.md) 的官方语法模板创建（cards 按 status 分组 + table 盘点两视图，全 vault 聚合）；**已存在则绝不触碰**——用户在 Obsidian UI 的一切调整由 Obsidian 写回该文件。并排列 kanban 视图属社区插件（键名随版本变），仍由用户在 UI 里一键添加，skill 不代写
 - stub 是投影：允许随时全量重建（`/eo-project-init` 开启开关时做历史同步就是批量执行本节写法）
 
 ## 二、GitHub issue（`github.issue: true`）

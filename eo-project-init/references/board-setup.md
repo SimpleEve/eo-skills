@@ -1,24 +1,49 @@
-# Obsidian 看板配置指南（一次性，人工操作）
+# Obsidian 看板配置（starter 自动生成 + 可选升级）
 
-> `board.enabled` 开启后，各流程 skill 会向 `<project_root>/board/` 维护 stub 卡片（数据层，自动）。**呈现层由你在 Obsidian 里配置一次**——skill 永不写 `.base` 文件（社区插件的 YAML 键名随版本变动，由 Obsidian UI 写回最稳）。
+> 数据层（`<project_root>/board/` 的 stub 卡片）由各流程 skill 自动维护；呈现层的 **starter 看板由 skill 自动创建**（本文件含模板），只有「并排列 kanban 视图」这一项可选升级需要用户在 UI 点几下。
 
-## 数据层（skill 自动维护，无需操作）
+## starter 看板（skill 自动创建）
 
-每个 change 一张 stub 卡片：`board/<change-id>.md`，frontmatter 含 `id / title / project / status / type / todo_done / todo_total / issue / pr / updated / tags: [eo-change]`。stub 是 change.md 的投影，可随时全量重建，**不要手工编辑**（会被覆盖）。
+开启 board 时，若 `<vault_root>/eo-change-board.base` 不存在，按下方模板创建（**仅官方 Bases 语法**——table/cards 是 Obsidian 1.9+ 内置视图，无插件依赖；文件存在则绝不触碰，用户在 UI 的调整由 Obsidian 写回）：
 
-## 呈现层（你配置一次）
+```yaml
+filters:
+  and:
+    - file.hasTag("eo-change")
+views:
+  - type: cards
+    name: 看板（按状态分组）
+    order:
+      - file.name
+      - project
+      - type
+      - todo_done
+      - todo_total
+    groupBy:
+      property: status
+      direction: ASC
+  - type: table
+    name: 盘点
+    order:
+      - file.name
+      - project
+      - status
+      - type
+      - todo_done
+      - todo_total
+      - updated
+```
 
-1. **装插件**：社区插件市场安装 **Kanban Bases View**（为官方 Bases 提供并排列看板视图；官方 kanban 视图发布后可把视图 type 一换切官方，数据零迁移）
-2. **建 .base**：在 vault 任意位置（建议 `00-Wiki/` 或项目目录）新建 Base，用 UI 配置：
-   - **Filter**：`tags contains eo-change`（多项目聚合天然生效——所有项目的 board/ 目录都会被扫到；要单项目就再加 `project == <项目名>`）
-   - **视图 1（主）**：type 选 Kanban Bases View，group by `status`（列序：draft → confirmed → implementing → done → archived），卡片属性显示 `project / type / todo_done / todo_total`
-   - **视图 2（退路）**：官方 Cards，group by `status`
-   - **视图 3（盘点）**：官方 Table，列 `id / project / status / todo_done / todo_total / updated`，按 `updated` 倒序
-3. **泳道（可选）**：Kanban Bases View 支持二维分组——按 `project` 做泳道，多项目一屏观测
-4. 配好后不要手工改 `.base` 的 YAML；调整一律走 Obsidian UI
+- 过滤锚点是 stub frontmatter 的 `eo-change` 标签——**全 vault 聚合**，多项目的 board/ 卡片自动进同一看板
+- 文件放 vault 根，用户可在 Obsidian 里拖到任意位置（不影响功能）
+- cards 按 `status` 分组是「纵向分节」的准看板；分组顺序为字母序（官方限制）
 
-## 提示
+## 可选升级：并排列 kanban 视图（用户 UI 操作，一次性）
 
-- stub 卡片正文带 change.md 引用，点卡片可跳到工件
-- `issue` / `pr` 字段有值时卡片可直达 GitHub
-- 看板数据丢失/错乱 → 重跑 `/eo-project-init`（更新分支）触发历史同步全量重建
+1. 设置 → 第三方插件 → 浏览 → 安装并启用 **Kanban Bases View**（为官方 Bases 提供并排状态列视图；官方 kanban 视图发布后可把视图类型一换切官方，数据零迁移）
+2. 打开 `eo-change-board.base` → 添加视图 → 类型选 Kanban Bases View → Group by `status`，卡片属性勾 `project` / `type` / `todo_done` / `todo_total`；多项目泳道设 `project`
+3. 社区插件的 YAML 键名随版本变动——这一步**只在 UI 配置**，由 Obsidian 写回文件，skill 不代写
+
+## 数据层备忘
+
+stub 卡片是 change frontmatter 的投影（`id / title / project / status / type / todo_done / todo_total / issue / pr / updated / tags: [eo-change, …]`），可随时全量重建，**不要手工编辑**（会被覆盖）；正文中的 change 路径是纯文本（vault 外路径不可链接，复制到 IDE 打开）。看板数据丢失/错乱 → 重跑 `/eo-project-init`（更新分支）触发历史同步重建。
