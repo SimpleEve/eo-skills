@@ -135,7 +135,7 @@ eo-doc/
 ```
 <project_root>/
 ├── roadmap.md     # 必建（frontmatter 含 status/phase/summary，Bases 项目总览按此聚合）
-├── backlog.md     # 必建（待办池 + 灵感）
+├── backlog/       # 按需，待办/灵感卡片（每条一文件，status: backlog 上看板；archive/ 存归档卡）
 ├── phases/        # 按需，roadmap 拆解后生成
 ├── decisions/     # 按需，首次记录决策时建
 ├── lessons/       # 按需，首次记录经验时建（**项目级**，替代全局 _lessons/）

@@ -1,79 +1,67 @@
 ---
 name: eo-backlog
-description: "往项目 backlog.md 追加待办或灵感。通过 .eo-project.json 定位项目。触发（仅用户明确要求记录时）：加入 backlog / 记一条待办 / 这个以后再说，记一下 / /eo-backlog。NOT FOR: 对话中顺带出现的『以后 / TODO』——未经用户确认不落盘。"
+description: "项目 backlog 卡片：往 <project_root>/backlog/ 写一张待办/灵感卡（上 Obsidian 看板的 backlog 列），或归档/删除既有卡。通过 .eo-project.json 定位。触发（仅用户明确要求时）：加入 backlog / 记一条待办 / 这个以后再说，记一下 / 这条 backlog 不做了 / /eo-backlog。NOT FOR: 对话中顺带出现的『以后 / TODO』——未经用户确认不落盘；决策与教训（走 /eo-project-record）。"
 ---
 
 # eo-backlog
 
 ## 功能
 
-往 `<project_root>/backlog.md` 追加一条条目，分类落到对应小节。
+backlog 卡片化管理：**每条一个文件**，落在 `<project_root>/backlog/`，靠 frontmatter 的 `eo-backlog` 标签与 `status: backlog` 出现在 Obsidian 项目看板的 backlog 列。卡片是**源数据**（不是投影）——用户在 Obsidian 里直接编辑卡片正文/标签是合法且鼓励的。
 
-**只做"追加"**。决策与经验教训走 `/eo-project-record`，本 skill 不越界。
-
-配置与目录约定见 [eo-project-init/references/config.md](../eo-project-init/references/config.md)。
+三个动作：**add**（默认，写卡）、**archive**（采纳/放弃归档）、**delete**（用户指定时才删）。
 
 ## 前置
 
-**必须**能找到 `.eo-project.json`（cwd 或父目录）。找不到时报错退出，提示运行 `/eo-project-init`。
+**必须**能找到 `.eo-project.json`（cwd 或父目录）。找不到时报错退出，提示运行 `/eo-project-init`。`backlog/` 与 `backlog/archive/` 目录 lazy 创建。
 
-`backlog.md` 由 `eo-project-init` 初始化时必建，理论上一定存在。若丢失则按 [eo-project-init/SKILL.md](../eo-project-init/SKILL.md) 的模板重建一份空骨架再写入。
+## 卡片格式
 
-## 输入
-
-- **待办**："D6 先跳过，回头处理"、"TODO: 补测试"、"记一条待办"
-- **灵感**："以后可以考虑 X"、"有个想法"、"先记一笔"
-
-## 路径解析
-
-从 `.eo-project.json` 读取 `project_root`，操作 `<project_root>/backlog.md`。不硬编码。
-
-## 执行步骤
-
-### 1. 分类
-
-| 类型 | 信号词 | 落到小节 |
-|------|--------|---------|
-| 待办 | "TODO"、"待办"、"回头"、"先跳过"、"workaround" | `## 待办` |
-| 灵感 | "以后"、"想法"、"先记一笔"、"idea"、"考虑" | `## 灵感 & 以后再说` |
-
-判断不了就按"待办"兜底，并在输出摘要里明示分类，让用户能一句话纠正。
-
-### 2. 提炼条目
-
-从用户输入提炼一行条目，格式：
+文件：`<project_root>/backlog/<YYYY-MM-DD>-<slug>.md`
 
 ```markdown
-- [ ] {简述} — {YYYY-MM-DD}
+---
+title: <一句话，动宾结构>
+project: <项目名，取自 .eo-project.json>
+status: backlog          # 激活态恒为 backlog；归档时变 adopted / dropped
+tags: [eo-backlog, <内容标签…>]   # eo-backlog 是看板过滤锚点，必含且必须在激活态
+created: YYYY-MM-DD
+issue: ~                 # 可选：粘外来 GitHub issue URL（不主动 issue 化）
+---
+<一两句补充说明，可空>
 ```
 
-- 简述保持单行、动宾结构（"补 X 的单测"、"调研 Y 方案"）
-- 原始上下文信息量大时，允许在简述后加 `（{一句补充}）`，但整条不超过两行
-- 日期用今天（从环境的 `Today's date` 读取）
+- 待办/灵感不再分小节，用内容标签表达（如 `idea`）；拿不准就不打
+- **status 恒为 `backlog`**：它不是 change，不进 draft/confirmed 流转；在看板上把 backlog 卡拖进其他状态列是误操作（会改 status），发现即纠正回来
 
-灵感类别**不用 checkbox**，用无序列表 `-`。
+## 动作
 
-### 3. 追加写入
+### add（默认）
 
-读 `<project_root>/backlog.md`，在对应小节末尾追加条目。小节若不存在（用户手改过模板），补齐小节标题再写入。
+1. 提炼 title（单行动宾）、补充说明（可空）、内容标签
+2. 按上方格式写入 `backlog/<date>-<slug>.md`
+3. 摘要：卡片路径 + title + 当前激活卡片数
 
-更新 frontmatter 的 `updated: YYYY-MM-DD`。
+### archive（采纳 / 放弃）
 
-### 4. 输出摘要
+触发：change 采纳了这条 backlog（由 /eo-change 在确认后调用），或用户说「这条不做了」。
 
-向用户展示：
-- 追加到哪个小节
-- 条目原文
-- `backlog.md` 当前每小节的条目数
+1. frontmatter 三改：`status: backlog → adopted`（采纳）或 `dropped`（放弃）；tags 里 `eo-backlog → eo-backlog-archived`（双保险退出看板）；追加关联——采纳写 `adopted_by: <change-id>`，放弃写 `dropped_reason: <一句话>`
+2. **文件移入 `backlog/archive/`**（主目录只留激活卡，防膨胀）
+3. 摘要：处置结果 + 关联 change（若有）
 
-## 输出
+### delete（仅用户明确指定）
 
-- `<project_root>/backlog.md` 追加一条，frontmatter `updated` 刷新
+默认归档留痕；用户明确说「直接删掉」才物理删除文件。
+
+### migrate（旧扁平 backlog 打散）
+
+发现 `<project_root>/backlog.md`（或 backlog/ 下的 todo.md 等旧扁平文件）时提示可迁移：未完成的 `- [ ]` 条目逐条打散成卡片（created 取条目原日期，行内 `#tag` 转入 tags）；已完成/已放弃条目留在原文件不动；迁完在原文件顶部标注「已迁移为卡片，此文件不再写入」。幂等：已存在同名卡跳过。
 
 ## 约束
 
-- **只追加，不修改已有条目**。要改/划掉/删除，让用户自己动手或用编辑器。
-- **不建 `decisions/` / `lessons/`**（那是 `eo-project-record` 的职责）
+- **仅用户明确要求时写入**，不做关键词嗅探
+- 激活卡的修改（改 title/标签/说明）用户手工做即可，本 skill 不代管；**归档必走 archive 动作**（三件套：status + tag + 移动，缺一会导致看板残留或审计断链）
+- 不建 INDEX——看板（Bases 聚合）就是它的索引
+- 决策与经验教训走 `/eo-project-record`，本 skill 不越界
 - 所有路径通过 `.eo-project.json` 解析，不硬编码
-- `project_root` 不可达 → 报错提示检查配置
-- 分类拿不准时默认"待办"+ 明示分类，让用户纠正，不要反复追问

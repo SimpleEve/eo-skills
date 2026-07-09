@@ -17,7 +17,8 @@
 5. **roadmap frontmatter 补齐**：`roadmap.md` 缺 `status` / `phase` / `summary` 字段的，从正文推断补写（推断不出的问一次）；`status` 枚举 `active | researching | paused | done`。
 6. **log.md 处置**：存在则提示「v2 不再写入 log.md，时间线由 changes/INDEX + git log 承担；文件可留存或归档」，不删除。
 7. **lessons 存量**：`lessons/` 有文件但无 INDEX.md → 提示「跑 `/eo-project-record` 的 reindex 补建检索锚点与索引」；decisions/ 同理。
-8. **首次 sync 提示**：若 `eo-doc/state/` 不存在，迁移汇报末尾建议「跑 `/eo-doc-manager sync` 生成首批活文档——此后 state + agent-handbook 就是『系统现在是什么样』的唯一口径」。
+8. **backlog 打散**：存在旧扁平 `backlog.md`（或 backlog/todo.md 等）→ 按 /eo-backlog 的 migrate 动作把未完成条目打散成卡片（created 取原日期、行内 #tag 转 tags），已完成/放弃条目留存原文件，原文件顶部标注「已迁移」。
+9. **首次 sync 提示**：若 `eo-doc/state/` 不存在，迁移汇报末尾建议「跑 `/eo-doc-manager sync` 生成首批活文档——此后 state + agent-handbook 就是『系统现在是什么样』的唯一口径」。
 
 ## 收尾
 

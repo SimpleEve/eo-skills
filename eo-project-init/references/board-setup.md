@@ -8,9 +8,13 @@
 
 ```yaml
 filters:
-  and:
-    - file.hasTag("eo-change")
-    - file.path.contains("/board/")
+  or:
+    - and:
+        - file.hasTag("eo-change")
+        - file.path.contains("/board/")
+    - and:
+        - file.hasTag("eo-backlog")
+        - file.path.contains("/backlog/")
 views:
   - type: kanban-view
     name: 看板（按状态分组）
@@ -38,7 +42,7 @@ views:
       - updated
 ```
 
-- 过滤器 = `eo-change` 标签 **且** 路径含 `/board/`——双条件对 vault 里偶然出现的行内 `#eo-change` hashtag 免疫；全 vault 聚合，多项目 board/ 卡片进同一看板
+- 过滤器 = 两组双条件的 or：change 卡（`eo-change` 标签 + 路径含 `/board/`）与 backlog 卡（`eo-backlog` 标签 + 路径含 `/backlog/`）——标签+路径双条件对行内 hashtag 免疫；全 vault 聚合。backlog 卡 `status: backlog` 在看板上自成一列（列序可在 UI 拖动）
 - 主视图 `kanban-view` 来自社区插件 **Kanban Bases View**（设置 → 第三方插件安装启用；并排状态列 + 泳道）。**未装插件时**该视图显示不可用——在 UI 把视图类型换成官方 `cards`（同样支持按 status 分组）即可，或装上插件
 - 模板只含插件的最小稳定键；columnOrders / cardOrders / columnColors 等机器状态由插件运行时自行写回，skill 不生成
 - 文件放 vault 根，可在 Obsidian 里拖到任意位置

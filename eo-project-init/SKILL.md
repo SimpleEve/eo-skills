@@ -1,6 +1,6 @@
 ---
 name: eo-project-init
-description: "eo-skills 在当前仓库的总入口：生成 .eo-project.json、初始化项目管理侧（roadmap/backlog）和代码侧最小骨架（eo-doc/），按需建 vault 软链和 agent 配置注入。触发：启动项目 / 初始化项目 / 新建项目 / /eo-project-init。"
+description: "eo-skills 在当前仓库的总入口：生成 .eo-project.json、初始化项目管理侧（roadmap）和代码侧最小骨架（eo-doc/），按需建 vault 软链和 agent 配置注入。触发：启动项目 / 初始化项目 / 新建项目 / /eo-project-init。"
 ---
 
 # eo-project-init
@@ -53,7 +53,7 @@ description: "eo-skills 在当前仓库的总入口：生成 .eo-project.json、
 
 0. **v1 痕迹检测**：发现 `eo-doc/dev/` 存在、`kanban_path` 非 null 等信号 → 先按 [references/migrate-v1.md](references/migrate-v1.md) 执行迁移子流程（冻结 spec、建项目级 changes、kanban 退役、roadmap 补 frontmatter 等，幂等），完成后继续下列步骤
 1. **配置校验**：读现有 `.eo-project.json`，对照 [references/config.md](references/config.md) 的 schema——基础字段（project_name/mode/project_root/doc_root）缺失按默认补写；存量配置的 `kanban_path` 字段忽略不改（旧看板体系已退役），已有字段一律不改；**`board` / `github` 段缺失时不在本步补写**（补了默认关闭值会吞掉第 5 步的询问），只记录缺段，留给第 5 步问答后落盘
-2. **骨架补齐**：项目管理侧两必建（roadmap/backlog）与代码侧 `eo-doc/` 骨架缺什么补什么；**不触碰任何已有文件的内容**
+2. **骨架补齐**：项目管理侧必建 roadmap.md 与代码侧 `eo-doc/` 骨架缺什么补什么；**不触碰任何已有文件的内容**
 3. **注入段刷新**：按标记对整段替换 agent 配置文件中的 `eo-project` / `eo-doc` 注入段；仓库根存在 `DESIGN.md` 时核对 `eo-design` 注入段
 4. **.gitignore 与软链核对**：`tmp/eo/`、`<doc_root>/.sync-cursor`、（local 模式）`.eo-project/`、（vault 模式）`<doc_root>/vault` 缺项补写；vault 模式且 `create_symlink: true` 时核对 `<doc_root>/vault` **软链本体**存在且指向 `project_root`，缺失/指错按「9. 建立软链」重建
 5. **联动两问**（仅对应段缺失时，规则见「8. 生成 .eo-project.json」的 board/github 小节）：开启 board → 立即做 stub 历史同步
@@ -64,7 +64,7 @@ description: "eo-skills 在当前仓库的总入口：生成 .eo-project.json、
 **不要直接默认到 local**。按封闭选择协议（[../eo-shared/questioning.md](../eo-shared/questioning.md) §4）呈现两个选项（用户级配置有 `default_mode` 时标为推荐），选项说明取自下方要点：
 
 ```
-这个项目的"项目管理侧"（roadmap / backlog / decisions / lessons 等）放在哪里？
+这个项目的"项目管理侧"（roadmap / backlog 卡片 / decisions / lessons 等）放在哪里？
 
 A) vault 模式 —— 集中到 Obsidian/文档 vault，跨项目统一浏览
    • project_root = <vault_root>/<projects_subdir>/<项目名>/
@@ -105,31 +105,12 @@ B) local 模式 —— 放在仓库自己的 .eo-project/ 下，跟代码走
 
 ```
 <project_root>/
-├── roadmap.md     # 必建
-└── backlog.md     # 必建
+└── roadmap.md     # 必建
 ```
 
-**按需目录一律不预建**（phases / decisions / lessons / brainstorm / docs），等对应 skill 首次写入时由那个 skill 创建。
+**按需目录一律不预建**（backlog / phases / decisions / lessons / brainstorm / docs），等对应 skill 首次写入时由那个 skill 创建（backlog 为卡片目录，由 /eo-backlog 管理）。
 
 写入 `roadmap.md`（读 [templates/roadmap.md](templates/roadmap.md)），填充项目名、目标、阶段概览占位。
-
-写入 `backlog.md`：
-
-```markdown
----
-type: backlog
-project: "{{project_name}}"
-updated: "{{date}}"
----
-
-# {{project_name}} Backlog
-
-> 待办池 + 灵感。
-
-## 待办
-
-## 灵感 & 以后再说
-```
 
 ### 6. Roadmap 拆解（可选）
 
@@ -232,14 +213,14 @@ local 模式**不建软链**。
 本项目通过 `.eo-project.json` 关联到项目管理侧：`{{project_root}}`
 
 - 模式：`{{mode}}`
-- 项目管理侧（roadmap / backlog / decisions / lessons 等）：`{{project_root}}`
+- 项目管理侧（roadmap / backlog 卡片 / decisions / lessons 等）：`{{project_root}}`
 - 代码侧文档：`{{doc_root}}/`
 
 ### 项目记录入口
 
 仅当**用户明确表达**要记录时响应（不做关键词嗅探，避免误触发）：
 
-- 用户明确说「加个待办 / 记到 backlog / 以后做」→ 调用 `/eo-backlog` 追加到 `{{project_root}}/backlog.md`
+- 用户明确说「加个待办 / 记到 backlog / 以后做」→ 调用 `/eo-backlog` 写卡到 `{{project_root}}/backlog/`
 - 用户明确说「把这个决策记下来」→ 调用 `/eo-project-record` 写入 `{{project_root}}/decisions/`
 - 用户明确说「记一条经验 / 踩坑记录一下」→ 调用 `/eo-project-record` 写入 `{{project_root}}/lessons/`
 
@@ -261,7 +242,7 @@ local 模式**不建软链**。
 ## 输出
 
 - **代码仓库**：`.eo-project.json` + `eo-doc/` 最小骨架 + agent 配置注入（+ 可选软链）
-- **项目管理侧**：`<project_root>/` 含 `roadmap.md` / `backlog.md`（+ 可选 `phases/`）
+- **项目管理侧**：`<project_root>/` 含 `roadmap.md`（+ 按需 `backlog/` 卡片、`phases/` 等）
 
 ## 约束
 
