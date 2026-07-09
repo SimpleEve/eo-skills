@@ -64,10 +64,10 @@ description: |
 ### 第七步：写入 change.md 并确认
 
 1. **分配 change-id**：扫描 `eo-doc/changes/` 现有目录，最大数字前缀 +1（3 位补零），用户给语义名，拼成 `<NNN>-<kebab-name>`。拒绝 `fix-` 前缀
-2. 按 [references/change-template.md](references/change-template.md) 写入 `eo-doc/changes/<NNN-id>/change.md`（`status: draft`）；已钉决策落 §1，条件节按触发条件取舍
+2. 按 [references/change-template.md](references/change-template.md) 写入 `eo-doc/changes/<NNN-id>/change.md`（`status: draft`）；已钉决策落 §1，条件节按触发条件取舍。**写入即新建看板 stub**（[../eo-shared/board-github.md](../eo-shared/board-github.md)，board 未开启则跳过）——draft 从这一刻起就在看板上
 3. 交付用户确认，按反馈修订
 4. **用户在对话中确认后，skill 自动置 `status: confirmed`**——不要求用户手改 frontmatter；来源是 backlog 卡的，按 [../eo-backlog/SKILL.md](../eo-backlog/SKILL.md) 的 archive 动作归档该卡（adopted + 关联本 change-id）
-5. 联动钩子：按 [../eo-shared/board-github.md](../eo-shared/board-github.md) 执行 stub upsert 与 issue 创建（对应开关未开启则跳过）
+5. 联动钩子：更新 stub（status 同步为 confirmed）、创建 GitHub issue（issue 只在此刻建，draft 阶段不建；对应开关未开启则跳过），见 [../eo-shared/board-github.md](../eo-shared/board-github.md)。修订循环中（场景 B）任何改动落盘也顺手 upsert stub
 
 ### 第八步：更新索引 + 提示后续
 

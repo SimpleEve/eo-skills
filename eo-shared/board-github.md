@@ -11,15 +11,19 @@
 
 ### 触发点
 
-change 的 frontmatter 发生以下变化后，顺手 upsert 对应 stub（一次写盘，不问用户）：
+**通用原则：change.md 的 frontmatter（status）或 §2/§3 勾选数发生变化的任何落盘动作，顺手 upsert stub**（一次写盘，不问用户）——stub 从 **draft 起全生命周期投影**，看板的 draft 列因此始终真实。具体锚点：
 
 | 触发 skill | 时机 |
 |-----------|------|
-| eo-change | 确认置 `confirmed` 后（新建 stub） |
-| eo-implement | 置 `implementing` 时；每个批末 checkpoint（刷新 todo 进度） |
+| eo-change | **写入 change.md（draft）时即新建 stub**；修订、确认置 `confirmed` 时更新 |
+| eo-implement | 置 `implementing` 时；每个批末 checkpoint（刷新 todo/ac 进度）；人工验收门勾 manual 后 |
 | eo-review | 通过置 `done` 时 |
 | eo-fix | 修复计入活跃 change（勾了 TODO/AC）时 |
 | eo-archive | 置 `archived` 后（第五层收尾） |
+
+草稿被**放弃**（change 目录删除/终止）时同步删除对应 stub，不留孤儿卡。
+
+注意不对称是有意的：**GitHub issue 仍在 confirmed 才建**（对外投影保守——草稿夭折不该在外部世界留痕）；stub 是本地可重建镜像（对内投影积极）。
 
 ### stub 写法
 
