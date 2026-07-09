@@ -17,12 +17,13 @@
 | 项目记录 | eo-project-lesson（仅教训） | **eo-project-record**（教训 + 决策统一入口，各带 INDEX） |
 | 项目看板 | kanban_path 手工看板（init 注册/update 刷新/lesson 计数） | **退役**。change 级观测 → board stub + Bases；项目级总览 → Bases 聚合各项目 roadmap.md frontmatter |
 | log.md | 必建，update/lesson 追加 | 移除必建（时间线由 changes/INDEX + git log 承担；存量 log.md 保留不再写入） |
+| backlog | 扁平 `backlog.md` 追加条目 | **卡片化**：`backlog/` 每条一文件（`status: backlog` 上项目看板）；采纳/放弃归档到 `backlog/archive/`（status + tag 切换 + adopted_by 关联）；旧扁平文件打散后留存 |
 | 新增 | — | eo-design（DESIGN.md）、eo-shared/（共享规范） |
 | 临时文件 | `tmp/<topic>-handoff.md` 等散放 | 统一 `tmp/eo/<域>/`（handoff / fix / design） |
 
 ## 迁移步骤（存量 v1 项目）
 
-> **推荐走自动路径**：在项目里重跑 `/eo-project-init`——其更新/修复分支会检测 v1 痕迹并自动引导下列第 2-6、8 步（可执行版见 `eo-project-init/references/migrate-v1.md`）。手动只需第 1 步（更新安装）与第 7 步（可选 design）。以下为完整手动版备查。
+> **推荐走自动路径**：在项目里重跑 `/eo-project-init`——其更新/修复分支会检测 v1 痕迹并自动引导下列第 2-6、8、9 步（可执行版见 `eo-project-init/references/migrate-v1.md`）。手动只需第 1 步（更新安装）与第 7 步（可选 design）。以下为完整手动版备查。
 
 1. **更新安装**：重跑 install 脚本（软链模式下拉取新版仓库即生效）。新目录 `eo-shared/`、`eo-design/` 会被自动链接；已删除的四个 skill 需手动清理残留软链：
    ```bash
@@ -37,6 +38,7 @@
 6. **首次 sync**：跑 `/eo-doc-manager sync`。若此前从未建过 state/，会 lazy 生成首批文档；此后 state + agent-handbook 就是「系统现在是什么样」的唯一口径。
 7. （可选）`/eo-design init` 建立 DESIGN.md。
 8. **项目管理侧迁移**：`kanban_path` 字段从此被忽略（旧手工看板文件可归档删除，如 00-Wiki/项目看板.md）；roadmap.md frontmatter 补 `status/phase/summary` 三字段后可被 Bases 聚合成项目总览；记录入口统一为 `/eo-project-record`（旧 lesson/update 软链已在步骤 1 一并清理）。
+9. **backlog 打散**：旧扁平 `backlog.md`（或 backlog/todo.md）的未完成条目按 `/eo-backlog` 的 migrate 动作打散为卡片（created 取原日期、行内 #tag 转 frontmatter tags），自动出现在项目看板 backlog 列；已完成/放弃条目与原文件留存作档。
 
 ## 语义速查（旧习惯 → 新做法）
 

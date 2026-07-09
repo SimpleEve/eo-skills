@@ -7,6 +7,7 @@
 - `eo-doc/dev/` 目录存在（v1 模块维度）
 - `.eo-project.json` 的 `kanban_path` 为非 null 字符串
 - `<project_root>/log.md` 存在且 `eo-doc/changes/` 不存在
+- `<project_root>/backlog.md`（或 backlog/todo.md 等扁平文件）存在且未标注「已迁移」
 
 ## 迁移步骤
 
