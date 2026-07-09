@@ -1,2 +1,5 @@
 .claude/
 .DS_Store
+
+# eo 临时工件不入库
+tmp/
