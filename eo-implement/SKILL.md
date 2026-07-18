@@ -84,7 +84,7 @@ description: |
 
 替代模式一的 Batch 结构；test/review 反馈的修复仍走模式二。
 
-1. **上下文与登记**：读 change.md（意图 + AC）、handbook INDEX 命中篇目、lessons 命中项；涉及 UI 且仓库根有 `DESIGN.md` → 读入并遵守。写 `base_commit`、`status → implementing`、刷新 stub
+1. **上下文与登记**：读 change.md（意图 + AC）、handbook INDEX 命中篇目、lessons 命中项（[../eo-shared/lessons.md](../eo-shared/lessons.md) §1）；涉及 UI 且仓库根有 `DESIGN.md` → 读入并遵守。写 `base_commit`、`status → implementing`、刷新 stub
 2. **测试锁定**（按 AC 性质分流）：
    - 新增/变更行为的 auto AC → 落成失败测试，确认**因断言失败**（而非报错/导入错误）
    - 「行为不变」类（characterization）→ 基线即绿合法，**不强制先红**，但须注明覆盖了哪些现有行为

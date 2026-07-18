@@ -94,7 +94,7 @@ description: |
 
 判档为轻档后走此流程，**替代第二至第八步**：
 
-1. **快速自查**：读 `eo-doc/state/` 相关篇目、lessons INDEX 命中项（≤2 条）、`changes/INDEX.md` 最近 3 条（防重复/冲突）；涉及 UI 且仓库根有 `DESIGN.md` → 读入；涉及外部世界 → 按 [../eo-shared/research.md](../eo-shared/research.md) 消费规则查 `research/`。能自答的不问用户
+1. **快速自查**：读 `eo-doc/state/` 相关篇目、lessons INDEX 命中项（按 [../eo-shared/lessons.md](../eo-shared/lessons.md) §1 匹配 trigger/tags，≤2 条）、`changes/INDEX.md` 最近 3 条（防重复/冲突）；涉及 UI 且仓库根有 `DESIGN.md` → 读入；涉及外部世界 → 按 [../eo-shared/research.md](../eo-shared/research.md) 消费规则查 `research/`。能自答的不问用户
 2. **澄清**：预算 1-2 问（协议同 questioning.md），问完即写——AC 定不下来说明澄清不到位，或该转全档
 3. **落盘（draft）**：按 [references/change-template.md](references/change-template.md) 轻档模板写入 `changes/<NN>-<slug>/change.md`（id/seq/查重/让号规则与全档同一套）；AC ≤5 条、覆盖异常路径、manual 标「人工:」；外部 GitHub issue 来源 → 号回写 `issue:`。写入即建看板 stub（未开启跳过）
 4. **探针对齐（→ confirmed）**：把意图 + AC 亮给用户否一次——探针的成功标准是**尽快暴露分歧**，不是通过评审。用户点头 → `status: confirmed` + 联动钩子（stub 刷新；GitHub issue 联动开启且 frontmatter 无 issue 号才建）。用户否 → 就地改再亮一次；方案分歧大 → 转全档从第二步续起
