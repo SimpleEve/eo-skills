@@ -106,6 +106,7 @@ description: |
 | 修复范围守界 | 超 trivial 量级 / 需方案权衡 → 转 change，不硬修 |
 | 深挖必宣告、必还原 | 插桩/日志/bisect 结束后全部还原 |
 | 需求变更不伪装成 fix | 期望行为本身变了就是 /eo-change 的事，哪怕改动很小 |
+| 注释纪律 | change/TODO/AC 编号严禁进代码注释（溯源走 commit 前缀）；只写代码表达不了的约束，见 conventions.md §2.6 |
 | 与 implement 的分工 | test/review 反馈的修复归 /eo-implement 模式二；本 skill 是流程外的口喷入口 |
 
 ## 典型场景

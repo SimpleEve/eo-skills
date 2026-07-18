@@ -78,7 +78,7 @@ description: |
 - **维度 2 · TODO↔AC 映射**：每条 TODO 标注了对应 AC 且映射成立？每条 AC 至少被一条 TODO 覆盖？出现映射不到 AC 的 TODO（越界）或没有 TODO 的 AC（悬空）→ P0
 - **维度 3 · TODO 拆解质量**：三要素齐全（描述/文件/对应 AC）？多条 TODO 对同一 AC 时是否逐条写了完成判据（一对一不要求）？**占位符检测**（「补充错误处理」「后续完善」→ P0）？Batch 分组合理、Batch 1 是可独立验证的 MVP？依赖自洽无循环？
 - **维度 4 · 粒度合规**：对照 [../eo-shared/granularity.md](../eo-shared/granularity.md)——TODO 数与全文行数在软标内（超软标 P1 建议拆、超硬标 P0 必须拆）；反向检查：是否 trivial 到根本不该开 change（→ P1 建议转直改）
-- **维度 5 · 意图一致性**：§1 已钉决策与 §2/§3 是否自洽（TODO 有没有偷偷推翻已钉结论）？`type` 与实际内容匹配（宣称 refactor 却新增用户可见能力 → 应改 feature）？混入多个不相关改动 → 建议拆
+- **维度 5 · 意图一致性**：§1 已钉决策与 §2/§3 是否自洽（TODO 有没有偷偷推翻已钉结论）？`type` 与实际内容匹配（宣称 refactor 却新增用户可见能力 → 应改 feature）？混入多个不相关改动 → 建议拆；AC/TODO 是否超出 §1 意图自行扩面（镀金，见 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)「不镀金」）→ P1 建议裁剪或转 backlog
 - **维度 6 · 条件节合规**：触发条件满足却缺节（有 TODO 未覆盖的连带文件但无 §4；有新外部依赖但无 §5；有不可逆操作但无 §7）→ P1；触发条件不满足却写了 → P2（瘦身建议）；§8 defer 超过 3 条 → P1；change 含 §6 流程图时对照 [../eo-doc-manager/references/mermaid.md](../eo-doc-manager/references/mermaid.md) §5 审查清单核对
 
 **定级纪律（全模式通用）**：

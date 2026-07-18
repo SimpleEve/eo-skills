@@ -59,6 +59,12 @@ skill 写入 vault（board stub、brainstorm 记录、lessons/decisions、backlo
 
 change-id 前缀是 eo-archive 归集 commit 区间的依据；`fix:`/`ui:` 前缀供 retro 统计直改流量。推荐「一次 change 一次 commit」；TODO 分批时允许一批一 commit，archive 至多补一个收尾 meta commit。**轻档例外**：预期恰为 2-3 个 commit——test-lock commit + 实施 commit（+ 收尾 meta commit），**不得 squash**（锁定边界是独立复核的比对基准）。
 
+## 2.6 代码注释纪律
+
+**溯源不进注释**：文件↔change 的对应由 commit 前缀 `[<change-id>]` 承载（git blame 即得），**严禁**把 change/TODO/AC 编号写进代码注释——归档后这些编号对读代码的人毫无意义，只会腐烂。
+
+注释只写**代码本身表达不了的约束**（不变量、反直觉的坑、外部契约），一两行为限；不复述代码在做什么，不向审查者解释这次改动为何正确——那些话属于 commit message 与对话汇报。密度对齐所在文件的既有风格。
+
 ## 3. 状态词汇总表（看板列序即此）
 
 全看板合法状态的全序：

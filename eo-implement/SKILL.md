@@ -96,7 +96,7 @@ description: |
 3. **实施**：自拆 TODO（对话内列出，**不写入 change.md**）；**禁改测试文件**——确需改（AC 本身写错）→ 停手上报，用户确认改 AC 后重锁再继续
 4. **完成门**（全过才算完）：
    - 锁定测试全绿 + lint/typecheck 绿
-   - **独立复核**：spawn 一个新鲜上下文 subagent，输入 = change.md + `test_lock_commit..HEAD` 完整 diff（含测试文件改动历史）+（UI 时）DESIGN.md，核对「AC 逐条被真实覆盖？锁定后测试是否被弱化/删除/篡改？有无过拟合 / 硬编码特判 / 绕过验证？」——执行者自述不作数。结论一行写入 change.md 末尾（`独立复核：通过/不通过，<日期>，基线 <short-sha>`）；发现问题 → 修复后重跑完成门
+   - **独立复核**：spawn 一个新鲜上下文 subagent，输入 = change.md + `test_lock_commit..HEAD` 完整 diff（含测试文件改动历史）+（UI 时）DESIGN.md，核对「AC 逐条被真实覆盖？锁定后测试是否被弱化/删除/篡改？有无过拟合 / 硬编码特判 / 绕过验证？diff 里有无 AC 之外的多余实现（镀金）？」——执行者自述不作数。结论一行写入 change.md 末尾（`独立复核：通过/不通过，<日期>，基线 <short-sha>`）；发现问题 → 修复后重跑完成门
    - manual 项（「人工:」）逐项请用户确认，**代勾必须附确认记录**（AC 行后「确认：<用户原话要点>，<日期>，基线 <short-sha>」，规范见 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)）；manual 项 >2 条是扩档信号
 5. **收口（finalizer，顺序执行，不得减免）**：
    ① **结算**：确认全部实施变更已提交（`[<change-id>]` 前缀），工作区无本 change 残留
@@ -117,6 +117,7 @@ description: |
 - **修复循环双向取证**：先复现失败再修，且复现取最低成本层——起环境是最后手段，不是默认
 - **勾选即时**：TODO/AC 完成立即在 change.md 勾选，不攒批
 - **commit 前缀**：所有实施提交带 `[<change-id>]`（archive 靠它归集区间）
+- **注释纪律**：change/TODO/AC 编号**严禁**进代码注释（溯源走 commit 前缀）；注释只写代码表达不了的约束、一两行为限，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §2.6
 - **status 自动流转**：confirmed→implementing 由本 skill 写入；reviewed 由 review 通过后写入；轻档 archived 由轻模式收口写入
 - **轻模式纪律**：TODO 不写入 change.md、禁改测试文件、完成门必过独立复核；扩档信号出现即停手报告
 - **修复循环不升格**：test/review 反馈的缺陷不以任何形式开新 change
