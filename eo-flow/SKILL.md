@@ -111,13 +111,13 @@ codex 按合约会回 `[tmux-bridge from:... ] done: ...` 到本 pane。**必须
 | `review` | 甩 `$eo-implement`（`/eo-flow fix`，异步 codex） | 改代码，量大、需执行环境 |
 | `change-review` | **本 pane 内联改 `change.md`** | 文档修订，量小；且 `$eo-implement` 不消费 `change-review.md` |
 
-内联改之前，先标出有决策空间的条目（命名、抽象粒度、策略选择）给用户确认，纯字面/规范校订直接改。改完告知用户"已内联修订 X 条，另 Y 条待你定"。
+内联改之前，先标出有决策空间的条目（命名、抽象粒度、策略选择）给用户确认，纯字面/规范校订直接改。改完在 change-review.md 的 Finding 台账标注处置（fixed 落点 / wont-fix 理由）——这是下一轮增量复审的输入，然后告知用户"已内联修订 X 条，另 Y 条待你定"。
 
 **档位选择**（在上游路径之上，决定自动 or 停手）：
 
 - **自动修**（按上面路径走）：明确 P0 bug、测试失败、AC 未覆盖、规范违反——客观、有标准答案的。
 - **暂停问用户**：架构取舍、接口命名、影响面外溢、需要改 change 方案、同一问题反复 2 轮没收敛。
-- **通过可合**：零 P0/P1 或仅 P2 → 读对应产出文件（test.md / review.md / change-review.md）末尾的「## 速报」节，**按其「下一步」原样转达用户**（各 skill 的下一步口径以其报告速报节为单一来源，本 skill 不重写流程表）。三条 eo-flow 特有的补充：
+- **通过可合**：达到通过线（test / review：零 P0/P1 或仅 P2；change-review：零未决 P0——P1 移交起草方裁决，不阻塞）→ 读对应产出文件（test.md / review.md / change-review.md）末尾的「## 速报」节，**按其「下一步」原样转达用户**（各 skill 的下一步口径以其报告速报节为单一来源，本 skill 不重写流程表）。三条 eo-flow 特有的补充：
   - `implement` 没有报告文件——TODO 勾选完成即下一步 `/eo-flow test`（或直接 `/eo-test`）
   - `review` 通过 → `/eo-archive <change-id>`——**只有这里才是归档入口**；`eo-archive` 只消费 review.md 通过的 change，不消费 change-review.md（方案审查通过时代码还没写，不能归档）
   - `fix` 完成 → 按 fix 前的上下文回到原 action 复审（例：review 触发的 fix → 再跑 `/eo-flow review`）

@@ -18,6 +18,9 @@ filters:
 views:
   - type: kanban-view
     name: 看板（按状态分组）
+    filters:
+      and:
+        - 'status != "archived"'
     groupBy:
       property: status
       direction: ASC
@@ -25,6 +28,7 @@ views:
     order:
       - file.name
       - title
+      - summary
       - project
       - type
       - tags
@@ -34,6 +38,8 @@ views:
     name: 盘点
     order:
       - file.name
+      - seq
+      - summary
       - project
       - status
       - type
@@ -49,4 +55,4 @@ views:
 
 ## 数据层备忘
 
-stub 卡片是 change frontmatter 的投影（`id / title / project / status / type / todo_done / todo_total / issue / pr / updated / tags: [eo-change, …]`），可随时全量重建，**不要手工编辑**（会被覆盖）；正文中的 change 路径是纯文本（vault 外路径不可链接，复制到 IDE 打开）。看板数据丢失/错乱 → 重跑 `/eo-project-init`（更新分支）触发历史同步重建。
+stub 卡片是 change frontmatter 的投影（`id / seq / title / summary / branch / project / status / type / todo_done / todo_total / issue / pr / updated / tags: [eo-change, …]`），可随时全量重建，**不要手工编辑**（会被覆盖）；正文只有 change 路径纯文本（vault 外路径不可链接，复制到 IDE 打开）。**tags 全生命周期恒定**（`eo-change` 是过滤锚点，归档也不换名不移文件，只置 `status: archived`）；kanban 主视图靠视图级过滤 `status != "archived"` 只显示活跃管线，盘点 table 保留全史。看板数据丢失/错乱 → 重跑 `/eo-project-init`（更新分支）触发历史同步重建。

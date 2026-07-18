@@ -43,7 +43,7 @@ eo-doc/
 ├── templates/        # 必建（空），eo-* 技能扩展点
 ├── state/            # 按需，系统当前状态（首次 sync 时 lazy 建）
 │   └── INDEX.md
-└── .sync-cursor      # sync 基线与计数（自动进 .gitignore）
+└── .sync-cursor      # sync 基线与计数（随 eo-doc/ 入库，不进 .gitignore）
 ```
 
 ### 不处理的旧目录
@@ -101,9 +101,8 @@ state/ 和 agent-handbook/ 的内容必须从**源码**生成，不是从已有�
    - `<doc_root>/changes/INDEX.md`（骨架）
    - `<doc_root>/templates/`（空目录，不自动生成模板文件）
 4. **不创建** `state/`（首次 sync 时 lazy 建）
-5. 初始化 `<doc_root>/.sync-cursor`（当前 HEAD 作为首次基线）
-6. 将 `<doc_root>/.sync-cursor` 追加到 `.gitignore`
-7. CLAUDE.md 注入（见下方"CLAUDE.md 注入规则"）
+5. 初始化 `<doc_root>/.sync-cursor`（当前 HEAD 作为首次基线）——**随 `<doc_root>/` 入库，不写进 `.gitignore`**（理由与合并冲突处理见 [references/git-sync.md](references/git-sync.md)）
+6. CLAUDE.md 注入（见下方"CLAUDE.md 注入规则"）
 8. **不自动生成 state/ 和 agent-handbook/ 内容**——留待 `/eo-doc-manager sync` 或 `re-sync` 首次触发
 
 

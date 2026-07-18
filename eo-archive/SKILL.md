@@ -12,22 +12,28 @@ description: |
 ## 核心理念
 
 1. **零同步逻辑**：本 skill 不拥有任何文档同步细节，第四层是对 `/eo-doc-manager sync` 的内嵌调用（加载并执行其流程）
-2. **AC 是归档门**：验收清单全勾才能归档；豁免必须显式记录
+2. **AC 是归档门**：验收清单全勾才能归档，人工项经 acceptance.md 逐项核验（唯一硬门在此）；豁免必须显式记录
 3. **冻结不可逆**：`status: archived` 之后 change 目录只读；后续问题按性质走 /eo-fix 或新 change
 4. **commit 区间只是审计**：归集的区间写入 frontmatter 备查，不决定同步范围（同步永远是 cursor..HEAD）
 
 ## 前置条件
 
 - **必须能找到 `.eo-project.json`**。找不到 → 报错退出，提示运行 `/eo-project-init`
-- 目标 `eo-doc/changes/<change-id>/change.md` 存在且 `status: done`
+- 目标 `eo-doc/changes/<change-id>/change.md` 存在且 `status: reviewed`（存量 `done` 视同 reviewed，顺手改写）
 
 ## 工作流程（五层）
 
 ### 第一层：前置校验
 
-1. `status: done`（不是 → 指出当前所处环节：draft/confirmed 回 /eo-change 或 /eo-implement；implementing 回 /eo-implement；已 archived 直接告知）
+1. `status: reviewed`（不是 → 指出当前所处环节：draft/confirmed 回 /eo-change 或 /eo-implement；implementing 回 /eo-implement；已 archived 直接告知）
 2. `review.md` 存在且结论为通过（P0/P1 已清零）
-3. **验收清单全勾**：change.md §2 所有 `- [x]`，且 **manual 类 AC（「人工:」标记）的勾必须来自用户确认**（implement 人工验收门的记录；agent 代勾的 manual 项视为未勾）。存在未勾/未确认项 → 列出并按封闭选择协议（[../eo-shared/questioning.md](../eo-shared/questioning.md) §4）请用户三选一：回 /eo-implement 补齐（推荐）/ 显式豁免（豁免项与理由写入 §8 开放问题）/ 终止归档
+3. **验收清单全勾 + 人工验收硬门**（规范见 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)）：
+   - 从 change.md §2 解析 manual AC 集合（「人工:」标记）——**非空则 `acceptance.md` 必须存在且与集合一一对应**（缺项/孤儿/重复 = 校验失败）；空集则只查普通 AC 全勾
+   - 逐项核对勾选与异常行：用户勾的「通过」直接有效（勾选权归用户）；agent 代勾必须带确认记录（日期 +「原话」），缺记录按未勾处理
+   - 验收基线之后存在改变人工项行为的 `[<change-id>]` 提交 → 受影响项按未勾（判不清 → 全部按未勾）
+   - **未勾的 auto-heavy AC**（重验证项，勾选权归 /eo-test 不归 implement——跳过 eo-test 时它们必然未勾）→ 提示跑 `/eo-test` 补验；与下方未勾项同处置，**不得静默放行**
+   - **归档前把已勾项汇总一句请用户一键确认**（封闭选择，跨会话最终复核）；尚有未勾项 → 主动提议「带我验收」逐项走查；核对通过后同步勾 manual AC
+   - 存在不通过/待验/未勾项 → 按封闭选择协议（[../eo-shared/questioning.md](../eo-shared/questioning.md) §4）三选一：**补齐**（推荐——回 /eo-implement 修复，或回 /eo-test 补验重验证项；「不通过」= 修复循环输入，status 置回 implementing）/ 显式豁免（§8 + 验收单同项标豁免，双记录同 AC 编号）/ 终止归档
 
 ### 第二层：工作区结算
 
@@ -42,7 +48,7 @@ cursor 基于 commit，sync 只能看见已提交内容，因此先结算：
 
 1. 从 `base_commit..HEAD` 按 `[<change-id>]` 前缀归集本 change 的提交；单 commit 直取，多 commit 列出请用户确认；存在无前缀夹杂提交时请用户圈定
 2. 写入 frontmatter：`commits: [<区间>]`（仅审计用）、`status: archived`（不可逆）
-3. 更新 `eo-doc/changes/INDEX.md` 对应行
+3. 更新 `eo-doc/changes/INDEX.md` 对应行，顺手对 seq 列查重（重号 → created 晚者让号，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §2）
 4. 以上文档改动提交入库——可与第二层合为同一个 commit（推荐一次 change 一次 commit）；implement 已按批提交时，这就是一个小的收尾 meta commit
 
 ### 第四层：文档同步（内嵌调用）
@@ -55,7 +61,7 @@ cursor 基于 commit，sync 只能看见已提交内容，因此先结算：
 
 ### 第五层：收尾
 
-1. 联动钩子：按 [../eo-shared/board-github.md](../eo-shared/board-github.md) 执行——stub 置 archived、issue 兜底关闭、PR 创建（按 `github.pr` 策略；对应开关未开启则跳过）
+1. 联动钩子：按 [../eo-shared/board-github.md](../eo-shared/board-github.md) 执行——stub 最终 upsert（仅置 `status: archived`，**tags 与文件位置不动**：`eo-change` tag 是看板过滤锚点）、issue 兜底关闭、PR 创建（按 `github.pr` 策略；对应开关未开启则跳过）
 2. 对话速报（不写额外文件）：
 
 ```

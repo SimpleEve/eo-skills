@@ -5,7 +5,7 @@ eo-review 按下方模板写入 `eo-doc/changes/<change-id>/review.md`。
 ```markdown
 ---
 title: <功能名称>代码审查报告
-change_id: <NNN-change-id>
+change_id: <change-id>
 tags: [标签1, 标签2]
 created: YYYY-MM-DD
 updated: YYYY-MM-DD

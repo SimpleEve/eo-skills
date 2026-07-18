@@ -43,7 +43,7 @@ description: |
 
 ```
 ## 需求上（设计口径）
-<规则/流程/边界，出处：state/xx.md、change 014 §1、decisions/2026-xx.md>
+<规则/流程/边界，出处：state/xx.md、change batch-export §1、decisions/2026-xx.md>
 
 ## 代码上（实现口径）
 <入口、关键路径、数据流，出处：handbook/xx.md、src/xx.ts:120-160>

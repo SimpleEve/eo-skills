@@ -1,8 +1,8 @@
 # Lessons 生产与消费规范（单一来源）
 
-> 生产方：eo-project-record（lesson 类型）。消费方：eo-change / eo-implement / eo-fix（启动时）。目标：教训在**下次相关任务开始时自动出现**，而不是躺在目录里等人想起。
+> 生产方：eo-project-record（lesson 类型）。消费方：eo-change / eo-implement / eo-test / eo-fix（启动时）。目标：教训在**下次相关任务开始时自动出现**，而不是躺在目录里等人想起。
 
-## 1. 消费流程（eo-change / eo-implement / eo-fix 启动时执行）
+## 1. 消费流程（eo-change / eo-implement / eo-test / eo-fix 启动时执行）
 
 1. 读 `<project_root>/lessons/INDEX.md`——**不存在则整步跳过，零成本**（不要 ls 目录逐个翻文件）
 2. 用当前任务的关键词（涉及的 API / 文件路径模式 / 场景词 / 技术栈）匹配 INDEX 各行的 `trigger` 与 `tags`

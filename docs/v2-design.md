@@ -66,9 +66,11 @@
                                       │
 eo-change（提问纪律 → AC 前置 → TODO 分批拆解 → 粒度校验 → 对话确认，status: confirmed）
    │
-eo-implement（按 Batch 执行，批末 checkpoint + commit；fix 循环归此）
+eo-implement（按 Batch 执行，批末 checkpoint + commit；**只跑轻验证**；fix 循环归此）
    │
-eo-test（AC 为锚）──▶ eo-review（AC 为检查表；强制）
+eo-test（AC 为锚 + 读码取输入；**重验证唯一执行者**）⇄ eo-review（AC 为检查表；强制）
+   │   两者先后无固定默认，agent 按 change 的风险面择一：
+   │   行为面广、重验证项多 → 先 test；逻辑密集、边界多 → 先 review（不起环境、早暴露，test 只跑终版）
    │
 eo-archive（AC 全勾校验 → commit 区间 → doc-manager sync → 冻结 change）
 ```
@@ -87,17 +89,18 @@ eo-doc/
   state/                 # 业务现状（不变）
   changes/               # 项目级扁平 change 目录（原 dev/<module>/changes/ 上提）
     INDEX.md             # 变更时间线（承接 v1 spec-history 的流水职责，只此一份）
-    001-<slug>/
+    14-<slug>/           # 目录名 = seq 补零前缀 + slug（见 §2.1 双层制）
       change.md
       review.md          # eo-review 产物
       change-review.md   # eo-change-review 产物（可选）
       test.md            # eo-test 产物（可选）
+      acceptance.md      # 人工验收单（eo-implement 产出，有「人工:」AC 时）
       design/            # 本 change 相关的高保真稿（可选，eo-design 产出）
   templates/
   .sync-cursor           # doc-manager 状态（新增计数字段，见 §6）
 ```
 
-- change-id：项目级三位连号 + 语义 slug（`014-batch-export`）。v1 是模块级编号，迁移见 §10。
+- change-id **双层制**（2026-07-14 定，起因：多 worktree 并行起草时连号必撞——中心计数器跑在去中心化介质上，冲突是必然）：**身份 = slug**（`batch-export`），只钉不可变/对外位置（commit 前缀、stub 文件名、issue 标题），出生查重（本地 changes/ + INDEX + `git ls-tree origin/<默认分支>` 兜底）、首个 commit 后不可改名；frontmatter `seq`（显示 `#14`）是**可变显示序号**，允许并行撞号、INDEX 更新时自愈（created 晚者让号）。**目录名 = `<NN>-<slug>/`**（2026-07-17 补回：seq 补零作前缀，恢复 `ls` 可排序性，解决 slug-only 下「找不到进行中的 change」；目录是可改名投影，撞号自愈扩展为 `git mv` 目录 + 改 INDEX/stub，**commit 前缀/issue 全程不动**，故仍规避 v1 的连号断链）。对标：OpenSpec 的 slug-only（零协调）+ spec-kit 式编号的排序/口头引用便利，规避其冲突（规范全文见 eo-shared/conventions.md §2）。v1 是模块级编号，存量数字前缀 id 冻结兼容，迁移见 §10。
 - **跨模块判定移除**（决策 #3）：change 只挂项目。原「是否动别人的 spec」判界废弃；变更范围就是 §4 涉及文件 + AC 的辐射面。
 
 ### 2.2 DESIGN.md（仓库根）
@@ -140,7 +143,7 @@ tmp/eo/
 - **预算按复杂度配比**：trivial 0-1 问、simple 1-3 问、complex 3-5 问、critical 5+ 问（并建议升级 brainstorming）。每轮最多 1-2 问。
 - **封闭选择协议（runtime 中立）**：优先用当前 runtime 的结构化提问工具（Claude Code 为 AskUserQuestion），无则对话内列 2-4 个编号选项；必带推荐项；开放问题走正文，放消息末尾。
 - **决策台账**：内部维护「已钉（结论+理由）/ 未钉 / defer」三态，不渲染给用户；已钉项不得重问、不得被后续讨论隐式推翻；defer 项写入 change.md §8 开放问题，**全篇上限 3 条**。
-- **UI/UX 类问题**：文字难以描述时，选项末尾附「生成 HTML 对比页帮你决策」（低保真、自包含、可点选；借 superpowers visual companion 思路，产物放 tmp/ 不入库，结论回填决策台账）。
+- **视觉/UI 方向类问题（已硬化）**：方向类封闭选择**必带**「画 HTML 对比页」选项；判据/豁免/疲劳优先级以 eo-shared/questioning.md §4 为准（产物放 tmp/ 不入库，结论回填决策台账）。
 - **疲劳信号识别**：用户说「别问了 / 先做吧 / 就这样」→ 立即用合理默认推进，假设显式写入 §1 并标注「（假设）」。
 - **反模式表**（写进 SKILL.md，比正面规则更有约束力）：一次塞 3+ 个问题；问代码里能查到的事实；重问已钉结论；不给选项的抽象大问题；结束不做覆盖确认。
 
@@ -148,8 +151,10 @@ tmp/eo/
 
 - **用户视角、可独立验证**，每条一个可勾选项，附验证方式。Success Criteria 风格要求技术无关（正例「用户 3 步内完成导出」，反例「API 200ms 返回」）。
 - 复杂行为可附 Given/When/Then 场景（可选，不强制）。
-- AC 的三重身份：implement 的完成判据（全勾才算 done）、review 的检查表、fix 的期望行为锚点（接替 v1 的 F-spec）。
-- **两级验证归属（后续决策）**：auto（agent 可验，批末自动勾）/ manual（「人工:」标记，只有用户能勾）——implement 完成时的人工验收门只把 manual 项推给用户（极简指引速报），archive 门禁校验 manual 勾的来源；解决「过度自动化导致用户不知何时/如何验收」。
+- AC 的三重身份：implement 的完成判据（TODO 全勾 + auto-light 通过 = **实施完成**，不等于验收完成）、review 的检查表、fix 的期望行为锚点（接替 v1 的 F-spec）。
+- **三级验证归属**：分的是**「谁在哪个阶段勾」**——`auto-light`（不起环境即可验：typecheck/lint/单测/静态扫描/单次冒烟，implement 批末勾）/ `auto-heavy`（起服务·多环境组合·点击流，**eo-test** 一次跑完并勾）/ `manual`（「人工:」标记，只有用户能勾）。**light/heavy 不在起草期标注**（起草时无从预判成本），由 agent 读「验证」栏当场判、判不准按 heavy；manual 相反必须起草期标（它问的是「人能不能判」，不是「贵不贵」）。三方勾选权不重叠——解决「同一套 E2E 矩阵在 implement / test / fix 各重演一遍」，重验证一次也不少，只是不跑三遍。
+- **重验证的环境纪律**：环境是共享资源，**agent 不拥有它的生命周期**——探测复用、用完不停，只在换环境组合时重启。「不停」能安全成立的前提是重验证已收敛到 eo-test 单一阶段（环境单主）；多 agent 并行争抢时该策略不成立，须先做归属分流。起停命令与单次代价属**项目特异知识**，走项目 lesson 经 implement/test/fix 的消费步骤送达，不进任何通用 skill。
+- **人工验收单 acceptance.md**：implement 完成时生成（软门不阻塞，规范见 eo-shared/acceptance.md：人话摘要 + 环境准备 + 逐项操作/预期/勾选框，**用户只勾不打字**、异常才写一句），review 通过后速报提示可验收，archive 是**唯一硬门**（核对勾选与异常行 + 已勾项一键复核，支持「带我验收」引导走查；**未勾的 auto-heavy 一并过此门**——跳过 eo-test 时它们必然未勾，不得静默放行）；解决「过度自动化导致用户不知何时/如何验收」与「验收指引易失、只有断言没有操作步骤」。
 - AC 先于 TODO 产出——TODO 拆解必须逐条映射到 AC（每条 TODO 标注「对应 AC-x」）。
 
 ### 3.4 TODO 拆解与分批
@@ -174,9 +179,11 @@ tmp/eo/
 
 ```markdown
 ---
-id: 014-batch-export
+id: batch-export     # slug 即身份
+seq: 14              # 显示序号（#14），补零作目录前缀 <NN>-<slug>/，撞号自愈
 title: 批量导出
-status: draft        # draft | confirmed | implementing | done | archived（skill 自动流转）
+summary: <一句话意图>  # INDEX 摘要与看板 stub 卡面的单一来源
+status: draft        # draft | confirmed | implementing | reviewed | archived（skill 自动流转）
 type: feature        # bootstrap | feature | enhance | refactor
 base_commit: ~       # eo-implement 首次执行时写入
 commits: []          # eo-archive 归档时写入
@@ -208,7 +215,7 @@ created: 2026-07-07
 <!-- 以下为条件节，满足触发条件才写 -->
 
 ## 5. 技术方案
-触发：新架构模式 / 新外部依赖 / 安全・性能・数据迁移复杂度 / 编码前有歧义。
+触发：新架构模式 / 新外部依赖 / 安全・性能・数据迁移复杂度。（判据须可证伪）
 
 ## 6. 流程图
 触发：状态机、多角色交互等「画比说清楚」的场景。
@@ -257,9 +264,9 @@ created: 2026-07-07
 
 - 首次执行：写入 `base_commit`（当前 HEAD），status 自动 `confirmed → implementing`。
 - **按 Batch 执行**：批末 checkpoint——验证该批对应 AC、勾选 TODO、汇报、询问「继续下一批 / 停」。
-- **commit 纪律（决策 #6，推荐非强制）**：推荐一次 change 一次 commit；TODO 分批时允许一批一 commit，message 统一带 change-id 前缀（`[014] ...`），便于 archive 归集区间。
+- **commit 纪律（决策 #6，推荐非强制）**：推荐一次 change 一次 commit；TODO 分批时允许一批一 commit，message 统一带 change-id 前缀（`[batch-export] ...`——slug，绝不用 seq：commit 不可变，编号可让号），便于 archive 归集区间。
 - fix 循环：change 生命周期内（含 archived 前）的 bug 修复归 implement，不开新 change（v1 定位保留）。
-- 全部 TODO 完成 + AC 全勾 → 提示走 test/review；review 通过后 status 自动置 `done`。
+- 全部 TODO 完成 + auto AC 全过 → 生成人工验收单（有人工项时，软门不阻塞）→ 提示走 test/review；review 通过后 status 自动置 `reviewed`（= 代码审查通过，manual 项可迟至 archive 硬门确认。曾命名 `done`——但「done 列还有事没完」在看板上是误导，2026-07-14 改名，存量 done 读到视同 reviewed）。
 
 ### 5.2 eo-fix（重构：三层按需付费）
 
@@ -267,7 +274,7 @@ created: 2026-07-07
 
 **分诊定路**：明显缺陷（报错/崩溃/数据错，对错无需文档裁决）→ 快路；「应该/不应该」类语义分歧（行为疑似有意实现、涉及业务规则数值）→ 取证路；定位不了 → 深挖。
 
-**定位（代码反查为主，~500-900 token）**：症状字符串 grep 源码（或 handbook INDEX 定位入口）→ `git log -n 20 -- <文件>` 按 commit 前缀反查归属（`[NNN]` 直达 change / `fix:` 直改史 / 无前缀存量代码）→ 只读 frontmatter + §2 AC。**commit 前缀纪律免费提供了「文件 ↔ change」精确反向索引，不另建**。辅路：changes/INDEX.md（活跃置顶、通常 0-3 个先验最高，再关键词扫 archived）。
+**定位（代码反查为主，~500-900 token）**：症状字符串 grep 源码（或 handbook INDEX 定位入口）→ `git log -n 20 -- <文件>` 按 commit 前缀反查归属（`[<slug>]` 直达 change / `fix:` 直改史 / 无前缀存量代码）→ 只读 frontmatter + §2 AC。**commit 前缀纪律免费提供了「文件 ↔ change」精确反向索引，不另建**。辅路：changes/INDEX.md（活跃置顶、通常 0-3 个先验最高，再关键词扫 archived）。
 
 **快路（默认）**：最小变更修复 → 复现步骤转回归验证 → 落点记账（活跃 change 计入并勾 AC；无则 `fix:` 直改，cursor 落后 >10 提示 sync）。
 
@@ -289,7 +296,7 @@ created: 2026-07-07
 
 归档的本质：**把世界结算成 commit，然后按 commit 更新文档**——archive 自己不拥有任何同步逻辑。
 
-1. **前置校验**：status done、review.md 通过、AC 全勾（未全勾需用户显式豁免并把豁免记入 change.md §8）。
+1. **前置校验**：status reviewed、review.md 通过、AC 全勾（未全勾需用户显式豁免并把豁免记入 change.md §8）。
 2. **工作区结算**：cursor 基于 commit，sync 只能看见已提交内容。属于本 change 的未提交改动 → 提交（带 change-id 前缀）；**无关脏改动留在工作区**（sync 默认「只取已提交增量」不会碰它们）；两类混在同一文件无法分离时问用户一次。
 3. **冻结元数据并提交**：从 `base_commit..HEAD` 按 change-id 前缀归集本 change 提交、写入 frontmatter `commits`（**仅审计与 PR body 用，不决定同步范围**）；status → `archived`（不可逆）；更新 changes/INDEX.md。这些文档改动本身提交入库——单 commit 纪律下与第 2 步合为同一个 commit，implement 已按批提交时这就是一个小的收尾 meta commit。
 4. **文档同步（内嵌调用，零自有逻辑）**：执行 `/eo-doc-manager sync` 的完整流程（cursor..HEAD → 推进 cursor），archive 的 SKILL.md 不复述任何同步细节——同步语义只存在于 doc-manager 一处（v1 的教训：一套逻辑多处描述必然漂移）。范围覆盖第 2/3 步的提交与期间累积的直改提交，结束时 cursor == HEAD。change.md 作为业务语境提示传入，但信源永远是代码。若中途失败：change 已冻结、cursor 未推进，手动重跑 `/eo-doc-manager sync` 即可续上（archive 只是 sync 的两个触发点之一）。
@@ -313,8 +320,8 @@ created: 2026-07-07
 
 ## 7. eo-test / eo-review / eo-change-review（微调）
 
-- **eo-test**：测试用例来源从 change §6 测试标准改为 AC 逐条推导（AC → 至少一个可执行验证）；「严禁改业务代码」不变。
-- **eo-review**：检查维度改为「AC 覆盖（逐条核对）+ 代码质量 P0/P1/P2」；清理 spec/模块引用。
+- **eo-test**：测试用例来源从 change §6 测试标准改为 AC 逐条推导（AC → 至少一个可执行验证）；「严禁改业务代码」不变。后续增补三条：**① 重验证唯一执行者**（auto-heavy AC 在此一次跑完并勾选，implement 不跑）；**② AC 决定验什么、代码决定拿什么验**——阶段一先读 diff 从分支/默认值/空值处理取输入，只按 AC 文字正向推导只会验到「AC 想到的路径」（`""`/`null`/越界值这类输入 AC 里永远不会写，再多跑几遍矩阵也漏）；**③ 补 lessons 消费步骤**——环境的起停命令与代价是项目特异知识，只能经此送达。
+- **eo-review**：检查维度改为「AC 覆盖（逐条核对）+ 代码质量 P0/P1/P2」；清理 spec/模块引用。后续增补：**未勾的 auto-heavy / manual AC 不算缺陷**（勾选权分别归 test 与用户；review 在 test 之前跑时它们本就未勾，只核对实现是否覆盖）。
 - **eo-change-review**（决策 #1：保留现状深度）：检查维度中 spec Delta 正确性删除，替换为「AC 质量（可测、无歧义、用户视角）+ 粒度合规（§3.5 指标）+ TODO↔AC 映射完整性」。观测其使用率与价值，后续决定是否轻量化（backlog 已记）。
 
 ### 7.1 对话速报（硬性要求）
@@ -347,16 +354,16 @@ P2（可后置）：
 
 | 模式 | 对应 gstack | 职责 |
 |---|---|---|
-| `init` | design-consultation | 0→1 建立设计系统：预填充（读 README/已有 DESIGN.md）→ 一个合并问题 + memorable-thing 强制问题 → （可选）竞品视觉调研 → 一次性完整提案（SAFE/RISK 拆分：2-3 个安全选择 + ≥2 个刻意冒险各说得失）→ 自包含 HTML 预览页（候选字体/色板/组件示例/明暗切换，用产品真实内容）→ 用户确认 → 落地 DESIGN.md + CLAUDE.md 注入 |
-| `variants` | design-shotgun | 针对某屏幕的多变体发散：先出 N 个文字概念（反趋同硬要求：像三个不同团队而非同一团队三种浓度）→ 确认后生成 HTML 变体 → 对比页收集反馈 → 迭代 → 选中结论进 DESIGN.md Decisions Log |
-| `apply` | design-html | 把选中方向落成生产级 HTML/组件；DESIGN.md token 优先级最高；真实内容禁 lorem ipsum；AI slop 黑名单自检 |
+| `init` | design-consultation | 0→1 建立设计系统：预填充（读 README/已有 DESIGN.md）→ 一个合并问题 + memorable-thing 强制问题 → 上下文门槛（≥2 项说不清 → 先 /eo-brainstorming；拒绝则最小 brief 2 轮封顶）→ （可选）竞品视觉调研 → 一次性完整提案（SAFE/RISK 拆分：2-3 个安全选择 + ≥2 个刻意冒险各说得失）→ 自包含 HTML 预览页（候选字体/色板/组件示例/明暗切换，用产品真实内容）→ 用户确认 → 落地 DESIGN.md + CLAUDE.md 注入 |
+| `variants` | design-shotgun | 针对某屏幕的多变体发散：brief 握手（上游材料预填五维、缺维补采、无可读引用按无上游）→ 性质声明（系统内探索 / 系统变更实验）→ 先出 N 个文字概念（反趋同硬要求：像三个不同团队而非同一团队三种浓度）→ 一次确认后生成 HTML 变体（支持子 agent 时并行，失败有限重试）→ 对比页即选择器（结构化反馈：保留/淘汰/杂交，禁口头拉锯）→ 迭代 → 沉淀分支：有 DESIGN.md 进 Decisions Log；无则显式声明「仅当次有效、未沉淀」 |
+| `apply` | design-html | 设计计划先行（按档位：整页全量四项+asset 策略 / 组件级只列受影响 token）+ 计划对照复审（通用默认必须改掉）→ 落成生产级 HTML/组件；DESIGN.md token 优先级最高；交互/可达性自查；真实内容禁 lorem ipsum；AI slop 黑名单自检 |
 | `audit` | design-review | 对已实现页面做「与 DESIGN.md 一致性」审计 + 修复建议（轻量版，可后置实现） |
 
 ### 8.2 产物存放
 
 - `DESIGN.md`：仓库根，唯一设计真相源。
 - 变体/预览 HTML：`tmp/eo/design/<date>-<topic>/`（约定见 §2.3），不入库；选中变体的结论（含关键 token）写入 DESIGN.md Decisions Log。
-- 服务具体 change 的高保真稿：`changes/<id>/design/`，随 change 归档冻结。
+- 服务具体 change 的高保真稿：`eo-doc/changes/<id>/design/`，随 change 归档冻结。
 
 ### 8.3 约束链（gstack 五重引用的 eo 版）
 
@@ -364,6 +371,7 @@ P2（可后置）：
 2. eo-change 起草涉及 UI 时：DESIGN.md 存在则作为默认约束读入；不存在则提示可先跑 `/eo-design init`。
 3. eo-review 增加检查项：UI 变更是否符合 DESIGN.md。
 4. `variants`/`apply` 声明 DESIGN.md token 优先级高于任何临时发挥。
+5. 与 eo-brainstorming 双向衔接：brainstorming 捕获出口的视觉/UI 结论移交 eo-design（已钉清单 = 设计 brief）；eo-design 上下文不足时反向升级 /eo-brainstorming；questioning.md §4 硬化为「视觉/UI 方向类封闭选择必带『画 HTML 对比页』选项」。
 
 ### 8.4 依赖降级
 
@@ -388,9 +396,9 @@ P2（可后置）：
 install.sh 是逐目录软链，跨 skill 相对路径引用不可靠。方案：新建 `eo-shared/` 目录（无 SKILL.md，不可触发），随包一起软链到 `~/.claude/skills/eo-shared`，存放单一来源的共享规范：
 
 - `questioning.md` — 提问纪律全文（eo-change / eo-brainstorming / eo-design 引用）
-- `ac-spec.md` — 验收清单规范（eo-change / eo-test / eo-review / eo-fix 引用）
+- `ac-spec.md` — 验收清单规范：三级验证归属、重验证的环境纪律（eo-change / eo-implement / eo-test / eo-review / eo-fix 引用）
 - `granularity.md` — 粒度指标、trivial 硬判据与拆分决策表
-- `conventions.md` — 横切约定：tmp/eo/ 工件命名空间（§2.3）、commit 前缀（change-id / fix: / ui:）、状态自动流转
+- `conventions.md` — 横切约定：tmp/eo/ 工件命名空间（§2.3）、change 身份（slug/seq 双层）、commit 前缀（change-id / fix: / ui:）、状态词汇总表（看板全序 + 离板状态）
 
 各 SKILL.md 以稳定路径 `~/.claude/skills/eo-shared/<file>` 引用。**实施时需先验证**：无 SKILL.md 的目录在三个 agent 环境（claude/codex/antigravity）的 skills 目录下均无副作用；install.sh 的 `has_skill_dirs` 过滤逻辑需放行该目录。若验证失败，降级方案是各 skill 内嵌精简版 + 构建脚本同步。
 
@@ -430,7 +438,7 @@ install.sh 是逐目录软链，跨 skill 相对路径引用不可靠。方案�
 
 1. ~~eo-shared/ 软链兼容性~~ 已验证：install.sh 按 `eo-*` 通配无条件软链、不检查 SKILL.md，eo-shared/ 自动分发；无 SKILL.md 目录对各 agent 无副作用（Batch 5 安装实测再确认一次 codex/antigravity）。
 2. 一致性校验阈值（暂定 sync_count=5，用数据调）。
-3. change-id 项目级连号与 v1 存量模块级编号并存时 INDEX 的呈现方式。
+3. ~~change-id 项目级连号与 v1 存量模块级编号并存时 INDEX 的呈现方式~~ 已消解（2026-07-14）：id 双层制后编号只是 frontmatter 显示序号，id 是不透明字符串——存量数字前缀 id 与新 slug id 在 INDEX 同列并存，无需特殊呈现。（2026-07-17 补：seq 补零回归目录前缀 `<NN>-<slug>/` 以恢复 `ls` 可排序性，身份仍是 slug；撞号自愈扩展到 `git mv` 目录，commit/issue 不动。）
 4. eo-design 竞品调研步骤与用户环境 web-access skill 的对接方式（可选步骤，不阻塞）。
 5. 直改模式的 cursor 落后提醒阈值（暂定 10，用数据调）。
 
@@ -440,7 +448,7 @@ install.sh 是逐目录软链，跨 skill 相对路径引用不可靠。方案�
 
 调研结论见 vault research/v2/《看板可观测与GitHub联动》《obsidian看板组件对比》。
 
-- **数据层**：skill 在 change 状态流转时向 vault 项目目录 upsert 一张 stub 卡片笔记，frontmatter：`id / title / project / status / type / todo_done / todo_total / issue / pr / updated / tags: [eo-change]`。stub 完全由 change frontmatter 派生，幂等、可全量重建，**零双写**（看板只是 frontmatter 的投影）。
+- **数据层**：skill 在 change 状态流转时向 vault 项目目录 upsert 一张 stub 卡片笔记，frontmatter：`id / seq / title / summary / branch / project / status / type / todo_done / todo_total / issue / pr / updated / tags: [eo-change]`（`summary` 一句话意图上卡面——Bases 卡显示属性、正文不可见；`branch` 供 worktree 并行时辨认；均派生自 change.md）。stub 完全由 change frontmatter 派生，幂等、可全量重建，**零双写**（看板只是 frontmatter 的投影）。**tags 全生命周期恒定**：`eo-change` 是 Bases 过滤锚点，归档也绝不换 tag、不移文件——只置 `status: archived`（2026-07-14 定：换 tag 会让卡从所有视图消失，历史盘点断档）；「看板只留活跃管线」由呈现层解决——starter 看板 kanban 主视图带 `status != "archived"` 视图级过滤，盘点 table 保留全史（数据层与呈现层各管各的）。
 - **呈现层**：一个共享 `.base` 文件三视图——主视图 **Kanban Bases View** 插件（真·并排状态列 + 列色 + 封面 + 按项目泳道）、官方 cards+groupBy 做退路、table 做盘点。官方 Bases kanban 视图在 roadmap 上为 Active，发布后改视图 type 即切换，数据零迁移。**skill 永不写 .base**——装好插件后在 UI 配一次、抄 Obsidian 写回的键名（社区插件 YAML 键随版本变动）。
 - **开关**：`.eo-project.json` 新增 `board` 段（`enabled` / `stub_dir`），逐项目 opt-in。schema 变更须登记跨项目关系文档（eo-platform 只读消费）。
 - **历史同步**：后开开关的项目由 eo-project-init 全量重建 stub（repair 语义，幂等，成本趋零）。

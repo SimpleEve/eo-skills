@@ -12,7 +12,7 @@
 ## 迁移步骤
 
 1. **冻结存量 spec**：对每个 `eo-doc/dev/<module>/spec.md` 与 `spec-history.md`，frontmatter 补 `status: frozen`（已有则跳过）。它们保留作历史参考，v2 任何 skill 不再读写。
-2. **建项目级 changes/**：`eo-doc/changes/INDEX.md` 不存在则创建；起始编号 = 扫描全部 `dev/*/changes/` 取最大 `NNN` + 1；INDEX 顶部加一行注记「NNN 号之前的历史 change 见 `dev/<module>/changes/`（v1 存量，原地保留）」。
+2. **建项目级 changes/**：`eo-doc/changes/INDEX.md` 不存在则创建；`seq` 起始号 = 扫描全部 `dev/*/changes/` 取最大 `NNN` + 1（新 change 按 v2 规则：slug 即 id，seq 只是显示别名，见 eo-shared/conventions.md §2）；INDEX 顶部加一行注记「此号之前的历史 change 见 `dev/<module>/changes/`（v1 存量，原地保留）」。
 3. **在途 change 盘点**：列出旧目录里 status 非 archived 的 change，逐个告知：「走完余下生命周期即可（implement/test/review 照旧），**归档按 v2 执行**——不合并 Delta，直接结算 commit + 触发 sync + 冻结」。不迁移文件位置。
 4. **kanban 退役**：`kanban_path` 非 null → 改写为 `null`，提示「旧手工看板已退役，看板文件（如 00-Wiki/项目看板.md 中本项目条目）可自行归档删除；项目级总览改由 Bases 聚合 roadmap frontmatter」。
 5. **roadmap frontmatter 补齐**：`roadmap.md` 缺 `status` / `phase` / `summary` 字段的，从正文推断补写（推断不出的问一次）；`status` 枚举 `active | researching | paused | done`。

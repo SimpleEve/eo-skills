@@ -1,14 +1,16 @@
 # change.md 固定模板（v2）
 
-eo-change 按下方模板写入 `eo-doc/changes/<NNN-change-id>/change.md`。
+eo-change 按下方模板写入 `eo-doc/changes/<NN>-<slug>/change.md`（目录 = seq 补零前缀 + slug；身份是 slug，见 [eo-shared/conventions.md](../../eo-shared/conventions.md) §2）。
 
 必填仅 §1-§4。§5-§8 是**条件节**：满足触发条件才写，不满足整节省略（连标题都不留）。如果写出来的 change.md 明显超过本模板量级，先查 [eo-shared/granularity.md](../../eo-shared/granularity.md) 的硬指标。
 
 ```markdown
 ---
-id: 014-batch-export
+id: batch-export     # slug 即身份（commit 前缀/stub 文件名用它），首个 commit 后不可改名
+seq: 14              # 显示序号（#14），补零作目录前缀 14-<slug>/；撞号自愈见 conventions.md §2
 title: 批量导出
-status: draft        # draft | confirmed | implementing | done | archived（skill 自动流转，用户不手改）
+summary: <一句话意图，≤50 字，纯文本>   # INDEX 摘要列与看板 stub 卡面的单一来源
+status: draft        # draft | confirmed | implementing | reviewed | archived（skill 自动流转，用户不手改）
 type: feature        # bootstrap | feature | enhance | refactor
 base_commit: ~       # eo-implement 首次执行时写入
 commits: []          # eo-archive 归档时写入（仅审计用，不决定同步范围）
@@ -53,7 +55,8 @@ created: 2026-07-07
 
 ## 5. 技术方案
 
-<!-- 触发：新架构模式 / 新外部依赖 / 安全・性能・数据迁移复杂度 / 编码前有歧义。都不满足 → 整节省略 -->
+<!-- 触发（任一成立才写，都不满足 → 整节省略）：新架构模式 / 新外部依赖 / 安全・性能・数据迁移复杂度。
+     判据须可证伪——「编码前有歧义」这类恒真描述不构成触发；有歧义应在第三步澄清掉，而非落进本节。 -->
 
 ## 6. 流程图
 

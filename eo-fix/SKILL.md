@@ -36,7 +36,7 @@ description: |
 ### 第二步：定位（代码反查为主，~500-900 token）
 
 1. **锚定代码**：有症状字符串（报错文案 / UI 文案）→ 直接 grep 源码，几乎一步中的；没有 → 经 `eo-doc/agent-handbook/INDEX.md` 定位模块入口文件
-2. **反查归属**：`git log --oneline -n 20 -- <嫌疑文件>` 看 commit 前缀——`[NNN]` → 相关 change 直达；`fix:` / `ui:` → 直改历史（无书面期望）；无前缀 → 存量代码
+2. **反查归属**：`git log --oneline -n 20 -- <嫌疑文件>` 看 commit 前缀——`[<change-id>]`（slug 或存量数字前缀）→ 相关 change 直达；`fix:` / `ui:` → 直改历史（无书面期望）；无前缀 → 存量代码
 3. 需要书面期望时只读该 change 的 frontmatter + §2 AC，**不通读**
 
 **辅路**（代码反查不灵时才用）：扫 `eo-doc/changes/INDEX.md`——活跃 change 置顶且通常只有 0-3 个，先看它们（刚做完的最容易坏）；不中再按关键词扫 archived 区。候选 >3 或全无匹配 → 追问用户。
@@ -44,6 +44,8 @@ description: |
 ### 第三步：快路修复
 
 最小变更修复 → 用户给的复现步骤转成回归验证跑通 → 跳到第六步落点记账。中途发现行为其实可能是有意的 → 转第四步。
+
+**复现与回归都取最低成本层**：修前先在该层复现失败（这是根因判断的依据，也是「改完看起来对了」之外唯一的证据），修后在同层验通过。层的选法——纯逻辑用单测 / `node -e` 等价复刻（秒级），接口契约用一次请求，**确属集成 / UI 态才起环境**（环境纪律见 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)）。不要每改一行就重新 build + 起环境。
 
 ### 第四步：取证路（仅语义分歧）
 
@@ -78,7 +80,7 @@ description: |
 
 ### 第六步：落点记账（任何路都不豁免，~30 秒）
 
-- 有相关**活跃 change** → 勾选涉及的 TODO/AC，commit 带 `[<change-id>]` 前缀；联动钩子刷新 stub（[../eo-shared/board-github.md](../eo-shared/board-github.md)，未开启跳过）
+- 有相关**活跃 change** → 勾选涉及的 TODO/AC（**auto-heavy 不代勾**，勾选权归 /eo-test；被本次改动弄脏的已勾项按 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)「勾变脏即取消」处理），commit 带 `[<change-id>]` 前缀；联动钩子刷新 stub（[../eo-shared/board-github.md](../eo-shared/board-github.md)，未开启跳过）；改动影响其 acceptance.md 人工项的入口/行为 → 按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)「失效与重置」取消该项勾选并注明原因
 - 无 → 直改落地：commit 带 `fix:` 前缀（见 [../eo-shared/conventions.md](../eo-shared/conventions.md)），由下次 doc sync 兜底归档；cursor 落后超过 10 个 commit 时建议顺手跑 `/eo-doc-manager sync`
 
 ### 第七步：收尾速报
@@ -99,6 +101,7 @@ description: |
 | 明显缺陷不查文档 | 快路不做任何取证，速度对齐「直接修」 |
 | 推翻行为前必取证 | 语义分歧不取证就改代码 = 可能静默推翻已确认决策，禁止 |
 | 落点记账不豁免 | 三层里唯一的必做项 |
+| 验证取最低成本层 | 能复现该缺陷的最便宜的层就是对的层（纯逻辑 → `node -e` / 单测，秒级）；起环境是最后手段，不是默认 |
 | 定位禁全局 grep eo-doc | 代码反查为主，INDEX 辅路 |
 | 修复范围守界 | 超 trivial 量级 / 需方案权衡 → 转 change，不硬修 |
 | 深挖必宣告、必还原 | 插桩/日志/bisect 结束后全部还原 |
@@ -107,9 +110,9 @@ description: |
 
 ## 典型场景
 
-**场景 1 · 明显缺陷（快路，全程不碰 eo-doc）**：「导出报错了」→ grep 报错文案锁定文件 → 修 → 回归验证 → `git log` 见 `[014]` 且 014 活跃 → 勾 AC、`[014]` 前缀提交。
+**场景 1 · 明显缺陷（快路，全程不碰 eo-doc）**：「导出报错了」→ grep 报错文案锁定文件 → 修 → 回归验证 → `git log` 见 `[batch-export]` 且该 change 活跃 → 勾 AC、`[batch-export]` 前缀提交。
 
-**场景 2 · 有意设计被误报（取证路的价值时刻）**：「列表怎么把已归档的也显示出来了，去掉」→ 反查归属 `[014]` → 014 的 AC-3 白纸黑字「归档项默认可见」→ 停手：「这是 014 特意做的，要推翻它就是需求变更」→ 用户确认后转 /eo-change。**没有这一步，这个已确认决策就被静默推翻了。**
+**场景 2 · 有意设计被误报（取证路的价值时刻）**：「列表怎么把已归档的也显示出来了，去掉」→ 反查归属 `[list-archive-view]` → 该 change 的 AC-3 白纸黑字「归档项默认可见」→ 停手：「这是 list-archive-view 特意做的，要推翻它就是需求变更」→ 用户确认后转 /eo-change。**没有这一步，这个已确认决策就被静默推翻了。**
 
 **场景 3 · 需求变更伪装**：「积分过期改成 90 天了」→ state 记载 30 天规则、代码一致——有意设计 → 转 /eo-change。
 

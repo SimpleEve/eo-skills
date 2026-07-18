@@ -55,7 +55,7 @@ description: "eo-skills 在当前仓库的总入口：生成 .eo-project.json、
 1. **配置校验**：读现有 `.eo-project.json`，对照 [references/config.md](references/config.md) 的 schema——基础字段（project_name/mode/project_root/doc_root）缺失按默认补写；存量配置的 `kanban_path` 字段忽略不改（旧看板体系已退役），已有字段一律不改；**`board` / `github` 段缺失时不在本步补写**（补了默认关闭值会吞掉第 5 步的询问），只记录缺段，留给第 5 步问答后落盘
 2. **骨架补齐**：项目管理侧必建 roadmap.md 与代码侧 `eo-doc/` 骨架缺什么补什么；**不触碰任何已有文件的内容**
 3. **注入段刷新**：按标记对整段替换 agent 配置文件中的 `eo-project` / `eo-doc` 注入段；仓库根存在 `DESIGN.md` 时核对 `eo-design` 注入段
-4. **.gitignore 与软链核对**：`tmp/eo/`、`<doc_root>/.sync-cursor`、（local 模式）`.eo-project/`、（vault 模式）`<doc_root>/vault` 缺项补写；vault 模式且 `create_symlink: true` 时核对 `<doc_root>/vault` **软链本体**存在且指向 `project_root`，缺失/指错按「9. 建立软链」重建
+4. **.gitignore 与软链核对**：`tmp/eo/`、（local 模式）`.eo-project/`、（vault 模式）`<doc_root>/vault` 缺项补写；若历史遗留把 `<doc_root>/.sync-cursor` 写进了 `.gitignore`，删掉该行并 `git add -f` 补入库（它须随文档一起共享，见 [../eo-doc-manager/references/git-sync.md](../eo-doc-manager/references/git-sync.md)）；vault 模式且 `create_symlink: true` 时核对 `<doc_root>/vault` **软链本体**存在且指向 `project_root`，缺失/指错按「9. 建立软链」重建
 5. **联动两问**（仅对应段缺失时，规则见「8. 生成 .eo-project.json」的 board/github 小节）：开启 board → 立即做 stub 历史同步
 6. **输出摘要**：列出本次补齐/刷新/跳过了什么，然后结束——不执行首次创建流程的其余步骤
 
@@ -137,8 +137,8 @@ eo-doc/
 **不创建** `design/ / research/ / knowledgebase/`（已移除且不再规划——调研沉淀归项目管理侧 `research/`，领域术语归 `state/glossary.md`）。
 
 额外：
-- 初始化 `eo-doc/.sync-cursor`（当前 HEAD 作为首次基线）
-- 将 `eo-doc/.sync-cursor` 与 `tmp/eo/` 追加到 `.gitignore`（tmp/eo/ 是各 skill 的临时工件命名空间，见 [../eo-shared/conventions.md](../eo-shared/conventions.md)）
+- 初始化 `eo-doc/.sync-cursor`（当前 HEAD 作为首次基线）——**随 `eo-doc/` 入库，不写进 `.gitignore`**（理由见 [../eo-doc-manager/references/git-sync.md](../eo-doc-manager/references/git-sync.md)）
+- 将 `tmp/eo/` 追加到 `.gitignore`（tmp/eo/ 是各 skill 的临时工件命名空间，见 [../eo-shared/conventions.md](../eo-shared/conventions.md)）
 - CLAUDE.md 注入（详见 [../eo-doc-manager/references/claude-injection.md](../eo-doc-manager/references/claude-injection.md)）
 
 **注意**：如果用户本次只想要项目管理侧（例如纯规划项目，没代码），可用 `--skip-code-side` 跳过本节。此时 `doc_root` 字段仍写入配置，留待将来补建。

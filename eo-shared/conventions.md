@@ -1,6 +1,6 @@
 # 横切约定（单一来源）
 
-> 被全部 eo-* skill 引用：tmp 工件命名空间、commit 前缀、状态自动流转。
+> 被全部 eo-* skill 引用：tmp 工件命名空间、change 身份（slug/seq 双层）、commit 前缀、状态词汇总表。
 
 ## 1. tmp 工件命名空间：tmp/eo/
 
@@ -24,28 +24,65 @@ tmp/eo/
 
 skill 写入 vault（board stub、brainstorm 记录、lessons/decisions、backlog 等）的内容中：
 
-- **代码仓库内的路径一律纯文本**（inline code，如 `` `eo-doc/changes/014-x/change.md` ``），**禁止写成 markdown 链接**——vault 之外的路径 Obsidian 无法解析，点了打不开；纯文本供人复制到 IDE
+- **代码仓库内的路径一律纯文本**（inline code，如 `` `eo-doc/changes/14-batch-export/change.md` ``），**禁止写成 markdown 链接**——vault 之外的路径 Obsidian 无法解析，点了打不开；纯文本供人复制到 IDE
 - vault 内部互链用 `[[wikilink]]`
 
-## 2. commit 前缀
+## 2. change 身份：slug 即 id，seq 是显示序号（也作目录前缀）
+
+**身份 = kebab-case 语义 slug**（如 `batch-export`）。身份只钉在**不可变/对外**的位置——这些位置写下就改不动，是撞号变贵的根源，坚决只用 slug、永不带号：
+
+- commit 前缀 `[<slug>]`（文件↔change 的反向索引，首个 commit 后不可改名，改名即断链）
+- GitHub issue 标题、看板 stub **文件名** `<slug>.md`
+
+纪律：
+
+- **出生查重**：创建时扫本地 `changes/` 目录与 INDEX.md；有 remote 时 `git ls-tree origin/<默认分支> -- eo-doc/changes/` 兜底（防多 worktree 并行撞名）。撞名 → 换更具体的 slug
+- 拒绝 `fix-` 前缀（bug 走 /eo-fix，无 fix 类型）
+
+**目录名 = `<NN>-<slug>/`**（如 `14-batch-export/`），`NN` = `seq` 补零对齐（两位起，`01`/`14`；跨百整体加宽），供 `ls` 顺序排出、一眼找到最近/进行中的 change。目录名是**可改名投影**（`git mv` 可移，不像 commit 前缀锁死），把 seq 放进来是安全的。下游 skill 里的路径占位符 `changes/<change-id>/` 一律指该目录 `<NN>-<slug>/`（运行时解析，不靠 id 拼）。
+
+**`seq`（frontmatter 整数，显示作 `#14`）是显示序号**，真相只存在于 change.md frontmatter 一处；目录前缀、INDEX 的 # 列、看板 stub 的 seq 字段都是它的投影。分配 = 项目内现有最大号 +1（含 v1/v2 存量数字前缀）。**seq 允许撞号**——多 worktree 并行分配是常态，撞号只造成同号目录与外观歧义，不破坏任何机制：
+
+- **自愈**（撞号只在多分支合并、两卡同树时才显形）：任何更新 INDEX 的动作（eo-change 第八步、eo-archive）顺手对 seq 查重；发现重号 → `created` 晚者让号，一套机械动作：① 改 frontmatter `seq` → ② `git mv <旧NN>-<slug> <新NN>-<slug>`（目录含未跟踪产物则 `mv` 后 `git add`）→ ③ 改 INDEX 行（# 列 + 链接路径）→ ④ upsert stub（整文件重写，seq 与正文路径随之刷新）→ ⑤ 一句话报告。**commit 前缀 `[slug]`、issue 标题/号绝不动**——这正是比 v1 便宜的根因：v1 把号钉进 commit，让号即断链；v2 只动可改名投影
+- **口头引用**：用户说「14 那个」→ 查 INDEX 解析成 slug；重号未修时列出候选问一句
+- **seq 绝不进** commit message、issue 标题、stub 文件名——这些改不了或没人会回去改
+
+> 存量数字前缀 id（v1 的 `014-batch-export`，在模块内 changes/ 原地冻结）照旧有效。v2 期短暂用过的 **slug-only 目录**（无 NN 前缀）不强制迁移：下次任何 skill 触碰该 change 时，按其 frontmatter `seq` 顺手 `git mv` 补上前缀即可（身份是 slug，前缀补不补都不影响引用）。
+
+## 2.5 commit 前缀
 
 | 场景 | 前缀 | 示例 |
 |------|------|------|
-| change 相关提交（implement 批次、archive 结算/meta） | `[<change-id>]` | `[014] 导出模块 Batch 1` |
+| change 相关提交（implement 批次、archive 结算/meta） | `[<change-id>]` | `[batch-export] 导出模块 Batch 1` |
 | 直改模式：bug 小修 | `fix:` | `fix: 修正导出文件名日期格式` |
 | 直改模式：UI/样式/文案 | `ui:` | `ui: 调整卡片间距` |
 
 change-id 前缀是 eo-archive 归集 commit 区间的依据；`fix:`/`ui:` 前缀供 retro 统计直改流量。推荐「一次 change 一次 commit」；TODO 分批时允许一批一 commit，archive 至多补一个收尾 meta commit。
 
-## 3. 状态自动流转
+## 3. 状态词汇总表（看板列序即此）
+
+全看板合法状态的全序：
+
+```
+backlog → draft → confirmed → implementing → reviewed → archived
+```
 
 change 的 `status` 由 skill 在对话确认后自动写入，**用户永远不手改 frontmatter**：
 
 ```
 draft ──(eo-change：用户对话确认)──▶ confirmed
       ──(eo-implement：首次执行)──▶ implementing
-      ──(eo-review 通过)──▶ done
+      ──(eo-review 通过)──▶ reviewed（代码审查已过；人工验收与归档尚未发生）
       ──(eo-archive：完成归档)──▶ archived（不可逆）
 ```
 
 用户的确认动作发生在对话里（回复确认，或按 [questioning.md](questioning.md) §4 封闭选择协议选择），skill 负责落盘。
+
+**终态处置**（两类卡片不对称，且都不影响对方）：
+
+| 状态 | 卡片类型 | 写入者 | 处置 |
+|------|---------|--------|------|
+| `adopted` / `dropped` | backlog 卡 | eo-backlog archive | 三件套：status + tag 换 `eo-backlog-archived` + 移 `backlog/archive/`（退出看板；卡是源数据，归档留痕在文件） |
+| `archived` | change stub | eo-archive 第五层 | 仅最终 upsert `status: archived`——**tags 与文件位置绝不动**：`eo-change` tag 是 Bases 过滤锚点，动了卡片从所有视图（含盘点）消失。活跃视图隐藏 archived 由呈现层的视图级过滤解决 |
+
+backlog 卡的激活态恒为 `backlog`（它不是 change，不进 change 流转）。存量项目的 `status: done` 是 `reviewed` 的旧名——skill 读到即视同 reviewed 并顺手改写。

@@ -33,7 +33,18 @@
 3. **sync 完成后**：当前 HEAD 写入 `.sync-cursor`，`sync_count` +1（archive 触发时 `archive_count` 也 +1）
 4. **用户指定范围时**：优先使用用户指定的范围，但仍更新 `.sync-cursor`
 
-`.sync-cursor` 是本地状态文件，init 时自动追加到 `.gitignore`。
+`.sync-cursor` 随 `<doc_root>/` 一起入库，**不进 `.gitignore`**。它描述的是「已入库的文档同步到了哪个 commit」——这是文档内容的属性，不是机器的属性。若只留在本地，另一台机器或新 clone 会拉到文档却拿不到基线，被当成首次 sync 重新挑起点，把已写进文档的范围重扫一遍。
+
+### 合并冲突处理
+
+两条分支各自 sync 过时 `.sync-cursor` 会冲突。此时 `<doc_root>/` 正文本就冲突、本就需要人工合并，cursor 只是附带的一处，按机械规则解：
+
+| 字段 | 规则 | 理由 |
+|------|------|------|
+| `last_sync_commit` | 取两边**较旧**的（`git merge-base --is-ancestor <A> <B>` 判定祖先关系） | 保守：宁可下次重扫一段，不可漏扫让代码静默漂移 |
+| `sync_count` | 两边**相加** | 事件计数。A 侧 4 次 + B 侧 2 次 = 实际发生 6 次，抽查阈值应照常触发 |
+| `archive_count` | 两边**相加** | 同上，累计统计 |
+| `last_sync_date`、`sync_type` | 跟随 `last_sync_commit` 选中的那一侧 | 与基线保持自洽 |
 
 ### 脏变更三选一
 

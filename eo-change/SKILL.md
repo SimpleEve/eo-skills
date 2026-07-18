@@ -45,7 +45,7 @@ description: |
 
 ### 第三步：预算内澄清
 
-按 [../eo-shared/questioning.md](../eo-shared/questioning.md) 全文执行：预算配比、每轮 1-2 问、封闭选择按其 §4 协议（带推荐项）、内部决策台账（已钉/未钉/defer）、UI/UX 问题附「生成 HTML 对比页」选项、疲劳信号立即降级用默认。defer 上限 3 条，落入 §8 开放问题。
+按 [../eo-shared/questioning.md](../eo-shared/questioning.md) 全文执行：预算配比、每轮 1-2 问、封闭选择按其 §4 协议（带推荐项）、内部决策台账（已钉/未钉/defer）、视觉/UI 方向类问题必带「画 HTML 对比页」选项（其 §4 硬性规则，衔接 /eo-design variants）、疲劳信号立即降级用默认。defer 上限 3 条，落入 §8 开放问题。
 
 ### 第四步：产出验收清单（先于 TODO）
 
@@ -63,17 +63,17 @@ description: |
 
 ### 第七步：写入 change.md 并确认
 
-1. **分配 change-id**：扫描 `eo-doc/changes/` 现有目录，最大数字前缀 +1（3 位补零），用户给语义名，拼成 `<NNN>-<kebab-name>`。拒绝 `fix-` 前缀
-2. 按 [references/change-template.md](references/change-template.md) 写入 `eo-doc/changes/<NNN-id>/change.md`（`status: draft`）；已钉决策落 §1，条件节按触发条件取舍。**写入即新建看板 stub**（[../eo-shared/board-github.md](../eo-shared/board-github.md)，board 未开启则跳过）——draft 从这一刻起就在看板上
+1. **确定 change-id（slug 即身份，规则见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §2）**：用户给语义名 → kebab-case slug 即 id（拒绝 `fix-` 前缀）。查重：扫 `eo-doc/changes/` 目录与 INDEX.md，有 remote 时 `git ls-tree origin/<默认分支> -- eo-doc/changes/` 兜底（防多 worktree 并行撞名）；撞名 → 换更具体的 slug。另分配显示序号 `seq`：现有 change（含存量数字前缀 id）最大号 +1，补零作目录前缀 `<NN>-<slug>/`（供 `ls` 排序、一眼找进行中的）——seq 允许 worktree 并行撞号（自愈见第八步）
+2. 按 [references/change-template.md](references/change-template.md) 写入 `eo-doc/changes/<NN>-<slug>/change.md`（目录名 = seq 补零前缀 + slug；`status: draft`，frontmatter 含 `seq` 与一句话 `summary`）；已钉决策落 §1，条件节按触发条件取舍。**写入即新建看板 stub**（[../eo-shared/board-github.md](../eo-shared/board-github.md)，board 未开启则跳过）——draft 从这一刻起就在看板上
 3. 交付用户确认，按反馈修订
 4. **用户在对话中确认后，skill 自动置 `status: confirmed`**——不要求用户手改 frontmatter；来源是 backlog 卡的，按 [../eo-backlog/SKILL.md](../eo-backlog/SKILL.md) 的 archive 动作归档该卡（adopted + 关联本 change-id）
 5. 联动钩子：更新 stub（status 同步为 confirmed）、创建 GitHub issue（issue 只在此刻建，draft 阶段不建；对应开关未开启则跳过），见 [../eo-shared/board-github.md](../eo-shared/board-github.md)。修订循环中（场景 B）任何改动落盘也顺手 upsert stub
 
 ### 第八步：更新索引 + 提示后续
 
-更新 `eo-doc/changes/INDEX.md`。然后按场景提示：
+更新 `eo-doc/changes/INDEX.md`，顺手对 seq 列查重：发现重号（多 worktree 并行分配所致）→ `created` 晚者让号——改 frontmatter `seq` + `git mv` 目录（`<旧NN>`→`<新NN>`）+ 改 INDEX 行（含链接路径）+ upsert stub，一句话报告（**commit 前缀/issue 全程不动**，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §2）。然后按场景提示：
 
-**场景 A — 首次产出**（目录下无含未解决 P0/P1 的 change-review.md）：
+**场景 A — 首次产出**（目录下无含未决 P0 的 change-review.md）：
 
 > change 已就绪（status: confirmed）。后续：
 > 🟡（可选；符合 [../eo-change-review/SKILL.md](../eo-change-review/SKILL.md) 开头「建议跑」条件时主动提示）`/eo-change-review` — 方案审查
@@ -81,7 +81,12 @@ description: |
 > 2. `/eo-test <change-path>` → `/eo-review <change-path>`
 > 3. `/eo-archive <change-id>` — review 通过后归档
 
-**场景 B — 返工修订**（存在未解决 P0/P1 的 change-review.md）：修订后**必须**再跑 `/eo-change-review` 复审（此时代码未写，**严禁**走 /eo-review 或直接 implement），直到无 P0/P1。复审通过前保持 `status: draft`。
+**场景 B — 返工修订**（change-review.md 存在未决 P0）：
+
+1. **逐条处置台账**（change-review.md 的 Finding 台账）：修复的改 change.md 并在台账「处置」列标注改动落点（状态置 `fixed`）；不认同的标 `wont-fix` + 一句理由，并在对话中向用户播报（用户异议随时改回）
+2. **P1 不阻塞**：采纳与否由本 skill 裁决——采纳顺手修，不采纳标 `wont-fix`；P1 的修复**不触发复审**
+3. 修订后**必须**再跑 `/eo-change-review` 复审（默认增量核销；AC 增删、已钉决策变动等锚变化自动升全量），循环到 **P0=0**；复审累计上限 3 轮，到限由用户按其终态措辞裁决
+4. 此时代码未写，**严禁**走 /eo-review 或直接 implement；复审通过前保持 `status: draft`
 
 
 ## changes/INDEX.md 模板
@@ -89,9 +94,9 @@ description: |
 ```markdown
 # 变更时间线
 
-| 编号 | 标题 | 类型 | 状态 | 日期 | 摘要 |
-|------|------|------|------|------|------|
-| [014-batch-export](014-batch-export/change.md) | 批量导出 | feature | confirmed | YYYY-MM-DD | 一句话 |
+| # | change | 类型 | 状态 | 日期 | 摘要 |
+|---|--------|------|------|------|------|
+| 14 | [batch-export](14-batch-export/change.md) | feature | confirmed | YYYY-MM-DD | 一句话（= frontmatter summary） |
 ```
 
 ## 关键约束

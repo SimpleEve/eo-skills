@@ -17,9 +17,9 @@
 |-----------|------|
 | eo-change | **写入 change.md（draft）时即新建 stub**；修订、确认置 `confirmed` 时更新 |
 | eo-implement | 置 `implementing` 时；每个批末 checkpoint（刷新 todo/ac 进度）；人工验收门勾 manual 后 |
-| eo-review | 通过置 `done` 时 |
+| eo-review | 通过置 `reviewed` 时 |
 | eo-fix | 修复计入活跃 change（勾了 TODO/AC）时 |
-| eo-archive | 置 `archived` 后（第五层收尾） |
+| eo-archive | 置 `archived` 后（第五层收尾）：最后一次 upsert（`status: archived`）。**tags 与文件位置都不动**——`eo-change` tag 是 Bases 过滤锚点，动了卡片从所有视图消失；活跃看板不想看 archived 列由呈现层解决（starter 看板的 kanban 主视图自带 `status != "archived"` 视图级过滤，盘点 table 保留全史） |
 
 草稿被**放弃**（change 目录删除/终止）时同步删除对应 stub，不留孤儿卡。
 
@@ -31,11 +31,14 @@
 
 ```markdown
 ---
-id: 014-batch-export
+id: batch-export
+seq: 14                  # 显示别名（#14），与 change.md 同步；无则省略
 title: 批量导出
 project: <project_name>
 status: confirmed        # 与 change.md 同步
 type: feature
+summary: <一句话意图，≤50 字，纯文本>   # 与 change.md frontmatter 同步，卡面一眼看意图
+branch: feature/export   # upsert 时的 git 分支；在默认分支则省略（worktree 并行时一眼可辨）
 todo_done: 2
 todo_total: 6
 ac_done: 1
@@ -44,13 +47,13 @@ issue: 42                # 无则省略
 pr: https://github.com/...   # 无则省略
 created: 2026-07-07
 updated: 2026-07-08
-tags: [eo-change]          # eo-change 是看板过滤锚点,必含;可再附加内容标签
+tags: [eo-change]          # eo-change 是看板过滤锚点,必含且全生命周期恒定(含 archived,绝不换名);可再附加内容标签
 ---
 
-`<仓库内 change.md 的相对路径>` ｜ <一句话意图摘要>
+`<仓库内 change.md 的相对路径>`
 ```
 
-正文的 change 路径**必须是纯文本（inline code），禁止写成 markdown 链接**——change 在代码仓库内、vault 之外，Obsidian 无法解析这种链接，点了也打不开；纯文本路径供人复制到 IDE 打开。
+正文只放 change 路径，且**必须是纯文本（inline code），禁止写成 markdown 链接**——change 在代码仓库内、vault 之外，Obsidian 无法解析这种链接，点了也打不开；纯文本路径供人复制到 IDE 打开。描述性信息（summary 等）一律进 frontmatter：Bases 卡面显示的是属性，正文在卡上不可见。
 
 - `todo_done/todo_total` 数 change.md §3 的 checkbox；`ac_done/ac_total` 数 §2 的 checkbox（看板一眼看验收进度）
 - **starter 看板自动创建**：开启 board 时（含历史同步），若 `<vault_root>/eo-project-board.base` **不存在**则按 [../eo-project-init/references/board-setup.md](../eo-project-init/references/board-setup.md) 的模板创建（kanban-view 主视图 + table 盘点，双条件过滤，全 vault 聚合）；**已存在则绝不触碰**——用户在 Obsidian UI 的一切调整由 Obsidian 写回该文件。kanban-view 依赖社区插件 Kanban Bases View，未装时用户可在 UI 把视图类型换官方 cards
@@ -61,7 +64,7 @@ tags: [eo-change]          # eo-change 是看板过滤锚点,必含;可再附加
 ### confirmed 时建 issue（eo-change）
 
 1. frontmatter 已有 `issue` 号 → 跳过（去重唯一依据是回写的编号，**绝不靠标题匹配**）
-2. `gh issue create --title "<id> <title>" --body <生成>`；body = §1 意图摘要 + §2 AC 清单 + §3 TODO 作 checkbox 列表（GitHub 原生显示 n of m 进度）
+2. `gh issue create --title "<id> <title>" --body <生成>`（id = slug；`seq` 不进标题——对外投影没人会回去改号）；body = §1 意图摘要 + §2 AC 清单 + §3 TODO 作 checkbox 列表（GitHub 原生显示 n of m 进度）
 3. issue 号回写 change frontmatter `issue: <N>`（stub 随之带上）
 4. `gh` 不可用 / 无 remote / 未登录 → 提示一次并跳过，不阻塞主流程
 
