@@ -1,0 +1,189 @@
+<title>eo 三档制设计稿</title>
+<style>
+:root{
+  --bg:#F6F7F9; --surface:#FFFFFF; --ink:#1C232E; --muted:#5A6572;
+  --line:#E3E7EC; --accent:#0D7377;
+  --t1:#0E9F6E; --t2:#C27803; --t3:#3F5EDB;
+  --chip-ink:#FFFFFF; --code-bg:#EEF1F5;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#14181E; --surface:#1C222B; --ink:#E8ECF1; --muted:#97A2AF;
+    --line:#2A323D; --accent:#4FD1C5;
+    --t1:#2DBE8A; --t2:#E09B2D; --t3:#7C93F0; --code-bg:#242C36;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#14181E; --surface:#1C222B; --ink:#E8ECF1; --muted:#97A2AF;
+  --line:#2A323D; --accent:#4FD1C5;
+  --t1:#2DBE8A; --t2:#E09B2D; --t3:#7C93F0; --code-bg:#242C36;
+}
+:root[data-theme="light"]{
+  --bg:#F6F7F9; --surface:#FFFFFF; --ink:#1C232E; --muted:#5A6572;
+  --line:#E3E7EC; --accent:#0D7377;
+  --t1:#0E9F6E; --t2:#C27803; --t3:#3F5EDB; --code-bg:#EEF1F5;
+}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  line-height:1.75; margin:0; font-size:15px;
+}
+main{max-width:960px; margin:0 auto; padding:48px 24px 80px; display:flex; flex-direction:column; gap:56px;}
+h1,h2,h3{line-height:1.3; text-wrap:balance; margin:0;}
+h1{font-size:30px; font-weight:700;}
+h2{font-size:21px; font-weight:700; margin-bottom:4px;}
+p{margin:0;}
+.eyebrow{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; letter-spacing:.14em; color:var(--accent); text-transform:uppercase; margin-bottom:10px;}
+.lede{color:var(--muted); max-width:42em; margin-top:12px;}
+.status{display:inline-flex; align-items:center; gap:8px; margin-top:18px; border:1px solid var(--line); background:var(--surface); border-radius:999px; padding:4px 14px; font-size:13px; color:var(--muted);}
+.status b{color:var(--t2); font-weight:600;}
+section{display:flex; flex-direction:column; gap:18px;}
+.chip{display:inline-block; padding:1px 10px; border-radius:4px; color:var(--chip-ink); font-size:13px; font-weight:600; white-space:nowrap;}
+.c1{background:var(--t1);} .c2{background:var(--t2);} .c3{background:var(--t3);}
+.diagram{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:20px; overflow-x:auto;}
+.duo{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px;}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:18px 20px;}
+.card h3{font-size:15px; margin-bottom:6px;}
+.card p{font-size:14px; color:var(--muted);}
+.tablewrap{overflow-x:auto; background:var(--surface); border:1px solid var(--line); border-radius:10px;}
+table{border-collapse:collapse; width:100%; font-size:14px; min-width:640px;}
+th,td{text-align:left; padding:10px 16px; border-bottom:1px solid var(--line); vertical-align:top;}
+th{font-size:13px; color:var(--muted); font-weight:600; white-space:nowrap;}
+tbody tr:last-child td{border-bottom:none;}
+td:first-child{color:var(--muted); font-size:13px; white-space:nowrap;}
+.ev{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px;}
+.ev .num{font-size:30px; font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:-.01em;}
+.ev .src{font-size:12px; color:var(--muted); margin-top:8px; border-top:1px solid var(--line); padding-top:8px;}
+.n1{color:var(--t1);} .n2{color:var(--t2);} .n3{color:var(--t3);} .na{color:var(--accent);}
+ol.rules{margin:0; padding-left:22px; display:flex; flex-direction:column; gap:10px; font-size:14px;}
+ol.rules li b{font-weight:600;}
+ol.rules li span{color:var(--muted);}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; background:var(--code-bg); border-radius:4px; padding:1px 6px;}
+.oq{display:flex; flex-direction:column; gap:0; background:var(--surface); border:1px solid var(--line); border-radius:10px;}
+.oq>div{display:grid; grid-template-columns:minmax(140px,180px) 1fr; gap:16px; padding:14px 20px; border-bottom:1px solid var(--line); font-size:14px;}
+.oq>div:last-child{border-bottom:none;}
+.oq .q{color:var(--ink); font-weight:600;}
+.oq .a{color:var(--muted);}
+.oq .a b{color:var(--accent); font-weight:600;}
+footer{color:var(--muted); font-size:13px; border-top:1px solid var(--line); padding-top:18px;}
+footer code{font-size:12px;}
+@media (prefers-reduced-motion: no-preference){
+  section{animation:rise .4s ease both;}
+  @keyframes rise{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;}}
+}
+</style>
+<main>
+
+<header>
+  <div class="eyebrow">eo-skills · workflow design</div>
+  <h1>三档制：直改 / 轻档 change / 全档 change</h1>
+  <p class="lede">不抛 change，也不造新名词——change 分轻 / 全两档（tier: light | full）。轻量化 = 减前置描述、保验收锚点、验证下沉为测试、意图显式去处。</p>
+  <div class="status">状态 <b>草案 · 待定夺</b> <span>· 正文见 docs/tier-design.md</span></div>
+</header>
+
+<section>
+  <div class="eyebrow">01 · 判档</div>
+  <h2>一次判档，两条底线</h2>
+  <div class="diagram">
+<pre class="mermaid">
+flowchart TD
+  A["需求进来<br/>（bug → eo-fix，方向未定 → brainstorming，不变）"] --> B{"描述成本 ≈ 实施成本？<br/>说清怎么改 ≈ 直接改掉"}
+  B -- "是" --> T1["直改档<br/>零工件，改完 commit"]
+  B -- "否" --> C{"四问任一为「是」？<br/>① 影响面圈不住（跨模块 / 共享不变量 / 对外接口）<br/>② 需要多方对齐<br/>③ 预计跨 session<br/>④ 误解代价高"}
+  C -- "全否" --> T2["轻档 change（tier: light）<br/>极简 change.md：意图 + AC ≤5"]
+  C -- "任一是" --> T3["全档 change（tier: full）<br/>完整 change.md 全流程"]
+  T2 -. "扩档信号：圈不住 / 两次跑偏 / AC 装不下 / 出现重验证" .-> T3
+  classDef neutral fill:#3A4552,stroke:#3A4552,color:#E8ECF1
+  classDef tier1 fill:#0E9F6E,stroke:#0E9F6E,color:#fff
+  classDef tier2 fill:#C27803,stroke:#C27803,color:#fff
+  classDef tier3 fill:#3F5EDB,stroke:#3F5EDB,color:#fff
+  class A,B,C neutral
+  class T1 tier1
+  class T2 tier2
+  class T3 tier3
+</pre>
+  </div>
+  <div class="duo">
+    <div class="card"><h3>判档权在 agent，不在用户</h3><p>用户始终自然描述需求，agent 判档并一句话宣告（含该档取舍），用户一个词可改档——<b>不新增任何用户决策点</b>，与今天 trivial 短路同一模式。</p></div>
+    <div class="card"><h3>边界不求精确，只求错得便宜</h3><p>判不准默认低档，升档路径（promoted）兜底；判高了只多一份工件。两个方向都不产生返工，模糊地带无害。</p></div>
+    <div class="card"><h3>输入源与档位正交</h3><p>口述 / backlog 卡 / <b>外部 GitHub issue</b> / brainstorming 捕获都是输入源，统一过判档门。GH issue 可落任何档（frontmatter 挂 gh_issue 回链）；自带 AC 的输入落盘近乎零成本。</p></div>
+    <div class="card"><h3>判界写相对量</h3><p>用「影响面能否圈住」「可审查性」这类相对判据，不写死行数阈值——绝对数字会随模型能力上移而过时。</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">02 · 三档对比</div>
+  <h2>每一档背什么、免什么</h2>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th></th><th><span class="chip c1">直改档</span></th><th><span class="chip c2">轻档 change · 新增</span></th><th><span class="chip c3">全档 change</span></th></tr></thead>
+    <tbody>
+      <tr><td>工件</td><td>零</td><td>极简 change.md：意图 1-2 句 + AC ≤5（tier: light）</td><td>完整 change.md（tier: full，缺省）</td></tr>
+      <tr><td>TODO</td><td>无</td><td><b>不预写</b>——agent 自拆，不落盘</td><td>三要素 + Batch 分批</td></tr>
+      <tr><td>方案审查</td><td>无</td><td>探针对齐：落盘即请用户<b>否一次</b></td><td>change-review（条件触发）</td></tr>
+      <tr><td>验收</td><td>常规 commit</td><td>测试锁定 + 独立复核 + manual 过目</td><td>implement / test / review 全流程</td></tr>
+      <tr><td>意图去向</td><td>commit message</td><td>done 即归档；决策按门槛落 decisions/</td><td>eo-archive 归档冻结（审计历史）</td></tr>
+      <tr><td>产出报告</td><td>无</td><td>无 test.md / review.md（随时可升级，见下）</td><td>test.md + review.md + archive</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">03 · 轻档生命周期</div>
+  <h2>从落盘到收口（状态机与全档共用）</h2>
+  <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  A["澄清<br/>预算 1-2 问"] --> B["落盘 draft<br/>意图 + AC"] --> C["探针对齐<br/>confirmed"] --> D["测试锁定<br/>AC → 失败测试<br/>commit 锁规格"] --> E["实施 implementing<br/>agent 自拆 TODO<br/>禁改测试"] --> F["完成门<br/>测试绿 + 独立复核<br/>+ manual 过目"] --> G["archived<br/>决策落 decisions/"]
+  E -. "扩档信号" .-> H["tier → full<br/>原地续走全流程"]
+  classDef step fill:#3A4552,stroke:#3A4552,color:#E8ECF1
+  classDef gold fill:#C27803,stroke:#C27803,color:#fff
+  classDef out fill:#3F5EDB,stroke:#3F5EDB,color:#fff
+  class A,B,E step
+  class C,D,F,G gold
+  class H out
+</pre>
+  </div>
+  <ol class="rules">
+    <li><b>测试锁定 = eo-test 前移吸收：</b><span>实施前把 auto 类 AC 落成失败测试，确认因断言失败（非报错），commit——测试即锁定的规格，实施目标就是让它变绿，无事后测试轮。出现要起环境的重验证（auto-heavy）即扩档信号。负向约束与观感类留书面（人工:）。</span></li>
+    <li><b>禁改测试：</b><span>实施中不许动测试文件；AC 本身写错 → 停手上报，改 AC 重锁再继续。</span></li>
+    <li><b>审查压缩但不砍能力：</b><span>方案级 → 探针对齐（轻档没有 TODO 映射 / 粒度 / 条件节等审查对象）；代码级 → 完成门的新鲜上下文 subagent 独立复核（AC 覆盖 + 过拟合 / 特判 / 篡改三查，执行者自述不作数）。AC 在 change.md 标准位置，一句「跑 /eo-review」随时升级完整审查，无需扩档。</span></li>
+    <li><b>done 即归档：</b><span>卡收口后不再编辑，本身即审计记录，无冻结仪式；文档同步走 doc-manager cursor sync 兜底轨（同 trivial 直改），不依赖 archive。INDEX 维护时顺手报告 open 超 30 天未动的卡（防静默蒸发）。</span></li>
+  </ol>
+</section>
+
+<section>
+  <div class="eyebrow">04 · 证据支柱</div>
+  <h2>为什么是这个形态</h2>
+  <div class="ev">
+    <div class="card"><div class="num na">~15%</div><p>agent 失配中「欠规格」只占约 15%；违反明确约束（38%）与假报完成（23%）要靠验收与验证治——<b>可压缩的是前置描述，不是 AC</b>。</p><div class="src">20,574 个真实 session 失配分析 → research/spec-artifact-debate.md</div></div>
+    <div class="card"><div class="num n2">61.1%</div><p>SWE-bench 人工筛查：61.1% 样本的测试会把正确解判错。测试写错无法自动发现——<b>必须保留人能通读的书面 AC 层</b>。</p><div class="src">OpenAI SWE-bench Verified 构建报告 → research/tdd-test-as-spec.md</div></div>
+    <div class="card"><div class="num n2">79%+</div><p>Claude 系模型面对做不到的测试时 79%+ 直接改测试（明确禁止也拦不住）——<b>禁令要配测试锁定 commit 与独立复核</b>。</p><div class="src">ImpossibleBench → research/tdd-test-as-spec.md</div></div>
+    <div class="card"><div class="num n1">37.76→1.31%</div><p>独立 monitor 复核把作弊率从 37.76% 压到 1.31%，真实通过率反升 20 点——<b>唯一被量化证明有效的防作弊手段</b>。</p><div class="src">The Verification Horizon → research/tdd-test-as-spec.md</div></div>
+    <div class="card"><div class="num n3">44%</div><p>issue 直派模式里 44% 的关闭 PR 是超 30 天无人 review 静默蒸发——<b>轻量档也需要独立于 PR 的进度锚点（卡）</b>。</p><div class="src">dotnet runtime 十个月 878 PR 实测 → research/issue-dispatch-model.md</div></div>
+    <div class="card"><div class="num n1">38→69%</div><p>同一团队直派成功率靠「准备」（常驻指令 + 环境）从 38% 跳到 69%——<b>杠杆在 per-repo 常驻层，即现有 state + lessons</b>。</p><div class="src">dotnet runtime 同上 → research/issue-dispatch-model.md</div></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">05 · 待定夺</div>
+  <h2>三个开放问题</h2>
+  <p class="lede" style="margin-top:0">原「存放」与「命名」两项已被「不造新名词、同一 change.md 分 tier」的统一方案消解。</p>
+  <div class="oq">
+    <div><span class="q">实施入口</span><span class="a"><b>推荐</b> eo-implement 增「轻模式」（复用修复循环与 commit 纪律）；备选：eo-change 一条龙</span></div>
+    <div><span class="q">独立复核形态</span><span class="a"><b>推荐</b> 完成门内一次性 subagent（轻，不产报告）；备选：eo-review 加轻模式</span></div>
+    <div><span class="q">backlog 衔接</span><span class="a"><b>推荐</b> backlog 卡先判档（backlog → 判档，而非固定 → change）；备选：维持现状</span></div>
+  </div>
+</section>
+
+<footer>
+  设计稿正文：<code>docs/tier-design.md</code> · 调研依据：<code>research/INDEX.md</code> · change-review 现协议（P0-only + 3 轮上限）不动，本轮调研再次加固。
+</footer>
+
+</main>
+<script type="module">
+// 本地副本专用：浏览器直接打开时渲染 mermaid（Artifact 版由平台原生渲染，无此脚本）
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+mermaid.initialize({ startOnLoad: true, theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "neutral" });
+</script>
