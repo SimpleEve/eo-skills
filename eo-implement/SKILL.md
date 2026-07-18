@@ -21,6 +21,7 @@ description: |
 - **必须能找到 `.eo-project.json`**。找不到 → 报错退出，提示运行 `/eo-project-init`
 - 目标 `eo-doc/changes/<change-id>/change.md` 存在且 `status: confirmed` 或 `implementing`
 - change 不存在 → 提示先执行 `/eo-change`；status: draft → 提示先在 /eo-change 完成确认
+- frontmatter `tier: light` → 走**轻模式**（见下）；缺省/`full` → 模式一
 
 ## 工作流程
 
@@ -79,6 +80,20 @@ description: |
 5. 完成后提示重新 `/eo-test` 或 `/eo-review`
 6. 修复不开新 change；发现问题根源是需求变更 → 停下告知用户，建议走 /eo-change
 
+### 轻模式（tier: light）
+
+替代模式一的 Batch 结构；test/review 反馈的修复仍走模式二。
+
+1. **上下文与登记**：读 change.md（意图 + AC）、handbook INDEX 命中篇目、lessons 命中项；写 `base_commit`、`status → implementing`、刷新 stub
+2. **测试锁定**：把 auto 类 AC 逐条落成失败测试，确认**因断言失败**（而非报错/导入错误），单独 commit（`[<change-id>]` 前缀）；AC 行回填「锁定：<测试文件>#<用例>」。**出现 auto-heavy 验证需求（起服务/多环境/点击流）→ 停，报扩档**。负向约束与观感类不落测试，保持书面
+3. **实施**：自拆 TODO（对话内列出，**不写入 change.md**）；**禁改测试文件**——确需改（AC 本身写错）→ 停手上报，用户确认改 AC 后重锁再继续
+4. **完成门**（全过才算完）：
+   - 锁定测试全绿 + lint/typecheck 绿
+   - **独立复核**：spawn 一个新鲜上下文 subagent，只给 change.md 与本次 diff，核对「AC 逐条被真实覆盖？有无过拟合测试 / 硬编码特判 / 绕过或篡改验证？」——执行者自述不作数。结论对话速报（不产报告）；发现问题 → 修复后重跑完成门
+   - manual 项（「人工:」）用户当场过目确认——轻档不生成 acceptance.md；manual 项 >2 条是扩档信号
+5. **收口**：实施 commit（`[<change-id>]` 前缀，推荐一次 commit）；AC 全勾；**`status → archived`**（轻档不经 eo-archive，收口即归档；文档同步由 doc-manager cursor sync 兜底）；stub 终态 upsert、issue 联动关闭（未开启跳过）；值得留的决策按 eo-project-record 门槛落 decisions/；**不产 test.md / review.md**
+6. **扩档**（任一信号：影响面圈不住 / 两次以上跑偏 / AC 超 5 条装不下 / auto-heavy 出现）：告知用户后 `tier` 改 `full`，就地补齐 TODO 等模板节（意图与 AC 保留，已锁定测试继续有效），status 不变，转模式一从当前状态续走——文件不挪、commit 前缀不变
+
 ### 偏差记录
 
 默认不生成额外文档。仅当实施偏离 change（方案临时变更、发现遗漏依赖、技术障碍绕行）时，创建 `changes/<change-id>/implement.md` 只记偏差本身。模板见 [references/implement-deviation-template.md](references/implement-deviation-template.md)。
@@ -90,6 +105,7 @@ description: |
 - **修复循环双向取证**：先复现失败再修，且复现取最低成本层——起环境是最后手段，不是默认
 - **勾选即时**：TODO/AC 完成立即在 change.md 勾选，不攒批
 - **commit 前缀**：所有实施提交带 `[<change-id>]`（archive 靠它归集区间）
-- **status 自动流转**：confirmed→implementing 由本 skill 写入；reviewed 由 review 通过后写入
+- **status 自动流转**：confirmed→implementing 由本 skill 写入；reviewed 由 review 通过后写入；轻档 archived 由轻模式收口写入
+- **轻模式纪律**：TODO 不写入 change.md、禁改测试文件、完成门必过独立复核；扩档信号出现即停手报告
 - **修复循环不升格**：test/review 反馈的缺陷不以任何形式开新 change
 - **不偏离 change**：方案问题上报用户；就地补 AC/TODO 仅限意图不变的精化

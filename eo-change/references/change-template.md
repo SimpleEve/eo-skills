@@ -2,6 +2,8 @@
 
 eo-change 按下方模板写入 `eo-doc/changes/<NN>-<slug>/change.md`（目录 = seq 补零前缀 + slug；身份是 slug，见 [eo-shared/conventions.md](../../eo-shared/conventions.md) §2）。
 
+**change 分轻/全两档**（判档见 [eo-shared/granularity.md](../../eo-shared/granularity.md) §5）：全档用下方完整模板；轻档（`tier: light`）用文末的极简模板。
+
 必填仅 §1-§3。§4-§8 是**条件节**：满足触发条件才写，不满足整节省略（连标题都不留）。如果写出来的 change.md 明显超过本模板量级，先查 [eo-shared/granularity.md](../../eo-shared/granularity.md) 的硬指标。
 
 ```markdown
@@ -11,6 +13,7 @@ seq: 14              # 显示序号（#14），补零作目录前缀 14-<slug>/�
 title: 批量导出
 summary: <一句话意图，≤50 字，纯文本>   # INDEX 摘要列与看板 stub 卡面的单一来源
 status: draft        # draft | confirmed | implementing | reviewed | archived（skill 自动流转，用户不手改）
+tier: full           # light | full；缺省视为 full（存量 change 零迁移）
 type: feature        # bootstrap | feature | enhance | refactor
 base_commit: ~       # eo-implement 首次执行时写入
 commits: []          # eo-archive 归档时写入（仅审计用，不决定同步范围）
@@ -87,3 +90,34 @@ created: 2026-07-07
 | `refactor` | 内部重构，用户可见行为不变（AC 写「行为不变」的回归口径） |
 
 **无 `fix` 类型**：bug 修复走 `/eo-fix`——有活跃 change 时计入该 change；trivial 直改；实为需求变更才新开 change。
+
+## 轻档模板（tier: light）
+
+存放、目录名、seq、INDEX、看板 stub、GitHub 联动与全档同一套。只有意图 + 验收清单两节，**无 TODO / 涉及文件 / 条件节**；AC 上限 5 条——装不下即扩档信号：
+
+```markdown
+---
+id: export-name-fix
+seq: 15
+title: 修正导出文件名
+summary: <一句话意图，≤50 字>
+status: draft        # 轻档流转：draft → confirmed → implementing → archived（跳过 reviewed，收口即归档）
+tier: light
+type: enhance
+base_commit: ~
+issue: ~             # 联动创建或外部来源的 GitHub issue 号（外部输入时落盘即回写，联动钩子靠它去重）
+created: 2026-07-18
+---
+
+# <标题>
+
+意图：<为什么做 + 做什么，1-2 句>
+
+## 2. 验收清单
+
+- [ ] AC-1 <正向可判定>（锁定：<测试锚点，eo-implement 轻模式回填>）
+- [ ] AC-2 <当……失败时，用户看到……>
+- [ ] AC-3 <观感类>（人工:<做什么 → 过目什么>）
+```
+
+AC 撰写规则同 [eo-shared/ac-spec.md](../../eo-shared/ac-spec.md)（增量制验证栏、条数不模板化、manual 标记）。验收清单保留 `## 2.` 编号——eo-review / eo-test 显式调用时按 §2 定位 AC，轻档工件天然可消费。

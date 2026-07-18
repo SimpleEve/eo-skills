@@ -1,6 +1,6 @@
 # 三档制设计稿：直改 / 轻档 change / 全档 change（草案，待定夺）
 
-> status: **draft**。本稿只描述目标形态与迁移点，不改任何 SKILL.md；定夺后按本稿开 change 实施。
+> status: **adopted · 已实施（2026-07-18）**。三个开放项按推荐落地：eo-implement 轻模式 / 完成门一次性 subagent 复核 / backlog 先判档（经 eo-change 第一步判档自然生效）。实施直接落 SKILL.md（本仓库即 skills 本体，不走 eo-* 流程）。落点：granularity.md §5（判档表）、conventions.md §3（轻档流转）、change-template.md（轻档模板）、eo-change（轻档流程）、eo-implement（轻模式）、ac-spec / eo-change-review / eo-review / eo-test（兼容行）。
 > 依据：本轮竞品与实践调研（[research/INDEX.md](../research/INDEX.md)）。skill 落地时**不携带**任何出处说明（精简 token）；有据可循的职责由本稿与 research/ 承担。
 
 ## 1. 问题与结论
@@ -31,7 +31,7 @@
 
 **判档权在 agent，不在用户**：用户始终自然描述需求，不需要预判档位。agent 按本表判档并一句话宣告（含该档的取舍，如「按轻档走：不出 review 报告，验收靠测试 + 复核」），用户一个词即可改档。判错代价已设计为低——判低了有升档路径兜底，判高了只多一份工件——**边界不需要精确，只需要错得便宜**，这正是模糊地带无害的原因。
 
-**输入源与档位正交**：用户口述 / backlog 卡 / 外部 GitHub issue / brainstorming 捕获都是输入源，统一过本判档门。外部 GitHub issue 可落任何档：报 bug → eo-fix；小而明确 → 轻档（frontmatter `gh_issue` 回链）；大需求 → 全档（现有 board-github 联动不变）。输入自带 AC 时（规范的 GH issue 正是如此），落盘近乎零成本。
+**输入源与档位正交**：用户口述 / backlog 卡 / 外部 GitHub issue / brainstorming 捕获都是输入源，统一过本判档门。外部 GitHub issue 可落任何档：报 bug → eo-fix；小而明确 → 轻档（号回写 frontmatter `issue:`，联动钩子靠回写号去重、不重复建）；大需求 → 全档（现有 board-github 联动不变）。输入自带 AC 时（规范的 GH issue 正是如此），落盘近乎零成本。
 
 **入口统一在 eo-change 第一步**（bug 仍走 eo-fix，方向未定仍升 brainstorming，均不变）：
 
@@ -59,7 +59,7 @@ id: export-name-fix        # slug 即身份，规则同 conventions.md §2
 seq: 15                    # 与全档共用序号空间，目录 <NN>-<slug>/
 tier: light                # light | full；缺省视为 full（存量 change 零迁移）
 status: draft              # 状态机与全档共用：draft → confirmed → implementing → archived（轻档跳过 reviewed）
-gh_issue: ~                # 外部 GitHub issue 回链（可选）
+issue: ~                   # 联动创建或外部来源的 GitHub issue 号（复用全档字段，钩子靠它去重）
 created: 2026-07-18
 ---
 

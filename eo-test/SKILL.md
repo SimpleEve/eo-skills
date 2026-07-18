@@ -27,6 +27,7 @@ description: |
 
 - **必须能找到 `.eo-project.json`**。找不到 → 报错退出，提示运行 `/eo-project-init`
 - `eo-doc/changes/<change-id>/change.md` 已存在，且相关代码已实现（status: implementing 或 reviewed）
+- `tier: light` 的 change 默认不经本 skill（重验证出现即扩档，见 eo-implement 轻模式）；用户显式要求时照常以 §2 AC 为锚执行，status 不限
 
 ## 工作流程
 

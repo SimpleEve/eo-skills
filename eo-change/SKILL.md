@@ -12,7 +12,7 @@ description: |
 ## 核心理念
 
 1. **验收驱动**：AC 先于 TODO 产出，是 implement 的完成判据、review 的检查表、fix 的期望行为锚点
-2. **渐进式严谨**：必填仅 3 节，涉及文件/方案/流程图/风险/开放问题全部条件化；trivial 改动直接短路成直改
+2. **三档渐进式严谨**：trivial 直改零工件；轻档（`tier: light`）只有意图 + AC；全档必填仅 3 节、其余条件化。判档表见 [../eo-shared/granularity.md](../eo-shared/granularity.md) §5——判档权在 agent，宣告后用户一个词可改档
 3. **量化粒度**：超软标建议拆、超硬标拒绝确认，指标数值以 [../eo-shared/granularity.md](../eo-shared/granularity.md) §1 为准
 4. **提问有预算**：事实自查、决策上抛、决策台账钉结论——规则见 [../eo-shared/questioning.md](../eo-shared/questioning.md)
 5. **状态自动流转**：用户在对话里确认，skill 落盘 status，用户永不手改 frontmatter
@@ -26,11 +26,12 @@ description: |
 
 ### 第一步：意图理解与复杂度定级
 
-1. 读用户的变更描述。**若来自 /eo-brainstorming 捕获出口**：直接继承其已钉决策与 change 草案，跳过已钉项的一切重复提问，从第四步续起。**若来源是某张 backlog 卡**（用户说「把这条 backlog 做了」）：继承卡片的 title/说明/标签作为意图输入，记下卡片路径待第七步归档
+1. 读用户的变更描述。**若来自 /eo-brainstorming 捕获出口**：直接继承其已钉决策与 change 草案，跳过已钉项的一切重复提问，从第四步续起。**若来源是某张 backlog 卡**（用户说「把这条 backlog 做了」）：继承卡片的 title/说明/标签作为意图输入，记下卡片路径待第七步归档。**若来源是外部 GitHub issue**：继承其正文作意图输入（规范 issue 常自带 AC），记下 issue 号待落盘回写 `issue:`（联动钩子靠回写号去重，不重复建）
 2. 按 [../eo-shared/questioning.md](../eo-shared/questioning.md) §2 定级：trivial / simple / complex / critical
 3. **trivial → 主动短路**：告知用户「这不值得开 change，直接改」，按 [../eo-shared/granularity.md](../eo-shared/granularity.md) §2 的直改模式执行（改 → 验证 → `fix:`/`ui:` 前缀 commit），本流程终止。判据任何一条不满足则回到 change 模式
 4. **critical → 建议升级**：「这个方向本身还没定，建议先 /eo-brainstorming 把决策钉了再回来」；用户坚持则继续，但澄清预算放宽到 5+
-5. **update vs new**：若变更明显是某个未归档 change 的意图精化 → 提议就地更新那个 change 而非新开（决策表见 granularity.md §3）
+5. **轻/全判档**：非 trivial 非 critical → 按 granularity.md §5 四问判档，一句话宣告（含取舍，如「按轻档走：不出 review 报告，验收靠测试 + 复核」），用户一个词可改档。**轻档 → 走文末「轻档流程」**（替代第二至第八步）；全档 → 继续第二步
+6. **update vs new**：若变更明显是某个未归档 change 的意图精化 → 提议就地更新那个 change 而非新开（决策表见 granularity.md §3）
 
 ### 第二步：事实自查（静默执行）
 
@@ -71,7 +72,7 @@ description: |
 
 ### 第八步：更新索引 + 提示后续
 
-更新 `eo-doc/changes/INDEX.md`，顺手对 seq 列查重：发现重号（多 worktree 并行分配所致）→ `created` 晚者让号——改 frontmatter `seq` + `git mv` 目录（`<旧NN>`→`<新NN>`）+ 改 INDEX 行（含链接路径）+ upsert stub，一句话报告（**commit 前缀/issue 全程不动**，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §2）。然后按场景提示：
+更新 `eo-doc/changes/INDEX.md`，顺手对 seq 列查重：发现重号（多 worktree 并行分配所致）→ `created` 晚者让号——改 frontmatter `seq` + `git mv` 目录（`<旧NN>`→`<新NN>`）+ 改 INDEX 行（含链接路径）+ upsert stub，一句话报告（**commit 前缀/issue 全程不动**，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §2）。顺手**防蒸发**：非 archived 且 30 天未动的轻档条目列一行提醒。然后按场景提示：
 
 **场景 A — 首次产出**（目录下无含未决 P0 的 change-review.md）：
 
@@ -89,6 +90,20 @@ description: |
 4. 此时代码未写，**严禁**走 /eo-review 或直接 implement；复审通过前保持 `status: draft`
 
 
+## 轻档流程（tier: light）
+
+判档为轻档后走此流程，**替代第二至第八步**：
+
+1. **快速自查**：读 `eo-doc/state/` 相关篇目与 lessons INDEX 命中项（≤2 条）；能自答的不问用户
+2. **澄清**：预算 1-2 问（协议同 questioning.md），问完即写——AC 定不下来说明澄清不到位，或该转全档
+3. **落盘（draft）**：按 [references/change-template.md](references/change-template.md) 轻档模板写入 `changes/<NN>-<slug>/change.md`（id/seq/查重/让号规则与全档同一套）；AC ≤5 条、覆盖异常路径、manual 标「人工:」；外部 GitHub issue 来源 → 号回写 `issue:`。写入即建看板 stub（未开启跳过）
+4. **探针对齐（→ confirmed）**：把意图 + AC 亮给用户否一次——探针的成功标准是**尽快暴露分歧**，不是通过评审。用户点头 → `status: confirmed` + 联动钩子（stub 刷新；GitHub issue 联动开启且 frontmatter 无 issue 号才建）。用户否 → 就地改再亮一次；方案分歧大 → 转全档从第二步续起
+5. **更新 INDEX + 提示后续**：INDEX 行类型列标 `light·<type>`；seq 查重自愈与防蒸发报告同第八步。后续提示：
+
+   > 轻档已就绪（confirmed）。下一步：`/eo-implement <change-path>`——轻模式：测试锁定 → 实施 → 完成门，收口即归档。
+
+轻档**不进 change-review**（方案分歧在探针对齐里暴露）；实施中的扩档由 eo-implement 轻模式触发（tier 改 full 原地续走，文件不挪）。
+
 ## changes/INDEX.md 模板
 
 ```markdown
@@ -102,7 +117,8 @@ description: |
 ## 关键约束
 
 - **AC 先于 TODO**；每条 TODO 必须映射到 AC
-- **粒度硬上限拒绝确认**（数值见 granularity.md §1）
+- **粒度硬上限拒绝确认**（数值见 granularity.md §1）；轻/全判档以 granularity.md §5 为准
+- **轻档不写 TODO、不进 change-review**；扩档只由 eo-implement 轻模式触发
 - **无 `fix` 类型**；bug 走 /eo-fix
 - **status 由 skill 流转**（见 [../eo-shared/conventions.md](../eo-shared/conventions.md)），用户不手改
 - **change 阶段不写代码**、不改活文档；归档不反写（由 eo-archive 触发 doc sync）

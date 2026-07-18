@@ -50,6 +50,8 @@ description: |
 
 ### 第一步：阅读上下文
 
+**tier: light 的 change 不适用本 skill**（轻档方案审查由探针对齐替代，见 [../eo-shared/granularity.md](../eo-shared/granularity.md) §5）——提示直接 `/eo-implement` 轻模式。
+
 **全量（首轮 / 升级）**：
 
 1. 读目标 change.md 全文（v2 模板：§1 意图 + 已钉决策、§2 AC、§3 TODO、条件节 §4-§8）

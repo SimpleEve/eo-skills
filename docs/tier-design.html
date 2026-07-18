@@ -78,7 +78,7 @@ footer code{font-size:12px;}
   <div class="eyebrow">eo-skills · workflow design</div>
   <h1>三档制：直改 / 轻档 change / 全档 change</h1>
   <p class="lede">不抛 change，也不造新名词——change 分轻 / 全两档（tier: light | full）。轻量化 = 减前置描述、保验收锚点、验证下沉为测试、意图显式去处。</p>
-  <div class="status">状态 <b>草案 · 待定夺</b> <span>· 正文见 docs/tier-design.md</span></div>
+  <div class="status">状态 <b>已实施 2026-07-18</b> <span>· 正文见 docs/tier-design.md</span></div>
 </header>
 
 <section>
@@ -106,7 +106,7 @@ flowchart TD
   <div class="duo">
     <div class="card"><h3>判档权在 agent，不在用户</h3><p>用户始终自然描述需求，agent 判档并一句话宣告（含该档取舍），用户一个词可改档——<b>不新增任何用户决策点</b>，与今天 trivial 短路同一模式。</p></div>
     <div class="card"><h3>边界不求精确，只求错得便宜</h3><p>判不准默认低档，升档路径（promoted）兜底；判高了只多一份工件。两个方向都不产生返工，模糊地带无害。</p></div>
-    <div class="card"><h3>输入源与档位正交</h3><p>口述 / backlog 卡 / <b>外部 GitHub issue</b> / brainstorming 捕获都是输入源，统一过判档门。GH issue 可落任何档（frontmatter 挂 gh_issue 回链）；自带 AC 的输入落盘近乎零成本。</p></div>
+    <div class="card"><h3>输入源与档位正交</h3><p>口述 / backlog 卡 / <b>外部 GitHub issue</b> / brainstorming 捕获都是输入源，统一过判档门。GH issue 可落任何档（号回写 frontmatter issue:，联动钩子靠它去重）；自带 AC 的输入落盘近乎零成本。</p></div>
     <div class="card"><h3>判界写相对量</h3><p>用「影响面能否圈住」「可审查性」这类相对判据，不写死行数阈值——绝对数字会随模型能力上移而过时。</p></div>
   </div>
 </section>

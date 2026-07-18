@@ -76,6 +76,8 @@ draft ──(eo-change：用户对话确认)──▶ confirmed
       ──(eo-archive：完成归档)──▶ archived（不可逆）
 ```
 
+**change 分轻/全两档**（frontmatter `tier: light | full`，**缺省视为 full**，存量 change 零迁移）。轻档共用上表状态机但**跳过 reviewed**：draft →（探针对齐）confirmed →（测试锁定 + 实施）implementing →（完成门通过，eo-implement 轻模式直接写入）archived——轻档不经 eo-archive，收口即归档，文档同步由 doc-manager cursor sync 兜底。判档规则见 [granularity.md](granularity.md) §5。
+
 用户的确认动作发生在对话里（回复确认，或按 [questioning.md](questioning.md) §4 封闭选择协议选择），skill 负责落盘。
 
 **终态处置**（两类卡片不对称，且都不影响对方）：
