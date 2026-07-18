@@ -105,7 +105,9 @@ status: draft        # 轻档流转：draft → confirmed → implementing → a
 tier: light
 type: enhance
 base_commit: ~
-issue: ~             # 联动创建或外部来源的 GitHub issue 号（外部输入时落盘即回写，联动钩子靠它去重）
+test_lock_commit: ~  # eo-implement 轻模式测试锁定 commit（独立复核的比对基线）
+commits: []          # 收口时写入（[id] 前缀提交区间，审计用）
+issue: ~             # 联动创建或外部来源的 GitHub issue 号（外部输入时落盘即回写，联动钩子靠它去重；跨仓来源记 owner/repo#N 或 URL）
 created: 2026-07-18
 ---
 
@@ -120,4 +122,4 @@ created: 2026-07-18
 - [ ] AC-3 <观感类>（人工:<做什么 → 过目什么>）
 ```
 
-AC 撰写规则同 [eo-shared/ac-spec.md](../../eo-shared/ac-spec.md)（增量制验证栏、条数不模板化、manual 标记）。验收清单保留 `## 2.` 编号——eo-review / eo-test 显式调用时按 §2 定位 AC，轻档工件天然可消费。
+AC 撰写规则同 [eo-shared/ac-spec.md](../../eo-shared/ac-spec.md)（增量制验证栏、条数不模板化、manual 标记；manual 项代勾附「确认：原话要点 + 日期 + 基线 sha」）。验收清单保留 `## 2.` 编号——eo-review / eo-test 显式调用时按 §2 定位 AC，轻档工件天然可消费。

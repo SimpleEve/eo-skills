@@ -84,15 +84,27 @@ description: |
 
 替代模式一的 Batch 结构；test/review 反馈的修复仍走模式二。
 
-1. **上下文与登记**：读 change.md（意图 + AC）、handbook INDEX 命中篇目、lessons 命中项；写 `base_commit`、`status → implementing`、刷新 stub
-2. **测试锁定**：把 auto 类 AC 逐条落成失败测试，确认**因断言失败**（而非报错/导入错误），单独 commit（`[<change-id>]` 前缀）；AC 行回填「锁定：<测试文件>#<用例>」。**出现 auto-heavy 验证需求（起服务/多环境/点击流）→ 停，报扩档**。负向约束与观感类不落测试，保持书面
+1. **上下文与登记**：读 change.md（意图 + AC）、handbook INDEX 命中篇目、lessons 命中项；涉及 UI 且仓库根有 `DESIGN.md` → 读入并遵守。写 `base_commit`、`status → implementing`、刷新 stub
+2. **测试锁定**（按 AC 性质分流）：
+   - 新增/变更行为的 auto AC → 落成失败测试，确认**因断言失败**（而非报错/导入错误）
+   - 「行为不变」类（characterization）→ 基线即绿合法，**不强制先红**，但须注明覆盖了哪些现有行为
+   - 可静态判定的负向约束 → 锁成 lint/静态检查命令
+   - AC 零 auto → 跳过本步（完成门只走独立复核 + manual）
+   - 项目无测试基建 → 停，问用户：转全档，或接受无锁定轻档（在 change.md 注明，完成门只剩复核 + manual）
+
+   锁定内容单独 commit（`[<change-id>]` 前缀），commit hash 写入 frontmatter `test_lock_commit`；AC 行回填「锁定：<测试文件>#<用例>」。**出现 auto-heavy 验证需求（起服务/多环境/点击流）→ 停，报扩档**。观感类不落测试，保持书面
 3. **实施**：自拆 TODO（对话内列出，**不写入 change.md**）；**禁改测试文件**——确需改（AC 本身写错）→ 停手上报，用户确认改 AC 后重锁再继续
 4. **完成门**（全过才算完）：
    - 锁定测试全绿 + lint/typecheck 绿
-   - **独立复核**：spawn 一个新鲜上下文 subagent，只给 change.md 与本次 diff，核对「AC 逐条被真实覆盖？有无过拟合测试 / 硬编码特判 / 绕过或篡改验证？」——执行者自述不作数。结论对话速报（不产报告）；发现问题 → 修复后重跑完成门
-   - manual 项（「人工:」）用户当场过目确认——轻档不生成 acceptance.md；manual 项 >2 条是扩档信号
-5. **收口**：实施 commit（`[<change-id>]` 前缀，推荐一次 commit）；AC 全勾；**`status → archived`**（轻档不经 eo-archive，收口即归档；文档同步由 doc-manager cursor sync 兜底）；stub 终态 upsert、issue 联动关闭（未开启跳过）；值得留的决策按 eo-project-record 门槛落 decisions/；**不产 test.md / review.md**
-6. **扩档**（任一信号：影响面圈不住 / 两次以上跑偏 / AC 超 5 条装不下 / auto-heavy 出现）：告知用户后 `tier` 改 `full`，就地补齐 TODO 等模板节（意图与 AC 保留，已锁定测试继续有效），status 不变，转模式一从当前状态续走——文件不挪、commit 前缀不变
+   - **独立复核**：spawn 一个新鲜上下文 subagent，输入 = change.md + `test_lock_commit..HEAD` 完整 diff（含测试文件改动历史）+（UI 时）DESIGN.md，核对「AC 逐条被真实覆盖？锁定后测试是否被弱化/删除/篡改？有无过拟合 / 硬编码特判 / 绕过验证？」——执行者自述不作数。结论一行写入 change.md 末尾（`独立复核：通过/不通过，<日期>，基线 <short-sha>`）；发现问题 → 修复后重跑完成门
+   - manual 项（「人工:」）逐项请用户确认，**代勾必须附确认记录**（AC 行后「确认：<用户原话要点>，<日期>，基线 <short-sha>」，规范见 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)）；manual 项 >2 条是扩档信号
+5. **收口（finalizer，顺序执行，不得减免）**：
+   ① **结算**：确认全部实施变更已提交（`[<change-id>]` 前缀），工作区无本 change 残留
+   ② **元数据**：自检 AC 勾选终态（每个 manual 勾有确认记录、独立复核记录存在，缺任一 → 不得归档）→ frontmatter 写 `commits`（`[<change-id>]` 前缀提交区间）、`status → archived` → INDEX 行终态（档列 light）+ seq 查重自愈 → 以上文档变更作一个收尾 meta commit
+   ③ **显式触发 `/eo-doc-manager sync`**（cursor sync 无自动触发，不能指望兜底）；本 change 的 diff 不触碰代码路径时可跳过并说明
+   ④ GitHub 联动开启时：按 [../eo-shared/board-github.md](../eo-shared/board-github.md) 执行 push/PR 与 issue body 终态刷新；**关 issue 放最后**
+   ⑤ stub 终态 upsert；值得留的决策按 eo-project-record 门槛落 decisions/。**不产 test.md / review.md**
+6. **扩档**（任一信号：影响面圈不住 / 两次以上跑偏 / AC 超 5 条装不下 / auto-heavy 出现 / manual 项 >2）：停手告知用户，转 /eo-change「扩档子流程」——tier 改 full、已完成工作映射为已勾 TODO、用户再确认（风险触发的建议跑全量 change-review）；然后回本 skill 模式一从首个未完成 Batch 续走。`test_lock_commit` 与已锁定测试保留，文件不挪、commit 前缀不变
 
 ### 偏差记录
 

@@ -16,10 +16,8 @@
 |------|------|------|
 | [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) | skill 运行时 | 官方 CLI |
 | [Antigravity](https://antigravity.dev) | skill 运行时（可选） | 官方 CLI |
-| `tmux` | 跨 agent 协作底座（`eo-flow` 必需） | `brew install tmux` |
 | [smux](https://github.com/ShawnPana/smux) | tmux pane 间通信桥（`tmux-bridge`） | 见上游仓库 README |
 
-> `eo-flow` 依赖 smux 提供的 `tmux-bridge` CLI 与另一 pane 里的 codex agent 通信。如果你只用单 agent 流（不跨 pane handoff），可以不装 tmux/smux。
 
 ---
 
@@ -77,7 +75,6 @@ install.bat --antigravity-only
 
 脚本会把当前仓库下所有 `eo-*` 目录逐个链接到对应的 skill 目录；如果目标里已经有同名 skill，会直接跳过，不会覆盖。链接而非复制：本仓库更新后所有 skill 立刻生效。
 
-> **关于 `eo-flow` 的对端 agent**：当前实现**写死调用 codex**（在另一个 tmux pane 里跑 codex CLI）。如果你想换成 Claude Code 作为对端，需要自行改 `eo-flow/SKILL.md` 里的派发指令。
 
 ---
 
@@ -98,7 +95,7 @@ install.bat --antigravity-only
 ```mermaid
 flowchart TD
     Init["/eo-project-init<br/>(必跑一次)"]:::entry --> Change
-    Brain["/eo-brainstorming<br/>(可选：方向发散 + 拆首批 change)"] -.捕获出口.-> Change["/eo-change<br/>change.md (AC + TODO)"]
+    Brain["/eo-brainstorming<br/>(可选：方向发散 + 拆首批 change)"] -.捕获出口.-> Change["/eo-change<br/>change.md (轻/全两档)"]
     Change -.可选.-> CR["/eo-change-review<br/>方案审查"]
     CR -.P0.-> Change
     Change --> Imp["/eo-implement<br/>按 Batch 写代码 + 勾 TODO<br/>(只跑轻验证)"]
@@ -113,9 +110,6 @@ flowchart TD
 
     Fix["/eo-fix<br/>bug 口喷入口：定位 + 直接修复"] -.需求变更.-> Change
 
-    Imp -.甩给 codex pane.-> Flow["/eo-flow &lt;action&gt;<br/>(需 tmux + smux)"]
-    Test -.同上.-> Flow
-    Rev -.同上.-> Flow
 
     Init --> Doc["/eo-doc-manager<br/>维护 eo-doc/"]
     Init --> Rec["/eo-recall<br/>回忆：当时怎么设计的?"]
@@ -129,7 +123,7 @@ flowchart TD
 
 > `/eo-handoff` 横切整个流程：clear 前在**任意节点**都可触发，把当前状态写到 `tmp/eo/handoff/<topic>.md` 供下个会话载入。图中仅以 implement 阶段示意。
 >
-> 样式微调、多语言这类 trivial 改动走**直改模式**（不开 change，判据见 [eo-shared/granularity.md](eo-shared/granularity.md)），由 doc-manager 的 cursor sync 兜底归档。
+> 样式微调、多语言这类 trivial 改动走**直改模式**（不开 change，判据见 [eo-shared/granularity.md](eo-shared/granularity.md)），随下次 doc sync 顺带收割。轻档 change（`tier: light`）由 implement 轻模式收口归档（含显式 doc sync），不经 test/review/archive——详见 [docs/tier-design.md](docs/tier-design.md)。
 
 ---
 
@@ -139,13 +133,12 @@ flowchart TD
 |------|---|------|
 | 第一次在项目里用 eo-skills | `/eo-project-init` | **必跑** |
 | 想法还不成形 / 新项目从零起步 | `/eo-brainstorming` | 发散 + 钉决策，出口直接拆首批 change |
-| 发起变更（新功能 / 增强 / 重构） | `/eo-change` | 产出 `change.md`（AC 前置 + TODO 分批）；trivial 会主动短路成直改 |
+| 发起变更（新功能 / 增强 / 重构） | `/eo-change` | 产出 `change.md`（轻档 = 意图 + AC；全档 = AC + TODO 分批）；trivial 短路直改 |
 | 按 change 写代码 | `/eo-implement` | 按 Batch 执行，含 bug 修复循环 |
 | 发现 bug（口喷即可） | `/eo-fix` | 定位 + 直接修复；难缠 bug 自动升级深挖模式；需求变更转 change |
 | 跑测试 / 写测试报告 | `/eo-test` | 以 AC 为锚 + 读码取输入；重验证唯一执行者 |
-| 实施后代码审查 | `/eo-review` | 强制，每个 change 都要；可在 test 前或后 |
-| 审查通过后归档 | `/eo-archive` | 更新 state/handbook + 冻结 change（不反写 spec） |
-| 把一步甩给另一个 pane 的 codex | `/eo-flow <action>` | 需 tmux + smux |
+| 实施后代码审查 | `/eo-review` | 全档必跑；轻档由 implement 完成门独立复核替代 |
+| 审查通过后归档 | `/eo-archive` | 更新 state/handbook + 冻结 change；轻档不经此（收口即归档） |
 | 忘了当初怎么设计的 / 想看某段逻辑的实现 | `/eo-recall` | 只读问答，分层作答带出处；复杂逻辑可出图/解释页 |
 | 定设计系统 / 出视觉方案 / 高保真页面 | `/eo-design <mode>` | init / variants / apply / audit，真相源 `DESIGN.md` |
 | 即将 `/clear` 但要保留进度 | `/eo-handoff` | 写到 `tmp/eo/handoff/<topic>.md`，下个会话载入即续 |
@@ -162,7 +155,7 @@ flowchart TD
 | Skill | 审什么 | 核心问题 | 强制？ |
 |-------|-------|---------|-------|
 | `/eo-change-review` | 某个 change 的方案 | **方案**对吗？AC 质量、粒度合规？ | 可选（高风险建议走） |
-| `/eo-review` | change 实施后的代码 | **代码**对吗？符合 AC？ | 每个 change 强制 |
+| `/eo-review` | change 实施后的代码 | **代码**对吗？符合 AC？ | 全档强制；轻档默认由独立复核替代 |
 
 ---
 

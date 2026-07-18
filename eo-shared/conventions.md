@@ -43,7 +43,7 @@ skill 写入 vault（board stub、brainstorm 记录、lessons/decisions、backlo
 
 **`seq`（frontmatter 整数，显示作 `#14`）是显示序号**，真相只存在于 change.md frontmatter 一处；目录前缀、INDEX 的 # 列、看板 stub 的 seq 字段都是它的投影。分配 = 项目内现有最大号 +1（含 v1/v2 存量数字前缀）。**seq 允许撞号**——多 worktree 并行分配是常态，撞号只造成同号目录与外观歧义，不破坏任何机制：
 
-- **自愈**（撞号只在多分支合并、两卡同树时才显形）：任何更新 INDEX 的动作（eo-change 第八步、eo-archive）顺手对 seq 查重；发现重号 → `created` 晚者让号，一套机械动作：① 改 frontmatter `seq` → ② `git mv <旧NN>-<slug> <新NN>-<slug>`（目录含未跟踪产物则 `mv` 后 `git add`）→ ③ 改 INDEX 行（# 列 + 链接路径）→ ④ upsert stub（整文件重写，seq 与正文路径随之刷新）→ ⑤ 一句话报告。**commit 前缀 `[slug]`、issue 标题/号绝不动**——这正是比 v1 便宜的根因：v1 把号钉进 commit，让号即断链；v2 只动可改名投影
+- **自愈**（撞号只在多分支合并、两卡同树时才显形）：任何更新 INDEX 的动作（eo-change 第八步、eo-archive、eo-implement 轻模式收口）顺手对 seq 查重；发现重号 → `created` 晚者让号（同日无法判晚者 → slug 字典序大者让号，稳定可判），一套机械动作：① 改 frontmatter `seq` → ② `git mv <旧NN>-<slug> <新NN>-<slug>`（目录含未跟踪产物则 `mv` 后 `git add`）→ ③ 改 INDEX 行（# 列 + 链接路径）→ ④ upsert stub（整文件重写，seq 与正文路径随之刷新）→ ⑤ 一句话报告。**commit 前缀 `[slug]`、issue 标题/号绝不动**——这正是比 v1 便宜的根因：v1 把号钉进 commit，让号即断链；v2 只动可改名投影
 - **口头引用**：用户说「14 那个」→ 查 INDEX 解析成 slug；重号未修时列出候选问一句
 - **seq 绝不进** commit message、issue 标题、stub 文件名——这些改不了或没人会回去改
 
@@ -57,7 +57,7 @@ skill 写入 vault（board stub、brainstorm 记录、lessons/decisions、backlo
 | 直改模式：bug 小修 | `fix:` | `fix: 修正导出文件名日期格式` |
 | 直改模式：UI/样式/文案 | `ui:` | `ui: 调整卡片间距` |
 
-change-id 前缀是 eo-archive 归集 commit 区间的依据；`fix:`/`ui:` 前缀供 retro 统计直改流量。推荐「一次 change 一次 commit」；TODO 分批时允许一批一 commit，archive 至多补一个收尾 meta commit。
+change-id 前缀是 eo-archive 归集 commit 区间的依据；`fix:`/`ui:` 前缀供 retro 统计直改流量。推荐「一次 change 一次 commit」；TODO 分批时允许一批一 commit，archive 至多补一个收尾 meta commit。**轻档例外**：预期恰为 2-3 个 commit——test-lock commit + 实施 commit（+ 收尾 meta commit），**不得 squash**（锁定边界是独立复核的比对基准）。
 
 ## 3. 状态词汇总表（看板列序即此）
 
@@ -76,7 +76,7 @@ draft ──(eo-change：用户对话确认)──▶ confirmed
       ──(eo-archive：完成归档)──▶ archived（不可逆）
 ```
 
-**change 分轻/全两档**（frontmatter `tier: light | full`，**缺省视为 full**，存量 change 零迁移）。轻档共用上表状态机但**跳过 reviewed**：draft →（探针对齐）confirmed →（测试锁定 + 实施）implementing →（完成门通过，eo-implement 轻模式直接写入）archived——轻档不经 eo-archive，收口即归档，文档同步由 doc-manager cursor sync 兜底。判档规则见 [granularity.md](granularity.md) §5。
+**change 分轻/全两档**（frontmatter `tier: light | full`，**缺省视为 full**，存量 change 零迁移）。轻档共用上表状态机但**跳过 reviewed**：draft →（探针对齐）confirmed →（测试锁定 + 实施）implementing →（完成门通过，eo-implement 轻模式直接写入）archived——轻档不经 eo-archive，归档由轻模式**收口序列（finalizer）**执行：结算 → 元数据收尾 commit → **显式触发 doc-manager sync** → push/PR → 关 issue/stub（cursor sync 只是范围游标、没有自动触发，不能当兜底）。判档规则见 [granularity.md](granularity.md) §5。
 
 用户的确认动作发生在对话里（回复确认，或按 [questioning.md](questioning.md) §4 封闭选择协议选择），skill 负责落盘。
 

@@ -27,7 +27,7 @@ manual 相反，**必须**在起草期标注：它回答的是「人能不能判
   - **auto-light** 的勾来自 implement 批末验证
   - **auto-heavy** 的勾**只来自 eo-test**——implement 批末遇到 heavy 项不跑、不勾、不代验，在汇报里列为「待 test」
   - **manual** 项 agent 不得自行判定勾选——用户确认方式 = 直接在人工验收单勾 checkbox（勾选权归用户，零打字），或走查中口头表态（agent 代勾须附确认记录）；change.md 的 manual 勾由 agent 依验收单同步（载体与规则见 [acceptance.md](acceptance.md)）
-- **轻档 change（`tier: light`）**：auto AC 由 eo-implement 轻模式在实施前落成失败测试（AC 行回填「锁定：<测试锚点>」），测试绿即勾；**auto-heavy 出现即扩档信号**（轻档不起环境）；manual 项完成门用户当场过目，不生成验收单
+- **轻档 change（`tier: light`）**：auto AC 由 eo-implement 轻模式在实施前落成失败测试（AC 行回填「锁定：<测试锚点>」，锁定 commit 记入 frontmatter `test_lock_commit`），测试绿即勾；**auto-heavy 出现即扩档信号**（轻档不起环境）；manual 项不生成验收单，但**代勾必须附确认记录**——AC 行后追加「确认：<用户原话要点>，<日期>，基线 <short-sha>」，无记录不得勾；基线后又有本 change 的 commit 影响该行为 → 取消勾选重新确认
 - **未勾 ≠ 失败**：review 在 test 之前跑时，auto-heavy 项本就未勾——那是归属使然，不是缺陷
 - **勾变脏即取消**：已勾的 AC 被后续修复影响 → 取消勾选并注明待复验（auto-heavy 注「待 test 复验」；manual 按 [acceptance.md](acceptance.md)「失效与重置」处理，含验收基线刷新）。**改过的代码上，旧的勾是假的**；影响范围判不清 → 全部取消
 

@@ -1,5 +1,7 @@
 # Token 开销实测与对标
 
+> 注（2026-07-18）：本文数字为历史测量样本（v2 单轨模板口径）。现行模板已改为必填 3 节 + tier 轻/全两档，量级结论不受影响，逐行数字勿直接引用。
+
 > 状态：结论稿
 > 日期：2026-07-15
 > 输入：TangentCloud 22 个会话 transcript（`~/.claude/projects/-Users-debugeve-projects-TangentCloud/*.jsonl`，148MB）、gstack v1.47 全量 skill、Anthropic 官方 agent-skills（17 个）

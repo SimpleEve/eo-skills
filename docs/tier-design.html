@@ -122,7 +122,7 @@ flowchart TD
       <tr><td>TODO</td><td>无</td><td><b>不预写</b>——agent 自拆，不落盘</td><td>三要素 + Batch 分批</td></tr>
       <tr><td>方案审查</td><td>无</td><td>探针对齐：落盘即请用户<b>否一次</b></td><td>change-review（条件触发）</td></tr>
       <tr><td>验收</td><td>常规 commit</td><td>测试锁定 + 独立复核 + manual 过目</td><td>implement / test / review 全流程</td></tr>
-      <tr><td>意图去向</td><td>commit message</td><td>done 即归档；决策按门槛落 decisions/</td><td>eo-archive 归档冻结（审计历史）</td></tr>
+      <tr><td>意图去向</td><td>commit message</td><td>finalizer 收口归档；决策按门槛落 decisions/</td><td>eo-archive 归档冻结（审计历史）</td></tr>
       <tr><td>产出报告</td><td>无</td><td>无 test.md / review.md（随时可升级，见下）</td><td>test.md + review.md + archive</td></tr>
     </tbody>
   </table>
@@ -148,8 +148,8 @@ flowchart LR
   <ol class="rules">
     <li><b>测试锁定 = eo-test 前移吸收：</b><span>实施前把 auto 类 AC 落成失败测试，确认因断言失败（非报错），commit——测试即锁定的规格，实施目标就是让它变绿，无事后测试轮。出现要起环境的重验证（auto-heavy）即扩档信号。负向约束与观感类留书面（人工:）。</span></li>
     <li><b>禁改测试：</b><span>实施中不许动测试文件；AC 本身写错 → 停手上报，改 AC 重锁再继续。</span></li>
-    <li><b>审查压缩但不砍能力：</b><span>方案级 → 探针对齐（轻档没有 TODO 映射 / 粒度 / 条件节等审查对象）；代码级 → 完成门的新鲜上下文 subagent 独立复核（AC 覆盖 + 过拟合 / 特判 / 篡改三查，执行者自述不作数）。AC 在 change.md 标准位置，一句「跑 /eo-review」随时升级完整审查，无需扩档。</span></li>
-    <li><b>done 即归档：</b><span>卡收口后不再编辑，本身即审计记录，无冻结仪式；文档同步走 doc-manager cursor sync 兜底轨（同 trivial 直改），不依赖 archive。INDEX 维护时顺手报告 open 超 30 天未动的卡（防静默蒸发）。</span></li>
+    <li><b>审查压缩但不砍能力：</b><span>方案级 → 探针对齐（轻档没有 TODO 映射 / 粒度 / 条件节等审查对象）；代码级 → 完成门的新鲜上下文 subagent 独立复核（AC 覆盖 + 过拟合 / 特判 / 篡改三查，执行者自述不作数）。AC 在 change.md 标准位置，一句「跑 /eo-review」随时升级完整审查（对轻档为只读语义：不写 change 目录、不改 status），无需扩档。</span></li>
+    <li><b>finalizer 收口即归档：</b><span>五步顺序执行——结算 → 元数据收尾 commit（manual 确认记录与复核记录自检）→ <b>显式触发 doc-manager sync</b> → push/PR → 关 issue/stub。收口后工件即审计记录，无冻结仪式。INDEX 维护时顺手报告超 30 天未动的轻档（防静默蒸发）。</span></li>
   </ol>
 </section>
 

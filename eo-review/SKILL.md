@@ -27,7 +27,7 @@ description: |
 
 - **必须能找到 `.eo-project.json`**。找不到 → 报错退出，提示运行 `/eo-project-init`
 - `eo-doc/changes/<change-id>/change.md` 存在，**相关代码已实现**（TODO 至少部分勾选），status 为 `implementing` 或 `reviewed`
-- `tier: light` 的 change 默认不经本 skill（代码级核查由 eo-implement 轻模式完成门的独立复核承担）；用户显式要求时照常按 §2 AC 逐条核对执行，status 不限、无 TODO 不碍（维度 1 只核 AC）
+- `tier: light` 的 change 默认不经本 skill（代码级核查由 eo-implement 轻模式完成门的独立复核承担）。用户显式要求时按 §2 AC 逐条核对执行，但为**只读语义**：报告落对话或 `tmp/eo/`，**不写 change 目录、不改 status**——archived 是不可逆终态绝不回写 reviewed，implementing 同样保持不变；发现缺陷 → 未收口的回轻模式修复，已 archived 的走 /eo-fix 或新开 change
 
 ### 前置拦截（硬性）
 

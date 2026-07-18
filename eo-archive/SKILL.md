@@ -20,6 +20,7 @@ description: |
 
 - **必须能找到 `.eo-project.json`**。找不到 → 报错退出，提示运行 `/eo-project-init`
 - 目标 `eo-doc/changes/<change-id>/change.md` 存在且 `status: reviewed`（存量 `done` 视同 reviewed，顺手改写）
+- `tier: light` 的 change 不经本 skill——轻档由 eo-implement 轻模式收口序列归档；对轻档执行本 skill → 告知其归档机制并退出，不做任何写入
 
 ## 工作流程（五层）
 

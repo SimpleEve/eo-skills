@@ -2,7 +2,7 @@
 name: eo-handoff
 description: |
   在 /clear 之前生成最小可恢复快照到 tmp/eo/handoff/<topic>.md，让下一个会话载入这一个文件就能从当前节点继续。优先记录任务状态、关键口径、下一步分叉，主动丢弃探索过程。触发：handoff / 存一下进度 / 我要 clear / /eo-handoff。
-  NOT FOR: 跨 agent 任务派发（用 /eo-flow）；机械压缩对话流（用内置 /compact）。
+  NOT FOR: 机械压缩对话流（用内置 /compact）。
 ---
 
 # eo-handoff — 跨会话状态交接
@@ -16,7 +16,6 @@ description: |
 | 名称 | 对端 | 性质 |
 |------|------|------|
 | 内置 `/compact` | 同一会话续命 | 机械压缩对话流，保留所有信息 |
-| `/eo-flow` | 同时存在的另一个 agent (codex pane) | 跨 agent 任务派发 |
 | **`/eo-handoff`** | **clear 之后的下一个会话（"未来的自己"）** | **定向提取当前状态 + 决策口径，主动丢弃探索过程** |
 
 核心区别：eo-handoff **不是总结**，是"开机指令"。读者是新会话的自己，目标是 5 分钟内回到当前节点。
@@ -144,7 +143,7 @@ clear 后新会话该做的第一组动作（有序）：
 | 不复制文件内容到 handoff | 只写路径，新会话自己读；handoff 是地图不是百科 |
 | tmp/eo/ 用户管 | 默认覆盖同名文件；不自动清理历史；`tmp/eo/` 由 /eo-project-init 写入 .gitignore（未跑过 init 的仓库由项目自决） |
 | 不依赖 eo-doc/ | 工作区级机制，任何项目能用，不读 .eo-project.json |
-| 不替代 /compact 或 /eo-flow | 看「定位」表格，三者职责互不重叠 |
+| 不替代 /compact | 看「定位」表格，职责互不重叠 |
 
 ## 示例（最小完整版）
 
@@ -165,6 +164,5 @@ Claude:
 ## 与其它 skill 的关系
 
 - 内置 `/compact`：续命当前会话，保留全量；本 skill 是清空当前会话前的状态导出
-- `/eo-flow`：跨 agent 任务派发；本 skill 是跨会话状态交接，不涉及第二个 agent
 - `/eo-project-record`：项目级长期记录（决策 / 经验），活在 vault；本 skill 是工作区临时快照，活在 `tmp/eo/`
 - 任何 eo-* 流程节点（brainstorming/change/implement/test/review/archive）都可以在中途调用本 skill 做 clear 前快照

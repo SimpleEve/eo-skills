@@ -94,24 +94,31 @@ description: |
 
 判档为轻档后走此流程，**替代第二至第八步**：
 
-1. **快速自查**：读 `eo-doc/state/` 相关篇目与 lessons INDEX 命中项（≤2 条）；能自答的不问用户
+1. **快速自查**：读 `eo-doc/state/` 相关篇目、lessons INDEX 命中项（≤2 条）、`changes/INDEX.md` 最近 3 条（防重复/冲突）；涉及 UI 且仓库根有 `DESIGN.md` → 读入；涉及外部世界 → 按 [../eo-shared/research.md](../eo-shared/research.md) 消费规则查 `research/`。能自答的不问用户
 2. **澄清**：预算 1-2 问（协议同 questioning.md），问完即写——AC 定不下来说明澄清不到位，或该转全档
 3. **落盘（draft）**：按 [references/change-template.md](references/change-template.md) 轻档模板写入 `changes/<NN>-<slug>/change.md`（id/seq/查重/让号规则与全档同一套）；AC ≤5 条、覆盖异常路径、manual 标「人工:」；外部 GitHub issue 来源 → 号回写 `issue:`。写入即建看板 stub（未开启跳过）
 4. **探针对齐（→ confirmed）**：把意图 + AC 亮给用户否一次——探针的成功标准是**尽快暴露分歧**，不是通过评审。用户点头 → `status: confirmed` + 联动钩子（stub 刷新；GitHub issue 联动开启且 frontmatter 无 issue 号才建）。用户否 → 就地改再亮一次；方案分歧大 → 转全档从第二步续起
-5. **更新 INDEX + 提示后续**：INDEX 行类型列标 `light·<type>`；seq 查重自愈与防蒸发报告同第八步。后续提示：
+5. **更新 INDEX + 提示后续**：INDEX 行「档」列标 `light`；seq 查重自愈与防蒸发报告同第八步。后续提示：
 
    > 轻档已就绪（confirmed）。下一步：`/eo-implement <change-path>`——轻模式：测试锁定 → 实施 → 完成门，收口即归档。
 
-轻档**不进 change-review**（方案分歧在探针对齐里暴露）；实施中的扩档由 eo-implement 轻模式触发（tier 改 full 原地续走，文件不挪）。
+轻档**不进 change-review**（方案分歧在探针对齐里暴露）；实施中的扩档由 eo-implement 轻模式停手转入下方扩档子流程。
+
+### 扩档子流程（light → full，由 eo-implement 轻模式停手转入）
+
+1. frontmatter `tier` 改 `full`，就地补齐全档模板节：§1 意图（轻档意图行扩写 + 已钉决策）、§2 保留、§3 TODO——**已完成的工作映射为已勾 TODO 并注「扩档前完成」**，剩余工作按 Batch 划分；条件节按触发条件取舍
+2. 交用户再确认（对话确认）；**因影响面/风险信号触发的扩档，建议跑一次全量 /eo-change-review**
+3. 刷新 INDEX 行（档列 light→full）、stub 与 issue body 投影（[../eo-shared/board-github.md](../eo-shared/board-github.md)，未开启跳过）
+4. 回 /eo-implement 模式一，从首个未完成 Batch 续走——`base_commit`/`test_lock_commit`/已锁定测试全部保留
 
 ## changes/INDEX.md 模板
 
 ```markdown
 # 变更时间线
 
-| # | change | 类型 | 状态 | 日期 | 摘要 |
-|---|--------|------|------|------|------|
-| 14 | [batch-export](14-batch-export/change.md) | feature | confirmed | YYYY-MM-DD | 一句话（= frontmatter summary） |
+| # | change | 档 | 类型 | 状态 | 日期 | 摘要 |
+|---|--------|----|------|------|------|------|
+| 14 | [batch-export](14-batch-export/change.md) | full | feature | confirmed | YYYY-MM-DD | 一句话（= frontmatter summary） |
 ```
 
 ## 关键约束

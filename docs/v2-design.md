@@ -3,6 +3,7 @@
 > 状态：draft（待逐节评审）
 > 日期：2026-07-07
 > 输入：vault/eo-skill/research/v2/（现状盘点 + 5 竞品调研）、vault/eo-skill/decisions/v2/（6 个已钉决策）
+> ⚠️ 2026-07-18 起：三档制（docs/tier-design.md）引入 change 轻/全两档；本文中「单轨 / 不设中间档 / 不引入 light change / 每 change 强制 review」相关表述已被取代，冲突处以 tier-design 为准。
 
 ---
 
@@ -40,7 +41,7 @@
 | eo-project-init | **调整** | 骨架与注入内容更新；待确定问题全部走封闭选择协议（questioning.md §4，runtime 中立） |
 | eo-design | **新增** | 四模式：init / variants / apply / audit（参考 gstack 全链路） |
 | eo-recall | **新增** | 活文档消费入口：回忆/解释问答（检索瀑布 + 分层作答带出处 + 按需 mermaid/HTML 解释页）；吸收 doc-manager 的 query |
-| eo-flow | **保留，延后修改** | 本次只清理其中 eo-workflow 与 spec 相关引用 |
+| eo-flow | ~~保留，延后修改~~ **已移除（2026-07-18）** | 三档制修复轮随 P0-6 一并移除，跨 agent 派发由外部编排承担 |
 | eo-project-update | **移除**（后续决策） | 旧看板刷新随手工看板体系退役；log.md 移除必建；roadmap 推进属 trivial 直改；decisions 记录并入 eo-project-record |
 | eo-project-lesson | **改名 eo-project-record 并扩展**（后续决策） | 双模板：lesson（trigger 锚点）+ decision（裁定格式）；双目录各带 INDEX；旧看板计数删除 |
 | eo-backlog / eo-handoff | 不动 | |
@@ -411,7 +412,7 @@ install.sh 是逐目录软链，跨 skill 相对路径引用不可靠。方案�
 
 - **eo-workflow**：目录本体；README.md:119（流程图节点）、README.md:128（实验声明）、docs/GUIDE.md:268、eo-flow/SKILL.md:5/16/187、eo-change/SKILL.md:193。
 - **eo-spec / eo-spec-review / eo-module-init**：目录本体；README/GUIDE 相关章节与流程图；eo-change（前置条件、Delta、跨模块判界）、eo-archive（全文重写）、eo-fix（F-spec）、eo-doc-manager（dev/ 说明）、eo-flow（分叉表中 spec-review/change-review 行）中的全部 spec 引用。
-- **eo-flow**：本次仅做上述引用清理，功能重构延后（用户决策）。
+- **eo-flow**：~~本次仅做上述引用清理，功能重构延后~~（2026-07-18 已整体移除）。
 
 ### 10.2 v1 项目迁移
 

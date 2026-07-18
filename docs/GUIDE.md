@@ -14,7 +14,6 @@
   - [典型流程图](#典型流程图)
   - [关键约束](#关键约束)
 - [两种 review 的边界](#两种-review-的边界)
-- [跨 agent 协作（eo-flow）](#跨-agent-协作eo-flow)
 - [会话交接（eo-handoff）](#会话交接eo-handoff)
 - [项目管理 skill](#项目管理-skill)
 - [文档体系（eo-doc-manager）](#文档体系eo-doc-manager)
@@ -101,13 +100,13 @@ eo-doc/changes/
 |-------|---------|------|------|
 | `/eo-project-init` | 项目首次使用 eo-skills | `.eo-project.json` + 双侧骨架 | **所有 skill 的前置** |
 | `/eo-brainstorming` | 想法不成形 / 新项目从零起步 | 已钉决策 + 首批 change 草案（捕获出口；视觉/UI 结论可移交 /eo-design） | 可选前置 |
-| `/eo-change` | 发起变更（bootstrap / feature / enhance / refactor） | `changes/<NN>-<slug>/change.md`（AC 前置 + TODO 分批） | trivial 主动短路成直改 |
+| `/eo-change` | 发起变更（bootstrap / feature / enhance / refactor） | `changes/<NN>-<slug>/change.md`（轻档 = 意图 + AC；全档 = AC 前置 + TODO 分批） | trivial 短路直改；轻/全判档见 granularity §5 |
 | `/eo-change-review` | change draft 完成后、implement 前的方案审查 | `change-review.md` | ✅ 可选 |
-| `/eo-implement` | 按 change.md TODO 分批实施（含 bug 修复循环） | 代码 + 勾选 TODO/AC + 人工验收单（有人工项时） | 批末 checkpoint（**只跑轻验证**） |
+| `/eo-implement` | 全档按 Batch 分批实施；轻档走轻模式（含 bug 修复循环） | 代码 + 勾选 TODO/AC + 人工验收单（有人工项时）；轻档收口即归档 | 批末 checkpoint（**只跑轻验证**） |
 | `/eo-fix` | 发现 bug（口喷即可） | 快路**直接修复** + 落点记账；语义分歧才取证；难缠 bug 自动深挖 | 需求变更转 change |
 | `/eo-test` | 运行测试 / 场景验证 | `test.md`（以 AC 为锚 + 读码取输入） | **重验证唯一执行者**；失败 → 回 implement |
-| `/eo-review` | 实施后的**代码**审查 | `review.md` | 强制；可在 test 前或后（见流程图两条链路） |
-| `/eo-archive` | 代码审查通过后归档 | 触发 doc sync 更新 state/handbook + 冻结 change | 人工验收唯一硬门；不反写 spec |
+| `/eo-review` | 实施后的**代码**审查 | `review.md` | 全档强制；轻档由 implement 完成门独立复核替代 |
+| `/eo-archive` | 代码审查通过后归档 | 触发 doc sync 更新 state/handbook + 冻结 change | 人工验收唯一硬门；不反写 spec；轻档不经此（轻模式收口归档） |
 | `/eo-design` | 设计系统 / 视觉方案 / 高保真 / 设计审计 | `DESIGN.md`（真相源）+ HTML 工件 + CLAUDE.md 约束注入 | init / variants / apply / audit 四模式 |
 | `/eo-recall` | 「当时怎么设计的 / 逻辑怎么实现的 / 为什么这么定」 | 只读问答：分层作答带出处；可出 mermaid / HTML 解释页 | 活文档的消费入口；吸收原 doc-manager query |
 
@@ -121,6 +120,8 @@ eo-doc/changes/
 发起变更：  /eo-change            →  changes/<NN>-<slug>/change.md
             │                         AC 前置 + TODO 分批 + 粒度校验
             │                         （trivial → 主动短路成直改，不产生工件）
+            │                         （轻档 tier: light → 探针对齐后走 implement 轻模式：
+            │                           测试锁定 → 实施 → 完成门 → finalizer 收口即归档，不经下方各环节）
             ▼
 方案审查：  /eo-change-review     →  change-review.md（可选）
             │                         P0 → 回 eo-change 修（复审默认增量核销，≤3 轮；P1 移交起草方裁决）
@@ -185,21 +186,6 @@ eo-doc/changes/
 
 ---
 
-## 跨 agent 协作（eo-flow）
-
-`/eo-flow <action>` 把单个步骤甩给另一个 tmux pane 里的 codex agent 执行，本 pane 继续做别的。典型场景：Claude pane 做 change 起草，Codex pane 做 implement/test/review。
-
-**前置**：
-
-- 装好 `tmux` + [smux](https://github.com/ShawnPana/smux)（提供 `tmux-bridge` CLI）
-- 已有一个跑着 codex 的 tmux pane
-
-**用法**：`/eo-flow implement|test|review|change-review|fix`——派发、回包合约、回包后读产出文件决策的具体流程以 `eo-flow/SKILL.md` 为准，此处不复写。
-
-**设计要点**：eo-* skill 本身不懂 smux（要能在没 tmux 的机器上独立跑）；"回包合约"由 eo-flow 在每次派发的附言里注入，不改任何 eo-* skill 正文。
-
----
-
 ## 会话交接（eo-handoff）
 
 `/eo-handoff` 在 `/clear` 之前生成最小可恢复快照到 `<repo>/tmp/eo/handoff/<topic>.md`，让下一个会话载入这一个文件就能从当前节点继续。**不是对话总结**，而是定向提取「当前状态 + 决策口径 + 下一步动作」，主动丢弃探索过程。
@@ -209,7 +195,6 @@ eo-doc/changes/
 | 名称 | 对端 | 性质 |
 |------|------|------|
 | 内置 `/compact` | 同一会话续命 | 机械压缩对话流，保留所有信息 |
-| `/eo-flow` | 同时存在的另一个 agent (codex pane) | 跨 agent 任务派发 |
 | `/eo-handoff` | clear 之后的下一个会话（"未来的自己"） | 跨会话状态交接 |
 
 **何时用**：

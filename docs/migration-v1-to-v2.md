@@ -9,10 +9,11 @@
 | 模块与 spec | `eo-doc/dev/<module>/spec.md` 活文档基线 | **移除**。期望行为的载体是 change 的验收清单（AC） |
 | change 位置 | `eo-doc/dev/<module>/changes/` 模块内编号 | `eo-doc/changes/` 项目级扁平目录，目录名 `<NN>-<slug>/`（seq 补零前缀便于 `ls` 排序、找进行中的）；**身份仍是 slug**（commit 前缀/issue 用它，撞号只 `git mv` 目录、不碰 commit），frontmatter `seq` 为显示序号（#N，撞号自愈）；存量数字前缀 id 冻结兼容 |
 | change 模板 | 9 章（Delta / S-C-G / 层级 Part） | 必填 3 节（意图 / AC / TODO 分批）+ 条件 5 节（含涉及文件） |
+| change 档位 | 单轨 | 2026-07-18 起分轻/全两档（`tier: light\|full`）：轻档 = 意图 + AC、测试锁定、finalizer 收口即归档（见 docs/tier-design.md） |
 | 归档 | Delta 机械合并回 spec.md | 结算 commit → 触发 doc-manager sync → 冻结 change |
 | status 流转 | 用户手改 frontmatter（approved 等） | skill 自动流转：draft → confirmed → implementing → reviewed → archived（曾短暂命名 `done`，读到视同 reviewed） |
 | bug 修复 | eo-fix 只诊断，implement 修 | **eo-fix 直接修复**（含深挖模式）；implement 只管 test/review 反馈循环 |
-| 小改动 | 也要开 change | trivial 直改模式（判据见 eo-shared/granularity.md），cursor sync 兜底 |
+| 小改动 | 也要开 change | trivial 直改模式（判据见 eo-shared/granularity.md），随下次 doc sync 顺带收割 |
 | 移除的 skill | — | eo-workflow、eo-spec、eo-spec-review、eo-module-init、eo-project-update |
 | 项目记录 | eo-project-lesson（仅教训） | **eo-project-record**（教训 + 决策统一入口，各带 INDEX） |
 | 项目看板 | kanban_path 手工看板（init 注册/update 刷新/lesson 计数） | **退役**。change 级观测 → board stub + Bases；项目级总览 → Bases 聚合各项目 roadmap.md frontmatter |
