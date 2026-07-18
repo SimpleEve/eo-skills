@@ -12,7 +12,7 @@ description: |
 ## 核心理念
 
 1. **验收驱动**：AC 先于 TODO 产出，是 implement 的完成判据、review 的检查表、fix 的期望行为锚点
-2. **渐进式严谨**：必填仅 4 节，方案/流程图/风险/开放问题全部条件化；trivial 改动直接短路成直改
+2. **渐进式严谨**：必填仅 3 节，涉及文件/方案/流程图/风险/开放问题全部条件化；trivial 改动直接短路成直改
 3. **量化粒度**：超软标建议拆、超硬标拒绝确认，指标数值以 [../eo-shared/granularity.md](../eo-shared/granularity.md) §1 为准
 4. **提问有预算**：事实自查、决策上抛、决策台账钉结论——规则见 [../eo-shared/questioning.md](../eo-shared/questioning.md)
 5. **状态自动流转**：用户在对话里确认，skill 落盘 status，用户永不手改 frontmatter
@@ -53,7 +53,7 @@ description: |
 
 ### 第五步：TODO 拆解与分批
 
-- 每条 TODO 四要素（描述/文件/对应 AC/完成判据），逐条映射 AC，**禁止占位符**（granularity.md §4）
+- 每条 TODO 三要素（描述/文件/对应 AC），逐条映射 AC；完成判据仅在多条 TODO 对同一 AC 时逐条补写（granularity.md §4），**禁止占位符**
 - 按 Batch 分组，**Batch 1 = MVP**：跑完即可独立验证其对应的 AC（批间 STOP and VALIDATE 由 eo-implement 执行）
 - 不写具体函数体；接口签名/数据结构可以描述
 

@@ -8,7 +8,7 @@
 |------|----|----|
 | 模块与 spec | `eo-doc/dev/<module>/spec.md` 活文档基线 | **移除**。期望行为的载体是 change 的验收清单（AC） |
 | change 位置 | `eo-doc/dev/<module>/changes/` 模块内编号 | `eo-doc/changes/` 项目级扁平目录，目录名 `<NN>-<slug>/`（seq 补零前缀便于 `ls` 排序、找进行中的）；**身份仍是 slug**（commit 前缀/issue 用它，撞号只 `git mv` 目录、不碰 commit），frontmatter `seq` 为显示序号（#N，撞号自愈）；存量数字前缀 id 冻结兼容 |
-| change 模板 | 9 章（Delta / S-C-G / 层级 Part） | 必填 4 节（意图 / AC / TODO 分批 / 涉及文件）+ 条件 4 节 |
+| change 模板 | 9 章（Delta / S-C-G / 层级 Part） | 必填 3 节（意图 / AC / TODO 分批）+ 条件 5 节（含涉及文件） |
 | 归档 | Delta 机械合并回 spec.md | 结算 commit → 触发 doc-manager sync → 冻结 change |
 | status 流转 | 用户手改 frontmatter（approved 等） | skill 自动流转：draft → confirmed → implementing → reviewed → archived（曾短暂命名 `done`，读到视同 reviewed） |
 | bug 修复 | eo-fix 只诊断，implement 修 | **eo-fix 直接修复**（含深挖模式）；implement 只管 test/review 反馈循环 |

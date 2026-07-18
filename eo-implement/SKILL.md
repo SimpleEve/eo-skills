@@ -40,12 +40,12 @@ description: |
    - 列出各 Batch 及 TODO 数，默认从第一个未完成 Batch 开始；用户可指定只跑某批
 
 4. **批内逐项实现**
-   - 按依赖顺序编码；每完成一个 TODO 运行其「完成判据」，**立即在 change.md 勾选**
+   - 按依赖顺序编码；每完成一个 TODO **立即在 change.md 勾选**——带「完成判据」的先跑判据再勾；无判据的（一对一映射）以常规绿灯（编译/lint/相关单测）为勾选门，其对应 AC 留待批末 checkpoint 验证
    - 遇到 change 未覆盖的技术细节：能从代码/handbook 自答的自答；真正的决策问用户（一次 1-2 问）
    - 发现 TODO/AC 写漏：告知用户，经确认后就地补进 change.md（意图不变的精化），再继续；补的是 manual 项且验收单已生成 → 同步补验收项（未勾）
 
 5. **批末 checkpoint（STOP and VALIDATE）**
-   - 验证该批对应的 **auto-light AC**：按 §2 的「验证」栏逐条执行，通过则勾选
+   - 验证该批对应的 **auto-light AC**：按 §2 的验证口径（「验证」栏，省略时按声明本身）逐条执行，通过则勾选
    - **auto-heavy AC 不跑、不勾、不代验**（需起服务 / 多环境组合 / 点击流；判不准按 heavy）——重验证收敛到 /eo-test 一次跑完，**implement 不起环境**；汇报里列为「待 test」
    - **manual 类（「人工:」标记）不代勾**，留给完成时的人工验收门
    - 提交本批代码：commit message 带 `[<change-id>]` 前缀（见 [../eo-shared/conventions.md](../eo-shared/conventions.md)；推荐一次 change 一次 commit，分批时一批一 commit）
