@@ -27,7 +27,10 @@ description: |
 ### 第一层：前置校验
 
 1. `status: reviewed`（不是 → 指出当前所处环节：draft/confirmed 回 /eo-change 或 /eo-implement；implementing 回 /eo-implement；已 archived 直接告知）
-2. `review.md` 存在且结论为通过（P0/P1 已清零）
+2. **报告当前结论门**（读末尾速报 + 台账，不通读正文——正文是历史快照）：
+   - **工作区无本 change 的未提交实施改动**（有 → 先结算成 `[<change-id>]` commit 再回 /eo-review——未经审查的实施改动不得借第二层结算绕过下一条）
+   - `review.md` 存在且末尾速报结论为通过（P0/P1 已清零），且其**最新轮基线 commit == 本 change 最后一个 `[<change-id>]` 实施提交**——修过码必须重新 review，旧结论不作数（不符 → 回 /eo-review 复审）
+   - `test.md` 存在时末尾速报必须为通过（test 不强制基线新鲜度——重验证一次跑完的取舍；触及 heavy AC 的修复由模式二收尾提示重跑）；台账不得有 `open`/`fixed` 的**阻塞项**（= review 台账 P0/P1、test 台账级别「阻塞」行；`waived`/`superseded`/P2 不算）——有 → 回 /eo-implement 模式二修复或重跑对应验证核销
 3. **验收清单全勾 + 人工验收硬门**（规范见 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)）：
    - 从 change.md §2 解析 manual AC 集合（「人工:」标记）——**非空则 `acceptance.md` 必须存在且与集合一一对应**（缺项/孤儿/重复 = 校验失败）；空集则只查普通 AC 全勾
    - 逐项核对勾选与异常行：用户勾的「通过」直接有效（勾选权归用户）；agent 代勾必须带确认记录（日期 +「原话」），缺记录按未勾处理

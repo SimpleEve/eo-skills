@@ -28,7 +28,7 @@ description: |
 
 1. 读用户的变更描述。**若来自 /eo-brainstorming 捕获出口**：直接继承其已钉决策与 change 草案，跳过已钉项的一切重复提问，从第四步续起。**若来源是某张 backlog 卡**（用户说「把这条 backlog 做了」）：继承卡片的 title/说明/标签作为意图输入，记下卡片路径待第七步归档。**若来源是外部 GitHub issue**：继承其正文作意图输入（规范 issue 常自带 AC），记下 issue 号待落盘回写 `issue:`（联动钩子靠回写号去重，不重复建）
 2. 按 [../eo-shared/questioning.md](../eo-shared/questioning.md) §2 定级：trivial / simple / complex / critical
-3. **trivial → 主动短路**：告知用户「这不值得开 change，直接改」，按 [../eo-shared/granularity.md](../eo-shared/granularity.md) §2 的直改模式执行（改 → 验证 → `fix:`/`ui:` 前缀 commit），本流程终止。判据任何一条不满足则回到 change 模式
+3. **trivial → 主动短路**：告知用户「这不值得开 change，直接改」，按 [../eo-shared/granularity.md](../eo-shared/granularity.md) §2 的直改模式执行（改 → 验证 → `fix:`/`ui:` 前缀 commit；注释零溯源，提交前对新增注释自检一眼，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §2.6），本流程终止。判据任何一条不满足则回到 change 模式
 4. **critical → 建议升级**：「这个方向本身还没定，建议先 /eo-brainstorming 把决策钉了再回来」；用户坚持则继续，但澄清预算放宽到 5+
 5. **轻/全判档**：非 trivial 非 critical → 按 granularity.md §5 四问判档，一句话宣告（含取舍，如「按轻档走：不出 review 报告，验收靠测试 + 复核」），用户一个词可改档。**轻档 → 走文末「轻档流程」**（替代第二至第八步）；全档 → 继续第二步
 6. **update vs new**：若变更明显是某个未归档 change 的意图精化 → 提议就地更新那个 change 而非新开（决策表见 granularity.md §3）
@@ -54,7 +54,7 @@ description: |
 
 ### 第五步：TODO 拆解与分批
 
-- 每条 TODO 三要素（描述/文件/对应 AC），逐条映射 AC；完成判据仅在多条 TODO 对同一 AC 时逐条补写（granularity.md §4），**禁止占位符**
+- 每条 TODO 三要素（描述/文件/对应 AC），逐条映射 AC；文件栏带**操作类型前缀**「新增:/修改:/删除:」（缺省视为修改——change-review 维度 7 按类型核验前提）；完成判据仅在多条 TODO 对同一 AC 时逐条补写（granularity.md §4），**禁止占位符**
 - 按 Batch 分组，**Batch 1 = MVP**：跑完即可独立验证其对应的 AC（批间 STOP and VALIDATE 由 eo-implement 执行）
 - 不写具体函数体；接口签名/数据结构可以描述
 
@@ -106,10 +106,23 @@ description: |
 
 ### 扩档子流程（light → full，由 eo-implement 轻模式停手转入）
 
-1. frontmatter `tier` 改 `full`，就地补齐全档模板节：§1 意图（轻档意图行扩写 + 已钉决策）、§2 保留、§3 TODO——**已完成的工作映射为已勾 TODO 并注「扩档前完成」**，剩余工作按 Batch 划分；条件节按触发条件取舍
+1. frontmatter `tier` 改 `full`，就地补齐全档模板节：§1 意图（轻档意图行扩写 + 已钉决策）、§2 保留、§3 TODO——**已完成的工作映射为已勾 TODO 并注「扩档前完成」**，剩余工作按 Batch 划分；条件节按触发条件取舍；补全档 frontmatter 字段 `plan_revision: 1`/`fix_rounds: 0`/`fix_consumed: []`（语义见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §3）
 2. 交用户再确认（对话确认）；**因影响面/风险信号触发的扩档，建议跑一次全量 /eo-change-review**
 3. 刷新 INDEX 行（档列 light→full）、stub 与 issue body 投影（[../eo-shared/board-github.md](../eo-shared/board-github.md)，未开启跳过）
 4. 回 /eo-implement 模式一，从首个未完成 Batch 续走——`base_commit`/`test_lock_commit`/已锁定测试全部保留
+
+### 回炉子流程（方案实质修订，由 eo-implement 模式二熔断/卡点检查或用户显式要求转入）
+
+回炉 ≠ 修 bug——是「方案本身要改」。前提：status 为 `implementing`（reviewed 的先按回退边置回，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §3）。
+
+1. **边界检查**：先过 [../eo-shared/granularity.md](../eo-shared/granularity.md) §3 更新 vs 新开决策表——意图本质变化 / 与原范围重叠 <50% / 原 change 可独立收尾 → **新开 change**，不回炉（原 change 走正常收尾或归档豁免）；不允许借回炉绕过这条边界
+2. **status → `draft`**，修订 §1/§2/§3（含已钉决策的重钉）
+3. **证据失效**：旧 TODO/AC 与新版逐条映射——语义不变的保留勾选注「回炉前完成」；完成判据或 AC 语义受影响的**取消勾选**注「回炉待复验」；manual 项按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)「失效与重置」重置；`test_lock_commit` 仅在全部被锁 AC 语义不变时保留，否则值旁注 `superseded`（待轻模式重锁）；`base_commit` 无条件保留
+4. **报告处置**：change-review.md / test.md / review.md（存在者）各追加一行 `> revision N 作废（<日期>）——后续见 revision N+1`，并把台账中仍为 `open`/`fixed` 的行状态批量改 `superseded`（随方案作废，archive 门不再计为阻塞）；**不压缩、不删除**旧轮次内容（报告可能未提交，git 兜不了底）
+5. **投影**：INDEX 行状态回 draft、stub upsert、issue body 刷新（联动开启时）
+6. **确认收口**：交用户重新确认 → `status: confirmed`，frontmatter `plan_revision` +1、`fix_rounds` 归零、`fix_consumed` 清空；再刷新一次投影。触发根因为「方案不合理 / AC 口径漂移」（且确实走了回炉——口径漂移多数走就地精化，见下）→ **必须**跑一次全量 /eo-change-review（新 revision 轮数从 1 起算、旧 wont-fix 失效）；用户显式豁免可跳，豁免记 §8。然后回 /eo-implement 模式一从首个未勾 Batch 续走
+
+**回炉与就地精化的边界**：措辞微调、意图不变的就地补 AC（implement 流程内确认后补写）不算回炉——不动 `plan_revision`、不清计数、不走本子流程。
 
 ## changes/INDEX.md 模板
 
@@ -126,6 +139,7 @@ description: |
 - **AC 先于 TODO**；每条 TODO 必须映射到 AC
 - **粒度硬上限拒绝确认**（数值见 granularity.md §1）；轻/全判档以 granularity.md §5 为准
 - **轻档不写 TODO、不进 change-review**；扩档只由 eo-implement 轻模式触发
+- **回炉只走回炉子流程**：先过更新 vs 新开边界；证据失效逐条处理；`plan_revision`/计数只在用户重新确认时动——就地精化不算回炉
 - **无 `fix` 类型**；bug 走 /eo-fix
 - **status 由 skill 流转**（见 [../eo-shared/conventions.md](../eo-shared/conventions.md)），用户不手改
 - **change 阶段不写代码**、不改活文档；归档不反写（由 eo-archive 触发 doc sync）

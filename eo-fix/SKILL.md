@@ -43,7 +43,7 @@ description: |
 
 ### 第三步：快路修复
 
-最小变更修复 → 用户给的复现步骤转成回归验证跑通 → 跳到第六步落点记账。中途发现行为其实可能是有意的 → 转第四步。
+最小变更修复 → 用户给的复现步骤转成回归验证跑通 → 跳到第六步落点记账。中途发现行为其实可能是有意的 → 转第四步。修复代码**注释零溯源**：change/AC/finding 标记与修复辩护不进注释（[../eo-shared/conventions.md](../eo-shared/conventions.md) §2.6）。
 
 **复现与回归都取最低成本层**：修前先在该层复现失败（这是根因判断的依据，也是「改完看起来对了」之外唯一的证据），修后在同层验通过。层的选法——纯逻辑用单测 / `node -e` 等价复刻（秒级），接口契约用一次请求，**确属集成 / UI 态才起环境**（环境纪律见 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)）。不要每改一行就重新 build + 起环境。
 
@@ -106,7 +106,7 @@ description: |
 | 修复范围守界 | 超 trivial 量级 / 需方案权衡 → 转 change，不硬修 |
 | 深挖必宣告、必还原 | 插桩/日志/bisect 结束后全部还原 |
 | 需求变更不伪装成 fix | 期望行为本身变了就是 /eo-change 的事，哪怕改动很小 |
-| 注释纪律 | change/TODO/AC 编号严禁进代码注释（溯源走 commit 前缀）；只写代码表达不了的约束，见 conventions.md §2.6 |
+| 注释纪律 | 一切流程溯源标注（change 编号/slug、TODO/AC、finding P0-x/P1-x、FAIL-x）严禁进代码注释（溯源走 commit 前缀）；不写「为何正确」的辩护；提交前对新增注释自检一眼，见 conventions.md §2.6 |
 | 与 implement 的分工 | test/review 反馈的修复归 /eo-implement 模式二；本 skill 是流程外的口喷入口 |
 
 ## 典型场景

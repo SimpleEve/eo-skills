@@ -61,13 +61,13 @@ change-id 前缀是 eo-archive 归集 commit 区间的依据；`fix:`/`ui:` 前�
 
 ## 2.6 代码注释纪律
 
-**溯源不进注释**：文件↔change 的对应由 commit 前缀 `[<change-id>]` 承载（git blame 即得），**严禁**把 change/TODO/AC 编号写进代码注释——归档后这些编号对读代码的人毫无意义，只会腐烂。
+**溯源不进注释**：文件↔change 的对应由 commit 前缀 `[<change-id>]` 承载（git blame 即得）。**严禁任何流程溯源标注**进代码注释——change 编号/slug、TODO/AC 编号、review finding（P0-x/P1-x）、FAIL-x、批次/阶段号、revision 号，只要**作为溯源标记**出现即违规；归档后这些标记对读代码的人毫无意义，只会腐烂。判据看语义不看字面：领域术语恰与 change slug 同名的正常约束注释不违规（如 slug 为 `cache-invalidation` 时描述缓存失效契约的注释照写）。
 
-注释只写**代码本身表达不了的约束**（不变量、反直觉的坑、外部契约），一两行为限；不复述代码在做什么，不向审查者解释这次改动为何正确——那些话属于 commit message 与对话汇报。密度对齐所在文件的既有风格。
+注释只写**代码本身表达不了的约束**（不变量、反直觉的坑、外部契约），一两行为限；不复述代码在做什么，**不向审查者解释这次改动为何正确**——正确性辩护属于 commit message 与对话汇报。密度对齐所在文件的既有风格。
 
 ## 3. 状态词汇总表（看板列序即此）
 
-全看板合法状态的全序：
+看板列序按主路径排列；状态机 = **主路径 + 显式回退边**（不是单向全序，下游不得按列序数值判合法流转）：
 
 ```
 backlog → draft → confirmed → implementing → reviewed → archived
@@ -80,7 +80,22 @@ draft ──(eo-change：用户对话确认)──▶ confirmed
       ──(eo-implement：首次执行)──▶ implementing
       ──(eo-review 通过)──▶ reviewed（代码审查已过；人工验收与归档尚未发生）
       ──(eo-archive：完成归档)──▶ archived（不可逆）
+
+回退边（与主路径同等合法）：
+reviewed ──(阻塞反馈：eo-test 结论不通过 / eo-review 复审出 P0/P1 / acceptance 打回 / 进入回炉前的置回)──▶ implementing
+          由**产出该结果的 skill 当场执行**并刷新 stub，不等 implement 猜；acceptance 打回常由用户
+          直接标注、无产出 skill——由首个读到打回的 skill（implement / archive）补置
+implementing ──(eo-change 回炉子流程：方案需实质修订)──▶ draft
+          重新确认后回 confirmed；`plan_revision` +1
 ```
+
+**修复循环与回炉字段**（全档 change.md frontmatter；轻档不使用——轻档熔断 = 两次以上跑偏即扩档，扩档确认后从零起算）：
+
+| 字段 | 类型/缺省 | 写入者 | 语义 |
+|------|----------|--------|------|
+| `plan_revision` | 整数，缺省视为 1 | eo-change 回炉子流程（用户重新确认时 +1） | 方案版本。fix 计数、change-review 轮数、wont-fix 豁免、报告台账全部以当前 revision 为界 |
+| `fix_rounds` | 整数，缺省视为 0 | eo-implement 模式二第 0 步 | 当前 revision 内的修复轮次；≥3 触发熔断三选一；回炉确认时归零 |
+| `fix_consumed` | 列表，缺省 `[]` | eo-implement 模式二第 0 步 | 已消费的失败反馈标识（`review#N` / `test#N` / `acceptance#<AC编号>@<验收基线sha>`）——幂等计数依据，触发集为空 = 续修不计数；回炉确认时清空 |
 
 **change 分轻/全两档**（frontmatter `tier: light | full`，**缺省视为 full**，存量 change 零迁移）。轻档共用上表状态机但**跳过 reviewed**：draft →（探针对齐）confirmed →（测试锁定 + 实施）implementing →（完成门通过，eo-implement 轻模式直接写入）archived——轻档不经 eo-archive，归档由轻模式**收口序列（finalizer）**执行：结算 → 元数据收尾 commit → **显式触发 doc-manager sync** → push/PR → 关 issue/stub（cursor sync 只是范围游标、没有自动触发，不能当兜底）。判档规则见 [granularity.md](granularity.md) §5。
 

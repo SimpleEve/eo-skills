@@ -156,7 +156,7 @@ eo-doc/changes/
 | `change-id` 命名 | kebab-case **slug 即 id**（目录/commit 前缀/stub 文件名用它，创建时查重）；frontmatter `seq` 是显示别名（#N，允许 worktree 并行撞号、INDEX 更新时自愈）；**拒绝 `fix-` 前缀**；存量数字前缀 id 冻结兼容 |
 | `change_type` 枚举 | `bootstrap` / `feature` / `enhance` / `refactor`（**无 `fix`**） |
 | 粒度硬指标 | TODO 数与行数超软标建议拆、超硬标必须拆；数值以 `eo-shared/granularity.md` 为准 |
-| 状态流转 | `draft → confirmed → implementing → reviewed → archived`（**skill 自动流转**，用户不手改 frontmatter；reviewed = 代码审查已过、待人工验收/归档。看板全序另含最前端的 `backlog` 列） |
+| 状态流转 | 主路径 `draft → confirmed → implementing → reviewed → archived` + 显式回退边（`reviewed →(阻塞反馈) implementing`、`implementing →(回炉) draft`，见 conventions.md §3）。**skill 自动流转**，用户不手改 frontmatter；reviewed = 代码审查已过、待人工验收/归档。看板列序另含最前端的 `backlog` 列 |
 | trivial 直改 | 满足硬判据（不改行为/接口/数据、无方案权衡、单会话）→ 不开 change，直改 + commit |
 | 归档不反写 | archive 只更新活文档 + 冻结 change；spec 概念已移除 |
 | 人工验收门 | manual 类 AC（「人工:」标记）只有用户能勾；implement 完成时生成人工验收单 `acceptance.md`（软门不阻塞），archive 是唯一硬门；全 auto 的 change 不生成不打扰（规范见 `eo-shared/acceptance.md`） |

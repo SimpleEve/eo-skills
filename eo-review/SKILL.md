@@ -38,6 +38,7 @@ description: |
 | change.md `status: draft` / `confirmed` 且 TODO 全未勾选 | 代码还没开工 | 先 `/eo-implement`；审方案走 `/eo-change-review` |
 | 用户描述是「审查 change 方案」/「implement 之前再看看」 | 要的是方案审查 | `/eo-change-review`（**不是本 skill**） |
 | 用户描述是「change 重写后再看看」 | 代码未变，只是 change.md 改了 | `/eo-change-review` |
+| 用户描述是「实施后发现方案/架构不对」 | 方案要实质修订，不是代码缺陷 | eo-change **回炉子流程**（修订 + 重新确认，不是本 skill） |
 
 纠偏反馈模板：
 > ⚠️ `/eo-review` 是**实施后的代码审查**，需要代码已经写出来。你当前的情况是 `<信号>`——应走 `/eo-change-review`（审 change.md 本身：AC / TODO 是否合规，implement 之前）。
@@ -60,18 +61,22 @@ description: |
 - **维度 1 · 验收覆盖**：§2 每条 AC 逐条核对实现与验证方式；每条 TODO 的完成判据是否真实达成；有无遗漏边界场景；**反向核对**：diff 中映射不到任何 AC/TODO 的行为新增（镀金）→ P1 建议裁剪或转 backlog。**未勾的 auto-heavy / manual AC 不算缺陷**——勾选权分别归 /eo-test 与用户（三级归属见 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)）；本 skill 在 test 之前跑时它们本就未勾，只核对「实现是否覆盖该 AC」，不因未勾判失败
 - **维度 2 · 逻辑正确性**：核心逻辑、异常处理、边界条件；竞态/死锁/资源泄漏/生命周期
 - **维度 3 · 架构合规**：分层、模块边界、依赖方向；职责单一、无不合理耦合
-- **维度 4 · 代码规范**：命名一致、类型严格（无随意 `any`）、重复代码、公共 API 注释
+- **维度 4 · 代码规范**：命名一致、类型严格（无随意 `any`）、重复代码、公共 API 注释；**注释纪律**（[../eo-shared/conventions.md](../eo-shared/conventions.md) §2.6）——diff 中发现流程溯源标注（change/TODO/AC/finding 编号、slug 作溯源）或「为何正确」的叙事辩护注释 → P1
 - **维度 5 · 安全与性能**：注入/越权/敏感信息暴露；明显性能瓶颈
 - **维度 6 · 设计一致性（条件）**：UI 实现的字体/色值/间距/圆角是否符合 `DESIGN.md`；发现色板外颜色、刻度外魔法数标 P1
 
-### 第四步：报告与速报
+### 第四步：报告与速报（轮次留痕，追加不覆盖）
 
-1. 按 [references/review-template.md](references/review-template.md) 写入 `eo-doc/changes/<change-id>/review.md`
-2. 无 P0/P1 → 将 change.md `status` 置 `reviewed`；联动钩子刷新 stub（[../eo-shared/board-github.md](../eo-shared/board-github.md)，未开启跳过）
+1. 按 [references/review-template.md](references/review-template.md) 维护 `eo-doc/changes/<change-id>/review.md`：
+   - **首轮**（文件不存在）：全量写入，P0/P1/P2 各条同步建入 Finding 台账（状态 open、首见轮 1、根因、本轮审查基线 commit）
+   - **复审轮**：**不重写报告**——先核销台账：`fixed` 项按其修复 commit 复验，到位 → `verified`，没到位 → 回 `open` 一句话说明；`verified` 项再次打回 = **reopen**（状态回 `open`、刷新最近轮）；新 finding 建条（编号沿用同一序列）。然后在「速报」前追加 `## 第 N 轮记录（revision R · 日期）` 节，原地更新末尾速报。遇**无台账的旧格式报告** → 按当前内容一次性补建台账再继续
+   - 台账写入权见模板 writer matrix：本 skill 建条与核销；`fixed` + 修复 commit 归 eo-implement 回写；用户当场裁决不修的 P1 → 状态置 `waived`（附原话要点，不阻塞 reviewed/归档）；历史轮次节不改；轮次编号全文件单调递增，跨 revision 不清零
+2. **status 流转（双向都归本 skill）**：无未决 P0/P1（`open`/`fixed`；`waived` 不算）→ change.md `status` 置 `reviewed`；有 P0/P1 且当前 status 已是 `reviewed`（复审翻车）→ **当场置回 `implementing`**（回退边，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §3）。两个方向都联动刷新 stub（[../eo-shared/board-github.md](../eo-shared/board-github.md)，未开启跳过）
 3. **对话速报（硬性——缺速报 = 流程未完成）**：
 
 ```
-结论：通过 / 不通过（P0 x 条）/ 有保留通过（P1 x 条）
+结论：通过 / 不通过（P0 x 条）/ 有保留通过（P1 x 条）［第 N 轮 · revision R · 基线 <short-sha>］
+⚠️ 复发：<ID> 第二次打回（无则省略此行）
 P0（阻塞）：
 1. <一句话> — <file:line>
 P1（应修）：
@@ -91,4 +96,5 @@ P2（可后置）：
 - **定位精确**：必须给出文件路径和行号
 - **不直接改代码**：只产报告，修复归 `/eo-implement`
 - **分级清晰**：P0 仅限阻塞性问题
-- **status 自动流转**：通过时本 skill 写 `reviewed`，不要求用户手改
+- **status 自动流转（双向）**：通过时本 skill 写 `reviewed`；复审翻车（reviewed 下发现 P0/P1）当场回退 `implementing`——都不要求用户手改
+- **报告追加不覆盖**：复审只核销台账 + 追加轮次记录 + 更新速报，历史轮次节不改；速报恒为末节

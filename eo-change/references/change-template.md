@@ -16,6 +16,9 @@ status: draft        # draft | confirmed | implementing | reviewed | archived（
 tier: full           # light | full；缺省视为 full（存量 change 零迁移）
 type: feature        # bootstrap | feature | enhance | refactor
 base_commit: ~       # eo-implement 首次执行时写入
+plan_revision: 1     # 方案版本；仅 eo-change 回炉子流程（用户重新确认时）+1；缺省视为 1
+fix_rounds: 0        # 当前 revision 修复轮次；eo-implement 模式二第 0 步维护，≥3 熔断；缺省视为 0
+fix_consumed: []     # 已消费失败反馈标识（review#N / test#N / acceptance#<AC>@<基线sha>）；回炉确认时清空
 commits: []          # eo-archive 归档时写入（仅审计用，不决定同步范围）
 issue: ~             # GitHub 联动开启时，confirmed 后回写 issue 号
 pr: ~                # PR 创建后回写 URL
@@ -42,12 +45,13 @@ created: 2026-07-07
 
 ## 3. TODO
 
-<!-- 3-7 条理想 / 10 条硬上限；每条三要素（描述/文件/对应 AC）；完成判据仅在多条 TODO 对同一 AC 时逐条写
+<!-- 3-7 条理想 / 10 条硬上限；每条三要素（描述/文件/对应 AC）；文件栏带操作类型前缀 新增:/修改:/删除:
+     （缺省视为修改——change-review 维度 7 按类型核验）；完成判据仅在多条 TODO 对同一 AC 时逐条写
      （一对一不写，默认判据 = 批末对应 AC 验证通过）；禁止占位符；按 Batch 分组，Batch 1 = MVP -->
 
 ### Batch 1（MVP）
-- [ ] TODO-1 <描述>（文件：…；对应 AC-1）
-- [ ] TODO-2 <描述>（文件：…；对应 AC-2）
+- [ ] TODO-1 <描述>（文件：新增: path/to/new.ts；对应 AC-1）
+- [ ] TODO-2 <描述>（文件：修改: path/to/existing.ts；对应 AC-2）
 
 ### Batch 2
 - [ ] TODO-3 <描述>（文件：…；对应 AC-3；完成判据：…）
