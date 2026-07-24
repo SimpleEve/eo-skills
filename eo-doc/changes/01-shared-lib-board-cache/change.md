@@ -3,7 +3,7 @@ id: shared-lib-board-cache
 seq: 1
 title: 抽取共享解析库并修复 eo-board local 合并与缓存
 summary: cli 解析能力抽为共享库供 eo-sync 复用；eo-board 补 local 覆盖合并，--serve 加缓存
-status: implementing
+status: reviewed
 tier: full
 type: enhance
 base_commit: 792522dc3d10117d6cf140e28c2ecd0e5bdf2f63
@@ -47,8 +47,8 @@ eo-board 是当前唯一呈现层，其内部已经手写了一整套「文件�
 - [x] AC-2 共享库可独立复用：不经 eo-board，直接 `python3 -c "import ..."` 即可调用五域能力——frontmatter 解析、change 目录扫描、AC/TODO 计数、git 封装、配置加载（验证：对本仓跑一段冒烟脚本，各域返回结构化结果）
 - [x] AC-3 local 覆盖生效：仓库存在 `.eo-project.local.json` 时，eo-board 按顶层字段覆盖后的合并结果工作（如 local 覆盖 `project_root` 后，backlog/roadmap 从新位置读取）；无 local 文件时行为与现在完全一致（验证：临时写一个覆盖 `project_root` 的 local 文件跑终端形态，观察 backlog 数据源变化，验后删除复原）
 - [x] AC-4 local 解析失败可见：`.eo-project.local.json` 存在但 JSON 非法时，用户看到指明该文件与原因的报错并退出（与主配置解析失败同口径），而非静默忽略或裸 traceback
-- [ ] AC-5 缓存命中：`--serve` 运行中仓库无变化时，后续 `/data.json` 轮询由缓存直接应答、不再全量重扫（验证：以 `build_data` 调用计数断言——同状态连续两次请求，第二次不触发全量扫描（计数不增）；stderr 的 hit/miss 诊断行仅作辅助观察，不作为通过依据）
-- [ ] AC-6 缓存新鲜：`--serve` 运行中出现新 commit、任何 ref 更新（含同 SHA 分支切换）、change.md / backlog 卡 / roadmap.md 改动，或跨过日期边界后，一个轮询周期（3 秒）内数据即反映变化（停滞天数、本月直改等派生字段同步刷新），无需重启服务（验证：serve 运行中手改某 change.md 的 status，浏览器 3-6 秒内看到卡片移列；日期/refs 类失效由确定性用例覆盖，见 TODO-4 完成判据）
+- [x] AC-5 缓存命中：`--serve` 运行中仓库无变化时，后续 `/data.json` 轮询由缓存直接应答、不再全量重扫（验证：以 `build_data` 调用计数断言——同状态连续两次请求，第二次不触发全量扫描（计数不增）；stderr 的 hit/miss 诊断行仅作辅助观察，不作为通过依据）
+- [x] AC-6 缓存新鲜：`--serve` 运行中出现新 commit、任何 ref 更新（含同 SHA 分支切换）、change.md / backlog 卡 / roadmap.md 改动，或跨过日期边界后，一个轮询周期（3 秒）内数据即反映变化（停滞天数、本月直改等派生字段同步刷新），无需重启服务（验证：serve 运行中手改某 change.md 的 status，浏览器 3-6 秒内看到卡片移列；日期/refs 类失效由确定性用例覆盖，见 TODO-4 完成判据）
 
 ## 3. TODO
 

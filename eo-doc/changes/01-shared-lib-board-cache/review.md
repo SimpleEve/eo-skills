@@ -6,7 +6,7 @@ created: 2026-07-24
 updated: 2026-07-24
 status: active
 summary: >
-  首轮审查未发现 P0，但缓存 miss 缺少单飞保护、合并配置缺少必填校验，共有 2 条 P1，暂不能置 reviewed。
+  第 2 轮复审已核销 P1-1/P1-2，P0/P1 清零，可由流程置 reviewed；AC-5/6 仍待 eo-test。
 ---
 
 # 抽取共享解析库并修复 eo-board local 合并与缓存 代码审查报告
@@ -19,8 +19,8 @@ summary: >
 
 | ID | 级别 | 摘要 | 位置 | 状态 | 根因 | 首见/最近轮 | 基线/修复 commit |
 |----|------|------|------|------|------|-------------|------------------|
-| P1-1 | P1 | cache miss 重建未受单飞保护，并发请求会重复全量扫描 | `cli/eo-board:1455` | fixed | implementation | 1/1 | `5ac8d27` / `5e81f33` |
-| P1-2 | P1 | local 合并后未校验必填配置，缺配置会静默展示空看板 | `cli/eo_lib/config.py:35` | fixed | implementation | 1/1 | `5ac8d27` / `5e81f33` |
+| P1-1 | P1 | cache miss 重建未受单飞保护，并发请求会重复全量扫描 | `cli/eo-board:1455` | verified | implementation | 1/2 | `5ac8d27` / `5e81f33` |
+| P1-2 | P1 | local 合并后未校验必填配置，缺配置会静默展示空看板 | `cli/eo_lib/config.py:35` | verified | implementation | 1/2 | `5ac8d27` / `5e81f33` |
 
 ## 审查总结（首轮快照）
 
@@ -81,10 +81,17 @@ summary: >
 - 并发缓存探针：固定同一 freshness key，同时发起两个线程，`build_data` 被调用 2 次，复现 P1-1。
 - `python3 -m compileall -q cli/eo_lib cli/eo-board` 通过。
 
+## 第 2 轮记录（revision 1 · 2026-07-24）
+
+- 审查基线：`5e81f33`
+- 核销：P1-1 verified（修复 commit `5e81f33`）；按配置槽持有独立重建锁，锁内重算新鲜度键并二次查缓存。同槽同键 8 线程探针仅执行 1 次 `build_data`，不同槽可并行，排队期间键从 `v1` 更新为 `v2` 后最终缓存停在 `v2`。
+- 核销：P1-2 verified（修复 commit `5e81f33`）；合并后统一校验四个必填字段、mode 枚举与路径绝对/相对约束，不再填充静默缺省。拆分在 shared/local 的合法配置可合并通过；缺失、local 以 null 覆盖、非法枚举/路径均抛 `ConfigError`，CLI 退出码为 1、含 `/eo-project-init` 指引且无 traceback。
+- reopen：无。
+- 新增：无。
+- 补充验证：`python3 -m compileall -q cli/eo_lib cli/eo-board` 通过；当前仓库终端形态 `python3 cli/eo-board` 正常输出。
+- 本轮结论：通过；P0/P1 已清零，可由流程置 `reviewed`。
+
 ## 速报
 
-结论：有保留通过（P1 2 条）［第 1 轮 · revision 1 · 基线 `5ac8d27`］
-P1（应修）：
-1. cache miss 重建未受单飞保护，并发请求会重复全量扫描 — `cli/eo-board:1455`
-2. local 合并后未校验必填配置，缺配置会静默展示空看板 — `cli/eo_lib/config.py:35`
-下一步：回 `/eo-implement` 模式二修复后复审；AC-5/6 仍待 `/eo-test`，change status 保持 `implementing`。
+结论：通过［第 2 轮 · revision 1 · 基线 `5e81f33`］
+下一步：P0/P1 已清零，可由流程置 `reviewed`；AC-5/6 仍待 `/eo-test`。
