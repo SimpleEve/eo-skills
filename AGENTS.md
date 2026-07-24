@@ -30,7 +30,7 @@
 | 目录 | 用途 | 何时读 |
 |------|------|--------|
 | [agent-handbook/](eo-doc/agent-handbook/INDEX.md) | 代码架构、模块入口、接口索引 | **看/改代码前必读 INDEX**，按需深入模块 |
-| state/ | 业务规则、状态流转、系统现状（待首次 sync 生成） | 了解功能"现在是什么样" |
+| [state/](eo-doc/state/INDEX.md) | 业务规则、状态流转、系统现状 | 了解功能"现在是什么样" |
 | [changes/](eo-doc/changes/INDEX.md) | change 工件流（change/review/test） | 查变更进度 |
 | [templates/](eo-doc/templates/) | 项目定制模板（eo-* 技能扩展点） | eo-* 技能启动时自动读取 |
 
