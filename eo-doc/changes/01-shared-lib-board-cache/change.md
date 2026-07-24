@@ -8,8 +8,8 @@ tier: full
 type: enhance
 base_commit: 792522dc3d10117d6cf140e28c2ecd0e5bdf2f63
 plan_revision: 1
-fix_rounds: 0
-fix_consumed: []
+fix_rounds: 1
+fix_consumed: ["review#1"]
 commits: []
 issue: ~
 pr: ~

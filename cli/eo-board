@@ -1447,25 +1447,42 @@ def cmd_html(cfg, args):
             print("（无法自动打开浏览器，请手动打开上方路径）")
 
 
-# --serve 专用：每项目一个进程内缓存槽（新鲜度键 → build_data 结果），不落盘
+# --serve 专用：每项目一个进程内缓存槽（新鲜度键 → build_data 结果），不落盘。
+# 重建按槽单飞：同槽并发 miss 只允许一个线程扫描，不同槽互不阻塞。
 _BOARD_CACHE = {}
 _BOARD_CACHE_LOCK = threading.Lock()
+_BOARD_BUILD_LOCKS = {}
 
 
-def get_board_data_cached(cfg):
-    key = compute_freshness_key(cfg)
-    slot = str(cfg["config_path"])
+def _cache_lookup(slot, key, cfg):
     with _BOARD_CACHE_LOCK:
         cached = _BOARD_CACHE.get(slot)
         if cached is not None and cached[0] == key:
             print(f"[eo-board] cache hit（{cfg['project_name']}）", file=sys.stderr)
             return cached[1]
-    data = build_data(cfg)
-    data["serve"] = True
+    return None
+
+
+def get_board_data_cached(cfg):
+    slot = str(cfg["config_path"])
+    key = compute_freshness_key(cfg)
+    hit = _cache_lookup(slot, key, cfg)
+    if hit is not None:
+        return hit
     with _BOARD_CACHE_LOCK:
-        _BOARD_CACHE[slot] = (key, data)
-    print(f"[eo-board] cache miss，已重扫（{cfg['project_name']}）", file=sys.stderr)
-    return data
+        build_lock = _BOARD_BUILD_LOCKS.setdefault(slot, threading.Lock())
+    with build_lock:
+        # 排队期间前一持有者可能已建好；键重算保证旧键构建不会覆盖更新的槽内容
+        key = compute_freshness_key(cfg)
+        hit = _cache_lookup(slot, key, cfg)
+        if hit is not None:
+            return hit
+        data = build_data(cfg)
+        data["serve"] = True
+        with _BOARD_CACHE_LOCK:
+            _BOARD_CACHE[slot] = (key, data)
+        print(f"[eo-board] cache miss，已重扫（{cfg['project_name']}）", file=sys.stderr)
+        return data
 
 
 class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
@@ -1566,7 +1583,12 @@ def main():
     try:
         cfg = load_project_config(cfg_path)
     except ConfigError as e:
-        die(f"❌ {e}")
+        print(f"❌ {e}", file=sys.stderr)
+        print(
+            "请检查配置或运行 /eo-project-init 修复；协作者 clone 场景可用 .eo-project.local.json 提供机器相关字段。",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     if args.serve:
         cmd_serve(cfg, args)
