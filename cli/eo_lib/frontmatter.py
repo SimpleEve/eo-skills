@@ -58,3 +58,54 @@ def unquote(s):
     if len(s) >= 2 and s[0] == s[-1] and s[0] in "\"'":
         return s[1:-1]
     return s
+
+
+def _format_scalar(value):
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    return str(value)
+
+
+def upsert_frontmatter_fields(text, updates):
+    """在 frontmatter 内保序 upsert 标量字段。
+
+    已存在的字段：原地替换冒号后的值，保留该行的缩进与行内注释；不存在的字段：以
+    ``<key>: <value>`` 单行追加在关闭 ``---`` 之前。其余行的顺序、格式、注释一律原样保留。
+    ``updates`` 为 ``{key: 标量值}``；``text`` 无合法 frontmatter 时原样返回。
+    """
+    if not updates:
+        return text
+    bom = ""
+    body = text
+    if body.startswith("﻿"):
+        bom, body = "﻿", body[1:]
+    m = FRONTMATTER_RE.match(body)
+    if not m:
+        return text
+    fm_text = m.group(1)
+    rest = body[m.end():]
+
+    remaining = dict(updates)
+    out_lines = []
+    for line in fm_text.split("\n"):
+        replaced = False
+        for key in list(remaining):
+            km = re.match(rf"^(\s*){re.escape(str(key))}(\s*):(.*)$", line)
+            if not km:
+                continue
+            indent, after_colon = km.group(1), km.group(3)
+            cm = re.search(r"\s+#.*$", after_colon)
+            comment = after_colon[cm.start():] if cm else ""
+            out_lines.append(f"{indent}{key}: {_format_scalar(remaining[key])}{comment}")
+            del remaining[key]
+            replaced = True
+            break
+        if not replaced:
+            out_lines.append(line)
+
+    for key, value in remaining.items():
+        out_lines.append(f"{key}: {_format_scalar(value)}")
+
+    return f"{bom}---\n" + "\n".join(out_lines) + "\n---\n" + rest

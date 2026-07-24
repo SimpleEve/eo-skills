@@ -1,5 +1,6 @@
 """change.md 正文解析、change 目录扫描与 AC/TODO 计数。"""
 
+import hashlib
 import re
 from pathlib import Path
 
@@ -205,7 +206,15 @@ def parse_change_file(path, worktree_path, dirname, warnings):
     }
 
 
-def scan_all_changes(cfg, worktrees, warnings):
+def status_rank(rec):
+    try:
+        return CHANGE_STATUS_ORDER.index(rec["status"])
+    except ValueError:
+        return -1
+
+
+def scan_changes_grouped(cfg, worktrees, warnings):
+    """扫描全部 worktree 的 change，按 id 分组返回 {id: [rec, ...]}（未去重，保留各 worktree 候选）。"""
     by_id = {}
     for wt in worktrees:
         changes_dir = Path(wt["path"]) / cfg["doc_root"] / "changes"
@@ -220,14 +229,17 @@ def scan_all_changes(cfg, worktrees, warnings):
                 continue
             rec["branch"] = wt.get("branch")
             by_id.setdefault(rec["id"], []).append(rec)
+    return by_id
 
-    def status_rank(r):
-        try:
-            return CHANGE_STATUS_ORDER.index(r["status"])
-        except ValueError:
-            return -1
 
-    winners = [recs[0] if len(recs) == 1 else max(recs, key=status_rank) for recs in by_id.values()]
+def pick_change_winner(recs):
+    """同 id 多候选取状态最高者（单条直接返回）。"""
+    return recs[0] if len(recs) == 1 else max(recs, key=status_rank)
+
+
+def scan_all_changes(cfg, worktrees, warnings):
+    by_id = scan_changes_grouped(cfg, worktrees, warnings)
+    winners = [pick_change_winner(recs) for recs in by_id.values()]
 
     seq_map = {}
     for w in winners:
@@ -238,6 +250,40 @@ def scan_all_changes(cfg, worktrees, warnings):
             warnings.append(f"撞号：seq #{seq} 同时被 {', '.join(sorted(ids))} 占用")
 
     return winners
+
+
+def resolve_writeback_path(recs, origin_worktree):
+    """回写落点消歧：返回 (目标 change.md 路径, None) 或 (None, [候选路径...]) 表示 fail-closed。
+
+    规则（change §5.5）：先取状态最高的候选；仅一份直接用；同状态多份时优先发起 run 的
+    worktree 内那份；发起处无该 change 且各候选文件内容一致 → 任取（按路径稳定排序）；内容分叉 → fail-closed。
+    """
+    if not recs:
+        return None, []
+    top = max(status_rank(r) for r in recs)
+    cands = [r for r in recs if status_rank(r) == top]
+    if len(cands) == 1:
+        return cands[0]["path"], None
+
+    pool = cands
+    if origin_worktree:
+        ow = str(Path(origin_worktree).resolve())
+        origin_cands = [c for c in cands if str(Path(c["worktree"]).resolve()) == ow]
+        if origin_cands:
+            pool = origin_cands
+    if len(pool) == 1:
+        return pool[0]["path"], None
+
+    hashes = {}
+    for c in pool:
+        try:
+            digest = hashlib.sha256(Path(c["path"]).read_bytes()).hexdigest()
+        except Exception:
+            digest = None
+        hashes.setdefault(digest, []).append(c)
+    if len(hashes) == 1 and None not in hashes:
+        return sorted(pool, key=lambda c: c["path"])[0]["path"], None
+    return None, sorted(c["path"] for c in cands)
 
 
 def count_ac(ac_items):

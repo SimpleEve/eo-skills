@@ -69,6 +69,7 @@ def load_project_config(path):
         "doc_root": raw["doc_root"],
         "board": raw.get("board") if isinstance(raw.get("board"), dict) else {},
         "github": raw.get("github") if isinstance(raw.get("github"), dict) else {},
+        "sync": raw.get("sync") if isinstance(raw.get("sync"), dict) else {},
         "config_path": path,
         "repo_root": path.parent,
     }

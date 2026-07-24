@@ -1,0 +1,684 @@
+#!/usr/bin/env python3
+"""eo-sync —— eo-skills 投影同步的插件化核。
+
+子命令：
+  eo-sync run [--dry-run] [--change <id>] [--target <name>]   持锁编排一次同步
+  eo-sync adapters                                            列出 PATH 上发现的适配器与其 capabilities
+
+核只做：发现（PATH 前缀 eo-sync-*）、配置解析与兼容映射、持锁编排、SoT 身份字段回写、簿记持久化。
+适配器（同协议、同发现路径、无后门）只算投影 + 写自己的目标介质，永不写代码仓库文件。
+
+只用标准库，零第三方依赖。POSIX-only（fcntl.flock）。
+"""
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - 非 POSIX 平台
+    fcntl = None
+
+# 符号链接安装下 __file__ 需先 resolve 才能定位真实仓库内的 cli/ 目录
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from eo_lib import (
+    ConfigError,
+    count_ac,
+    count_todo,
+    find_project_config,
+    list_worktrees,
+    load_project_config,
+    pick_change_winner,
+    resolve_writeback_path,
+    run_git,
+    scan_changes_grouped,
+    split_frontmatter,
+    upsert_frontmatter_fields,
+)
+
+PROTOCOL_VERSION = 1
+ADAPTER_PREFIX = "eo-sync-"
+STALE_LOCK_SECONDS = 600
+
+# change 生命周期保留键：适配器不得声明为身份字段，也不得回写
+RESERVED_CHANGE_KEYS = {
+    "id", "seq", "title", "summary", "status", "tier", "type",
+    "base_commit", "plan_revision", "fix_rounds", "fix_consumed",
+    "commits", "created",
+}
+FIELD_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+
+EXIT_OK = 0
+EXIT_FAILURE = 1
+EXIT_LOCKED = 2
+
+
+# --------------------------------------------------------------------------- 发现与协议
+
+def discover_adapters():
+    """扫描 PATH 上的 eo-sync-* 可执行文件，按 name 去重（PATH 靠前者胜）。返回 {name: path}。"""
+    found = {}
+    for entry in os.environ.get("PATH", "").split(os.pathsep):
+        if not entry:
+            continue
+        d = Path(entry)
+        if not d.is_dir():
+            continue
+        try:
+            children = sorted(d.iterdir())
+        except OSError:
+            continue
+        for child in children:
+            name = child.name
+            if not name.startswith(ADAPTER_PREFIX) or len(name) <= len(ADAPTER_PREFIX):
+                continue
+            adapter_name = name[len(ADAPTER_PREFIX):]
+            if adapter_name in found:
+                continue
+            if child.is_file() and os.access(str(child), os.X_OK):
+                found[adapter_name] = str(child.resolve())
+    return found
+
+
+def invoke_adapter(exe_path, verb, request, timeout):
+    """调用 `eo-sync-<name> <verb>`，stdin JSON 请求，stdout JSON 响应。
+
+    返回 (响应 dict, None) 或 (None, 错误文本)。协议主版本不匹配 / 非法 JSON / 非零退出均返回错误。
+    """
+    payload = dict(request)
+    payload["protocol_version"] = PROTOCOL_VERSION
+    payload["verb"] = verb
+    try:
+        proc = subprocess.run(
+            [exe_path, verb],
+            input=json.dumps(payload, ensure_ascii=False),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return None, f"{verb} 超时（>{timeout}s）"
+    except OSError as e:
+        return None, f"{verb} 无法启动：{e}"
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip().splitlines()
+        return None, f"{verb} 退出码 {proc.returncode}：{detail[0] if detail else '无 stderr'}"
+    try:
+        resp = json.loads(proc.stdout)
+    except (ValueError, TypeError):
+        return None, f"{verb} 输出非法 JSON"
+    if not isinstance(resp, dict):
+        return None, f"{verb} 响应不是 JSON 对象"
+    got = resp.get("protocol_version")
+    if got != PROTOCOL_VERSION:
+        return None, f"协议主版本不匹配（期望 {PROTOCOL_VERSION}，得到 {got!r}）"
+    return resp, None
+
+
+# --------------------------------------------------------------------------- 配置解析与启用
+
+def resolve_enabled(cfg):
+    """返回 {adapter_name: params}。sync 段存在则完全以其为准；否则由存量 board/github 段等价映射。"""
+    sync = cfg.get("sync") or {}
+    if sync:
+        enabled = {}
+        for name, conf in sync.items():
+            if isinstance(conf, dict) and conf.get("enabled"):
+                enabled[name] = {k: v for k, v in conf.items() if k != "enabled"}
+        return enabled
+
+    enabled = {}
+    board = cfg.get("board") or {}
+    if board.get("enabled"):
+        enabled["obsidian"] = {"stub_dir": board.get("stub_dir") or "board"}
+    gh = cfg.get("github") or {}
+    pr = gh.get("pr") or "never"
+    if gh.get("issue") or pr != "never":
+        enabled["github"] = {"issue": bool(gh.get("issue")), "pr": pr}
+    return enabled
+
+
+# --------------------------------------------------------------------------- 簿记与锁
+
+def bookkeeping_path(cfg):
+    home = os.environ.get("EO_HOME") or str(Path.home() / ".eo")
+    repo_root = str(cfg["repo_root"])
+    common = run_git(["rev-parse", "--git-common-dir"], cwd=repo_root).strip()
+    if common:
+        cp = Path(common)
+        common_abs = str(cp.resolve()) if cp.is_absolute() else str((Path(repo_root) / cp).resolve())
+    else:
+        common_abs = str(Path(repo_root).resolve())
+    hash8 = hashlib.sha256(common_abs.encode("utf-8")).hexdigest()[:8]
+    return Path(home) / "sync-state" / f"{cfg['project_name']}-{hash8}.json"
+
+
+def load_bookkeeping(path):
+    data = {}
+    if path.is_file():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            data = {}
+    if not isinstance(data, dict):
+        data = {}
+    data.setdefault("version", 1)
+    if not isinstance(data.get("adapters"), dict):
+        data["adapters"] = {}
+    return data
+
+
+def save_bookkeeping(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.replace(str(tmp), str(path))
+
+
+def _read_lock_holder(lock_path):
+    try:
+        return json.loads(lock_path.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        return None
+
+
+def _pid_alive(pid):
+    try:
+        os.kill(int(pid), 0)
+    except (ProcessLookupError, ValueError, TypeError):
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _lock_is_stale(holder):
+    if not isinstance(holder, dict):
+        return False
+    at = holder.get("at")
+    pid = holder.get("pid")
+    if not isinstance(at, (int, float)):
+        return False
+    if (time.time() - at) < STALE_LOCK_SECONDS:
+        return False
+    return not _pid_alive(pid)
+
+
+def _try_flock(lock_path):
+    """尝试非阻塞独占 flock。返回 fd（成功，已写入持有者信息）或 None（占用）。"""
+    fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        os.close(fd)
+        return None
+    info = json.dumps({"pid": os.getpid(), "at": time.time()}, ensure_ascii=False)
+    os.ftruncate(fd, 0)
+    os.lseek(fd, 0, os.SEEK_SET)
+    os.write(fd, info.encode("utf-8"))
+    os.fsync(fd)
+    return fd
+
+
+def acquire_lock(lock_path):
+    """取簿记同名 .lock 的独占锁。返回 (fd, None) 成功；(None, holder) 占用。陈锁自动重试一次。"""
+    if fcntl is None:
+        raise ConfigError("eo-sync 的并发锁依赖 POSIX fcntl.flock，当前平台不支持（可用 WSL）")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    fd = _try_flock(lock_path)
+    if fd is not None:
+        return fd, None
+    holder = _read_lock_holder(lock_path)
+    if _lock_is_stale(holder):
+        fd = _try_flock(lock_path)
+        if fd is not None:
+            return fd, None
+    return None, holder
+
+
+def release_lock(fd):
+    try:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+
+
+# --------------------------------------------------------------------------- 快照
+
+def compute_project_root(cfg, main_wt_path):
+    if cfg["mode"] == "vault":
+        return cfg.get("project_root")
+    return str(Path(main_wt_path) / ".eo-project")
+
+
+def build_snapshot(rec, default_branch):
+    ac_done, ac_total = count_ac(rec["ac"])
+    todo_done, todo_total = count_todo(rec["todo"])
+    try:
+        rel = str(Path(rec["path"]).resolve().relative_to(Path(rec["worktree"]).resolve()))
+    except ValueError:
+        rel = rec["path"]
+    branch = rec.get("branch")
+    if branch and default_branch and branch == default_branch:
+        branch = None
+    return {
+        "id": rec["id"],
+        "seq": rec.get("seq"),
+        "title": rec.get("title"),
+        "summary": rec.get("summary") or "",
+        "status": rec.get("status"),
+        "tier": rec.get("tier") or "full",
+        "type": rec.get("type") or "feature",
+        "created": rec.get("created"),
+        "base_commit": rec.get("base_commit"),
+        "issue": rec.get("issue"),
+        "pr": rec.get("pr"),
+        "intent": rec.get("intent") or "",
+        "ac": rec.get("ac") or [],
+        "todo": rec.get("todo") or [],
+        "ac_done": ac_done,
+        "ac_total": ac_total,
+        "todo_done": todo_done,
+        "todo_total": todo_total,
+        "rel_path": rel,
+        "branch": branch,
+    }
+
+
+def scan_snapshots(cfg, worktrees, change_filter, warnings):
+    """扫描并返回 (grouped {id:[rec]}, snapshots [snap...])，snapshots 按 change_filter 过滤、按 id 排序。"""
+    grouped = scan_changes_grouped(cfg, worktrees, warnings)
+    default_branch = worktrees[0].get("branch") if worktrees else None
+    snapshots = []
+    for cid in sorted(grouped):
+        if change_filter and cid != change_filter:
+            continue
+        winner = pick_change_winner(grouped[cid])
+        snapshots.append(build_snapshot(winner, default_branch))
+    return grouped, snapshots
+
+
+# --------------------------------------------------------------------------- 适配器排序与 capabilities
+
+def load_capabilities(adapters, warnings):
+    """对每个 {name: path} 查 capabilities。返回 {name: {"path", "caps"}}；失败者告警并剔除。"""
+    result = {}
+    for name in sorted(adapters):
+        path = adapters[name]
+        resp, err = invoke_adapter(path, "capabilities", {}, timeout=20)
+        if err:
+            warnings.append(f"适配器 {name} capabilities 失败，已跳过：{err}")
+            continue
+        result[name] = {"path": path, "caps": resp}
+    return result
+
+
+def validate_identity_ownership(loaded, warnings):
+    """校验各适配器 identity_fields：命名合法、非保留键、跨适配器无同名冲突。返回被拒绝的 name 集合。"""
+    rejected = set()
+    for name, info in loaded.items():
+        fields = info["caps"].get("identity_fields") or []
+        if not isinstance(fields, list):
+            warnings.append(f"适配器 {name} 的 identity_fields 不是列表，已拒绝")
+            rejected.add(name)
+            continue
+        for f in fields:
+            if not isinstance(f, str) or not FIELD_NAME_RE.match(f):
+                warnings.append(f"适配器 {name} 声明非法身份字段名 {f!r}，已拒绝")
+                rejected.add(name)
+                break
+            if f in RESERVED_CHANGE_KEYS:
+                warnings.append(f"适配器 {name} 声明保留键 {f!r} 作身份字段，已拒绝")
+                rejected.add(name)
+                break
+
+    owner = {}
+    for name, info in loaded.items():
+        if name in rejected:
+            continue
+        for f in info["caps"].get("identity_fields") or []:
+            owner.setdefault(f, []).append(name)
+    for f, names in owner.items():
+        if len(names) > 1:
+            warnings.append(f"身份字段 {f!r} 被多个适配器声明（{', '.join(sorted(names))}），全部拒绝以 fail-closed")
+            rejected.update(names)
+    return rejected
+
+
+# --------------------------------------------------------------------------- run
+
+def _project_context(cfg, project_root):
+    return {
+        "project_name": cfg["project_name"],
+        "project_root": project_root,
+        "doc_root": cfg["doc_root"],
+        "repo_root": str(cfg["repo_root"]),
+    }
+
+
+def apply_writeback(writeback, identity_fields, grouped, origin_wt, warnings):
+    """核执行身份字段回写校验 + 保序落盘。返回实际写入的 {path: {field: value}}。"""
+    fields_set = set(identity_fields)
+    per_path = {}
+    for cid, fields in (writeback or {}).items():
+        if not isinstance(fields, dict):
+            continue
+        recs = grouped.get(cid)
+        if not recs:
+            warnings.append(f"回写目标 change 不存在：{cid}，已跳过")
+            continue
+        accepted = {}
+        for field, value in fields.items():
+            if value is None:
+                continue
+            if field not in fields_set:
+                warnings.append(f"回写字段 {field!r} 未在适配器 identity_fields 声明（change {cid}），已拒绝")
+                continue
+            if not FIELD_NAME_RE.match(str(field)) or field in RESERVED_CHANGE_KEYS:
+                warnings.append(f"回写字段 {field!r} 非法或为保留键（change {cid}），已拒绝")
+                continue
+            accepted[field] = value
+        if not accepted:
+            continue
+        path, cands = resolve_writeback_path(recs, origin_wt)
+        if path is None:
+            warnings.append(f"回写落点消歧失败（change {cid} 同状态内容分叉），跳过：{', '.join(cands or [])}")
+            continue
+        try:
+            existing_fm, _ = split_frontmatter(Path(path).read_text(encoding="utf-8"))
+        except OSError as e:
+            warnings.append(f"回写读取失败（change {cid}）：{e}")
+            continue
+        existing_fm = existing_fm or {}
+        final = {}
+        for field, value in accepted.items():
+            cur = existing_fm.get(field)
+            if cur not in (None, "") and str(cur) != str(value):
+                warnings.append(f"字段 {field} 已有不同非空值（{cur!r}），不覆盖（change {cid}）")
+                continue
+            if str(cur) == str(value):
+                continue  # 已是目标值，幂等跳过
+            final[field] = value
+        if final:
+            per_path.setdefault(path, {}).update(final)
+
+    for path, fields in per_path.items():
+        try:
+            text = Path(path).read_text(encoding="utf-8")
+            Path(path).write_text(upsert_frontmatter_fields(text, fields), encoding="utf-8")
+        except OSError as e:
+            warnings.append(f"回写落盘失败：{path}（{e}）")
+    return per_path
+
+
+def run_adapter_phase(name, info, context, snapshots, book_ns, params, dry_run, warnings):
+    """跑单个适配器的 plan（+ 非 dry-run 时 apply）。返回 (actions, writeback, new_ns, drift, ok)。"""
+    plan_req = {
+        "context": context,
+        "changes": snapshots,
+        "bookkeeping": book_ns,
+        "params": params,
+    }
+    plan, err = invoke_adapter(info["path"], "plan", plan_req, timeout=90)
+    if err:
+        warnings.append(f"适配器 {name} plan 失败，已跳过：{err}")
+        return [], {}, book_ns, [], False
+    actions = plan.get("actions") or []
+    drift = plan.get("drift") or []
+    if dry_run:
+        return actions, {}, book_ns, drift, True
+
+    apply_req = {
+        "context": context,
+        "actions": actions,
+        "bookkeeping": book_ns,
+        "params": params,
+    }
+    result, err = invoke_adapter(info["path"], "apply", apply_req, timeout=300)
+    if err:
+        warnings.append(f"适配器 {name} apply 失败，已跳过：{err}")
+        return actions, {}, book_ns, drift, False
+    writeback = result.get("writeback") or {}
+    new_ns = result.get("bookkeeping")
+    if not isinstance(new_ns, dict):
+        new_ns = book_ns
+    drift = (drift or []) + (result.get("drift") or [])
+    results = result.get("results") or []
+    ok = not any(isinstance(r, dict) and r.get("error") for r in results)
+    return actions, writeback, new_ns, drift, ok
+
+
+def cmd_run(cfg, args):
+    warnings = []
+    failure = False
+    dry_run = args.dry_run
+
+    anchor = str(cfg["repo_root"])
+    worktrees = list_worktrees(anchor)
+    main_wt = worktrees[0]
+    project_root = compute_project_root(cfg, main_wt["path"])
+    context = _project_context(cfg, project_root)
+    origin_wt = str(Path(cfg["repo_root"]).resolve())
+
+    enabled = resolve_enabled(cfg)
+    if args.target:
+        enabled = {k: v for k, v in enabled.items() if k == args.target}
+    if not enabled:
+        print("未启用任何同步目标（合并配置无 sync 段且无 board/github 联动，或 --target 未命中）。")
+        return EXIT_OK
+
+    discovered = discover_adapters()
+    loaded = load_capabilities({n: p for n, p in discovered.items() if n in enabled}, warnings)
+    for name in enabled:
+        if name not in loaded:
+            warnings.append(f"启用的适配器 {name} 未在 PATH 发现或 capabilities 不可用，已跳过")
+            failure = True
+
+    rejected = validate_identity_ownership(loaded, warnings)
+    for name in rejected:
+        failure = True
+        loaded.pop(name, None)
+
+    active = [n for n in enabled if n in loaded]
+    if not active:
+        _emit_warnings(warnings)
+        print("无可用同步目标（启用的适配器均不可用）。")
+        return EXIT_FAILURE if failure else EXIT_OK
+
+    # 两阶段：身份字段适配器先行，回写并刷新快照后再跑纯投影适配器
+    identity_first = sorted(n for n in active if (loaded[n]["caps"].get("identity_fields") or []))
+    pure_after = sorted(n for n in active if not (loaded[n]["caps"].get("identity_fields") or []))
+
+    lock_fd = None
+    bk_path = bookkeeping_path(cfg)
+    if not dry_run:
+        lock_fd, holder = acquire_lock(Path(str(bk_path) + ".lock"))
+        if lock_fd is None:
+            _emit_warnings(warnings)
+            hint = ""
+            if isinstance(holder, dict):
+                when = holder.get("at")
+                when_s = datetime.fromtimestamp(when).strftime("%Y-%m-%d %H:%M:%S") if isinstance(when, (int, float)) else "?"
+                hint = f"（持有者 pid={holder.get('pid')}，取锁于 {when_s}）"
+            print(f"⏸ 另一个 eo-sync run 正持锁{hint}，本次干净退出。稍后重跑。", file=sys.stderr)
+            return EXIT_LOCKED
+
+    try:
+        book = load_bookkeeping(bk_path) if not dry_run else load_bookkeeping(bk_path)
+        grouped, snapshots = scan_snapshots(cfg, worktrees, args.change, warnings)
+
+        all_actions = []  # (change_id, adapter, action)
+        all_drift = []
+
+        # 阶段一
+        wrote_back = False
+        for name in identity_first:
+            info = loaded[name]
+            book_ns = book["adapters"].get(name, {})
+            params = enabled[name]
+            actions, writeback, new_ns, drift, ok = run_adapter_phase(
+                name, info, context, snapshots, book_ns, params, dry_run, warnings
+            )
+            if not ok:
+                failure = True
+            for a in actions:
+                all_actions.append((a.get("change_id"), name, a))
+            all_drift.extend(f"[{name}] {d}" for d in drift)
+            if not dry_run:
+                book["adapters"][name] = new_ns
+                identity_fields = info["caps"].get("identity_fields") or []
+                written = apply_writeback(writeback, identity_fields, grouped, origin_wt, warnings)
+                if written:
+                    wrote_back = True
+
+        # 回写后刷新快照，令纯投影适配器读到新平台身份
+        if wrote_back and not dry_run:
+            grouped, snapshots = scan_snapshots(cfg, worktrees, args.change, warnings)
+
+        # 阶段二
+        for name in pure_after:
+            info = loaded[name]
+            book_ns = book["adapters"].get(name, {})
+            params = enabled[name]
+            actions, writeback, new_ns, drift, ok = run_adapter_phase(
+                name, info, context, snapshots, book_ns, params, dry_run, warnings
+            )
+            if not ok:
+                failure = True
+            for a in actions:
+                all_actions.append((a.get("change_id"), name, a))
+            all_drift.extend(f"[{name}] {d}" for d in drift)
+            if not dry_run:
+                book["adapters"][name] = new_ns
+                if writeback:
+                    warnings.append(f"适配器 {name} 无身份字段却返回回写，已忽略")
+
+        if not dry_run:
+            save_bookkeeping(bk_path, book)
+    finally:
+        if lock_fd is not None:
+            release_lock(lock_fd)
+
+    _emit_plan(all_actions, all_drift, active, dry_run)
+    _emit_warnings(warnings)
+    return EXIT_FAILURE if failure else EXIT_OK
+
+
+def _emit_plan(all_actions, all_drift, active, dry_run):
+    header = "eo-sync run --dry-run（提示性计划，落地以持锁重算为准）" if dry_run else "eo-sync run 结果"
+    print(header)
+    if not all_actions:
+        print(f"  （启用目标 {', '.join(active)}：无计划动作）")
+    counts = {}
+    for cid, adapter, action in sorted(all_actions, key=lambda t: (str(t[0]), t[1], str(t[2].get("projection")))):
+        op = action.get("op", "?")
+        proj = action.get("projection", "?")
+        reason = action.get("reason", "")
+        counts[op] = counts.get(op, 0) + 1
+        tail = f"（{reason}）" if reason else ""
+        print(f"  {cid} × {adapter}/{proj} → {op}{tail}")
+    if counts:
+        print("  小计：" + "，".join(f"{op} {n}" for op, n in sorted(counts.items())))
+    for d in all_drift:
+        print(f"  ⚠ 漂移：{d}")
+
+
+def _emit_warnings(warnings):
+    for w in warnings:
+        print(f"  ! {w}", file=sys.stderr)
+
+
+# --------------------------------------------------------------------------- adapters
+
+def cmd_adapters(cfg, args):
+    warnings = []
+    enabled = resolve_enabled(cfg)
+    discovered = discover_adapters()
+    if not discovered:
+        print("PATH 上未发现任何 eo-sync-* 适配器。")
+        return EXIT_OK
+    print("已发现的 eo-sync 适配器：")
+    for name in sorted(discovered):
+        path = discovered[name]
+        flag = "启用" if name in enabled else "未启用"
+        resp, err = invoke_adapter(path, "capabilities", {}, timeout=20)
+        if err:
+            print(f"  {name}  [{flag}]  {path}\n      capabilities 不可用：{err}")
+            continue
+        projections = resp.get("projections") or []
+        proj_desc = ", ".join(
+            f"{p.get('id')}（起点 {p.get('lifecycle_start')}）" for p in projections if isinstance(p, dict)
+        )
+        idf = resp.get("identity_fields") or []
+        idf_desc = f"；身份字段 {idf}" if idf else ""
+        print(f"  {name}  [{flag}]  {path}")
+        print(f"      投影：{proj_desc or '无'}{idf_desc}")
+    for name in enabled:
+        if name not in discovered:
+            print(f"  （配置启用了 {name}，但 PATH 上无 eo-sync-{name}）")
+    return EXIT_OK
+
+
+# --------------------------------------------------------------------------- 入口
+
+def build_arg_parser():
+    parser = argparse.ArgumentParser(
+        prog="eo-sync",
+        description="eo-skills 投影同步的插件化核：发现 eo-sync-* 适配器，持锁编排一次单向同步。",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    sub = parser.add_subparsers(dest="command")
+
+    p_run = sub.add_parser("run", help="执行一次同步（默认落地；--dry-run 只算不写）")
+    p_run.add_argument("--dry-run", action="store_true", help="只输出提示性计划，全程零写入、不取锁")
+    p_run.add_argument("--change", metavar="ID", help="只同步指定 change id")
+    p_run.add_argument("--target", metavar="NAME", help="只跑指定适配器")
+
+    sub.add_parser("adapters", help="列出 PATH 上发现的适配器与其 capabilities")
+    return parser
+
+
+def main(argv=None):
+    parser = build_arg_parser()
+    args = parser.parse_args(argv)
+    if not args.command:
+        parser.print_help()
+        return EXIT_OK
+
+    cfg_path = find_project_config(Path.cwd())
+    if cfg_path is None:
+        print("❌ 未找到 .eo-project.json", file=sys.stderr)
+        print("请先运行 /eo-project-init 初始化项目。", file=sys.stderr)
+        return EXIT_FAILURE
+    try:
+        cfg = load_project_config(cfg_path)
+    except ConfigError as e:
+        print(f"❌ {e}", file=sys.stderr)
+        print("请检查配置或运行 /eo-project-init 修复。", file=sys.stderr)
+        return EXIT_FAILURE
+
+    try:
+        if args.command == "run":
+            return cmd_run(cfg, args)
+        if args.command == "adapters":
+            return cmd_adapters(cfg, args)
+    except ConfigError as e:
+        print(f"❌ {e}", file=sys.stderr)
+        return EXIT_FAILURE
+    parser.print_help()
+    return EXIT_OK
+
+
+if __name__ == "__main__":
+    sys.exit(main())

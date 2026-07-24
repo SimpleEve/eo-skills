@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+"""eo-sync 协议夹具适配器（测试用，纯标准库、不 import eo_lib）。
+
+正常行为：投影 id=note，生命周期起点 draft；声明身份字段 fixture_ref，对尚无该字段的
+change 回写一个合成值；靠簿记 content_hash 去重（已同步内容 → skip）。
+
+失败注入（环境变量，供 AC-4 / 协议健壮性测试）：
+  EO_FIXTURE_BAD_JSON=1        stdout 打印非法 JSON
+  EO_FIXTURE_PROTOCOL=<n>      响应用错误的协议主版本
+  EO_FIXTURE_EXIT=<code>       打印合法响应后以该退出码退出
+  EO_FIXTURE_RESERVED=1        capabilities 声明保留键 status 作身份字段
+  EO_FIXTURE_IDENTITY=<csv>    覆盖 identity_fields（空串 = 纯投影适配器）
+  EO_FIXTURE_WB_FIELD=<name>   回写字段名（默认 fixture_ref；用于测核对未知/非法字段的拒绝）
+  EO_FIXTURE_WB_VALUE=<val>    回写值（默认按 change id 合成）
+"""
+
+import hashlib
+import json
+import os
+import sys
+
+
+def _identity_fields():
+    if os.environ.get("EO_FIXTURE_RESERVED") == "1":
+        return ["status"]
+    raw = os.environ.get("EO_FIXTURE_IDENTITY")
+    if raw is not None:
+        return [x for x in raw.split(",") if x]
+    return ["fixture_ref"]
+
+
+def _emit(resp):
+    if os.environ.get("EO_FIXTURE_BAD_JSON") == "1":
+        sys.stdout.write("{ this is not json ")
+        sys.stdout.flush()
+        _maybe_exit()
+        return
+    proto = os.environ.get("EO_FIXTURE_PROTOCOL")
+    resp["protocol_version"] = int(proto) if proto else 1
+    sys.stdout.write(json.dumps(resp, ensure_ascii=False))
+    sys.stdout.flush()
+    _maybe_exit()
+
+
+def _maybe_exit():
+    code = os.environ.get("EO_FIXTURE_EXIT")
+    if code:
+        sys.exit(int(code))
+
+
+def _content_hash(change):
+    keys = ("id", "status", "tier", "title", "summary", "ac_done", "ac_total", "todo_done", "todo_total")
+    blob = json.dumps({k: change.get(k) for k in keys}, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def do_capabilities():
+    _emit({
+        "name": "fixture",
+        "entities": ["change"],
+        "projections": [{"id": "note", "lifecycle_start": "draft", "ops": ["create", "update", "delete", "skip"]}],
+        "identity_fields": _identity_fields(),
+    })
+
+
+def do_plan(req):
+    changes = req.get("changes") or []
+    book = req.get("bookkeeping") or {}
+    seen = set()
+    actions = []
+    for ch in changes:
+        cid = ch.get("id")
+        seen.add(cid)
+        h = _content_hash(ch)
+        prev = book.get(cid, {}).get("content_hash")
+        if prev == h:
+            actions.append({"op": "skip", "projection": "note", "change_id": cid, "reason": "内容未变", "payload": {}})
+        elif prev is None:
+            actions.append({"op": "create", "projection": "note", "change_id": cid, "reason": "首次投影", "payload": {"hash": h}})
+        else:
+            actions.append({"op": "update", "projection": "note", "change_id": cid, "reason": "内容变化", "payload": {"hash": h}})
+    for cid in book:
+        if cid not in seen:
+            actions.append({"op": "delete", "projection": "note", "change_id": cid, "reason": "change 已消失", "payload": {}})
+    _emit({"actions": actions, "drift": []})
+
+
+def do_apply(req):
+    actions = req.get("actions") or []
+    book = dict(req.get("bookkeeping") or {})
+    wb_field = os.environ.get("EO_FIXTURE_WB_FIELD", "fixture_ref")
+    wb_value_override = os.environ.get("EO_FIXTURE_WB_VALUE")
+    writeback = {}
+    results = []
+    for a in actions:
+        cid = a.get("change_id")
+        op = a.get("op")
+        if op == "delete":
+            book.pop(cid, None)
+            results.append({"change_id": cid, "op": op, "ok": True})
+            continue
+        if op == "skip":
+            results.append({"change_id": cid, "op": op, "ok": True})
+            continue
+        h = (a.get("payload") or {}).get("hash", "")
+        book[cid] = {"content_hash": h, "synced_status": "note", "synced_at": "fixture"}
+        if wb_field:
+            value = wb_value_override if wb_value_override is not None else f"ref-{cid}"
+            writeback[cid] = {wb_field: value}
+        results.append({"change_id": cid, "op": op, "ok": True})
+    _emit({"results": results, "writeback": writeback, "bookkeeping": book, "drift": []})
+
+
+def main():
+    verb = sys.argv[1] if len(sys.argv) > 1 else ""
+    try:
+        raw = sys.stdin.read()
+        req = json.loads(raw) if raw.strip() else {}
+    except ValueError:
+        req = {}
+    if verb == "capabilities":
+        do_capabilities()
+    elif verb == "plan":
+        do_plan(req)
+    elif verb == "apply":
+        do_apply(req)
+    else:
+        sys.stderr.write(f"未知子命令：{verb}\n")
+        sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()
