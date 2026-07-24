@@ -6,7 +6,7 @@ created: 2026-07-25
 updated: 2026-07-25
 status: active
 summary: >
-  第 2 轮复审不通过：扫描降级仍可误删投影，协议快照、响应校验、空值配置与注释纪律仍未闭合。
+  第 3 轮复审不通过：worktree 枚举瞬时降级仍可误删投影，响应与配置契约尚有两处未闭合。
 ---
 
 # eo-sync 插件层与存量适配器迁移代码审查报告
@@ -27,15 +27,15 @@ summary: >
 
 | ID | 级别 | 摘要 | 位置 | 状态 | 根因 | 首见/最近轮 | 基线/修复 commit |
 |----|------|------|------|------|------|-------------|------------------|
-| P0-1 | P0 | 不完整扫描仍被标成完整快照并删除缺席投影 | `cli/eo-sync:618`; `cli/eo-sync:623` | fixed | implementation | 1/2 | `2a6644f` / `3be8ca2` |
-| P1-1 | P1 | `identities` 含非标量 frontmatter，违反协议 v1 快照契约 | `cli/eo-sync:265`; `docs/sync-adapter-protocol.md:133` | fixed | implementation | 1/2 | `2a6644f` / `3be8ca2` |
+| P0-1 | P0 | worktree 枚举瞬时降级仍被误判为完整快照并删除投影 | `cli/eo-sync:593`; `cli/eo-sync:644` | fixed | implementation | 1/3 | `2a6644f` / `a3af2d6` |
+| P1-1 | P1 | `identities` 含非标量 frontmatter，违反协议 v1 快照契约 | `cli/eo-sync:267`; `docs/sync-adapter-protocol.md:133` | verified | implementation | 1/3 | `2a6644f` / `3be8ca2` |
 | P1-2 | P1 | 同状态 worktree 的计划来源与回写落点使用两套选择规则 | `cli/eo-sync:311`; `cli/eo_lib/changes.py:225` | verified | implementation | 1/2 | `2a6644f` / `7167f35` |
-| P1-3 | P1 | 协议响应校验仍把缺少必填字段的响应当成成功 | `cli/eo-sync:446`; `cli/eo-sync:465` | fixed | implementation | 1/2 | `2a6644f` / `3be8ca2` |
-| P1-4 | P1 | 显式 `sync: null` 仍被当成缺段并回落存量配置 | `cli/eo_lib/config.py:51`; `cli/eo_lib/config.py:76` | fixed | implementation | 1/2 | `2a6644f` / `3be8ca2` |
+| P1-3 | P1 | apply 响应缺少 `writeback` 仍通过最小 schema 校验 | `cli/eo-sync:484`; `cli/eo-sync:500` | fixed | implementation | 1/3 | `2a6644f` / `a3af2d6` |
+| P1-4 | P1 | `sync: null` 被新增为合法零目标，但公开配置契约仍限定 object | `cli/eo_lib/config.py:51`; `eo-project-init/references/config.md:82` | fixed | implementation | 1/3 | `2a6644f` / `a3af2d6` |
 | P1-5 | P1 | GitHub apply 会提前提交失败簿记并把 PR 失败报告为成功 | `cli/eo-sync-github:240`; `cli/eo-sync-github:260` | verified | implementation | 1/2 | `2a6644f` / `7167f35` |
 | P1-6 | P1 | archived issue 每次 run 都再次计划 close，第二次不能全 skip | `cli/eo-sync-github:133` | verified | implementation | 1/2 | `2a6644f` / `7167f35` |
 | P1-7 | P1 | 逐流转投影退役仍残留执行指令与旧收口语义 | `eo-change/SKILL.md:123`; `eo-implement/SKILL.md:134` | verified | implementation | 1/2 | `2a6644f` / `7167f35` |
-| P1-8 | P1 | 新增测试 docstring 再次写入 P0/P1 流程溯源 | `tests/test_eo_sync.py:429`; `tests/test_eo_sync.py:612` | fixed | implementation | 1/2 | `2a6644f` / `3be8ca2` |
+| P1-8 | P1 | 新增测试 docstring 再次写入 P0/P1 流程溯源 | `tests/test_eo_sync.py:428`; `tests/test_eo_sync.py:648` | verified | implementation | 1/3 | `2a6644f` / `3be8ca2` |
 
 ## 审查总结（首轮快照）
 
@@ -180,17 +180,38 @@ summary: >
 
 本轮结论：不通过（P0 1 条，P1 4 条）。`status` 保持 `implementing`，当前不可置 `reviewed`。
 
+## 第 3 轮记录（revision 1 · 2026-07-25）
+
+- 审查基线：`3be8ca2`
+- 核销：P1-1、P1-8 → `verified`；P1-2、P1-5、P1-6、P1-7 保持 `verified`。
+- 未核销：P0-1、P1-3、P1-4 由 `fixed` 回 `open`；三项均尚未到过 `verified`，本轮不记复发。
+- 新增：无。本轮只复核第 2 轮未决台账；AC-1/AC-8 仍归 `/eo-test`，其余 AC 不重做全量验收。
+
+### 未核销证据
+
+1. **P0-1**：过滤、frontmatter 解析告警与适配器缺省字段三条路径已 fail-safe，但 worktree 枚举仍是两次无绑定探测：`list_worktrees()` 在取锁前执行，随后锁内 `_worktrees_enumerated_ok()` 只检查第二次命令是否成功。定向构造两个 worktree，`c2` 只存在于第二个；首次全量投影后，让第一遍 `git worktree list --porcelain` 瞬时失败、锁内复查恢复成功。第二次 run 把退化得到的单 worktree 列表误判为完整，输出并执行 `c2 → delete`，退出码 0，`c2.md` 从存在变为被删。应在锁内一次取得「worktree 列表 + 完整性」的同一份权威结果，不能用后一次成功为前一次退化背书。
+2. **P1-3**：裸 plan/apply 与缺少 `actions`、`results`、`bookkeeping` 已能隔离；但 apply 缺少协议规定「无则空对象」的 `writeback` 仍返回校验通过。定向调用 `_validate_apply_response({"results": [], "bookkeeping": {}, "drift": []})` 返回 `None`，与 v1 最小结构及文档的 `writeback` 对象约束仍不一致。
+3. **P1-4**：`sync: null` 已不再回落存量配置，但修复把它新增定义为合法零目标；`_validate_merged()` 明确放过 null，公开配置表与协议仍只允许 `sync: object`。定向加载 `sync: null` 成功，说明实现与对外 schema 仍分叉；应按既有契约拒绝，或先在权威契约中明确把 null 纳入合法类型，不能只靠代码注释改口径。
+
+### 已核销证据
+
+- **P1-1**：`_read_identities()` 已排除 list/dict；对当前 change 实测 `fix_consumed`、`commits` 不再进入 `identities`，全部剩余值均为协议允许的标量，旁车丢失读回用例保持通过。
+- **P1-8**：修复提交移除了测试 docstring 中全部 finding 号；生产代码、夹具与两份测试文件扫描 `P0/P1`、change 节号均零命中，自检范围也已纳入测试文件。
+- `python3 -m unittest tests.test_eo_sync tests.test_eo_sync_smoke`：56 tests，全部通过。
+- `python3 -m unittest discover -s tests -p 'test*.py'`：60 tests，全部通过。
+- `git diff --check 7167f35..3be8ca2`：通过。现有回归未覆盖「第一次 worktree 枚举失败、第二次复查成功」与 apply 缺 `writeback` 两个反例。
+
+本轮结论：不通过（P0 1 条，P1 2 条）。`fix_rounds` 当前为 2；下一次模式二修复会用到第 3 轮额度。`status` 保持 `implementing`，当前不可置 `reviewed`。
+
 ## 速报
 
-结论：不通过（P0 1 条，P1 4 条）［第 2 轮 · revision 1 · 基线 `7167f35`］
+结论：不通过（P0 1 条，P1 2 条）［第 3 轮 · revision 1 · 基线 `3be8ca2`］
 
 P0（阻塞）：
-1. 扫描降级时仍宣称快照完整，会把暂时缺席的 change 投影当孤儿删除 — `cli/eo-sync:618`
+1. 首次 worktree 枚举瞬时失败、锁内复查成功时，退化快照仍会删除另一 worktree 的投影 — `cli/eo-sync:593`
 
 P1（应修）：
-1. `identities` 快照带列表值，违反协议 v1 的标量映射契约 — `cli/eo-sync:265`
-2. plan/apply 缺少必填字段仍通过 schema 校验并被当成成功 — `cli/eo-sync:446`
-3. `sync: null` 被当成字段缺席并回落启用存量目标 — `cli/eo_lib/config.py:51`
-4. 修复测试的类 docstring 重新写入 P0/P1 流程溯源 — `tests/test_eo_sync.py:429`
+1. apply 缺 `writeback` 仍通过 v1 最小 schema 校验 — `cli/eo-sync:484`
+2. `sync: null` 被代码新增为合法零目标，但公开配置契约仍限定 object — `cli/eo_lib/config.py:51`
 
-下一步：回 `/eo-implement` 模式二修复；修复提交后重跑 `/eo-review`。P0/P1 清零后才可明示具备置 `reviewed` 条件，实际置位按本 change 编排在 `/eo-test` 通过后执行。
+下一步：回 `/eo-implement` 模式二使用第 3 轮修复额度；修复提交后重跑 `/eo-review`，P0/P1 清零方可置 `reviewed`。
