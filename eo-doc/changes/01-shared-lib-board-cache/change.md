@@ -3,14 +3,14 @@ id: shared-lib-board-cache
 seq: 1
 title: 抽取共享解析库并修复 eo-board local 合并与缓存
 summary: cli 解析能力抽为共享库供 eo-sync 复用；eo-board 补 local 覆盖合并，--serve 加缓存
-status: reviewed
+status: archived
 tier: full
 type: enhance
 base_commit: 792522dc3d10117d6cf140e28c2ecd0e5bdf2f63
 plan_revision: 1
 fix_rounds: 1
 fix_consumed: ["review#1"]
-commits: []
+commits: ["9b3bc69", "72b1946", "5ac8d27", "5e81f33", "0c0219f", "9235e41"]
 issue: ~
 pr: ~
 created: 2026-07-24
