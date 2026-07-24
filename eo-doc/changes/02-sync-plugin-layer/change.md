@@ -8,8 +8,8 @@ tier: full
 type: feature
 base_commit: 5f38497da71eb7ca17b0fa10e0fe4453251399b8
 plan_revision: 1
-fix_rounds: 2
-fix_consumed: [review#1, review#2]
+fix_rounds: 3
+fix_consumed: [review#1, review#2, review#3]
 commits: []
 issue: ~
 pr: ~

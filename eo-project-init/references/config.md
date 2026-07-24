@@ -79,7 +79,7 @@ mv ~/.eo-skills.json "$EO_HOME/config.json"
 | `board.stub_dir` | string | ❌（默认 `"board"`） | stub 目录名（相对 `project_root`） |
 | `github.issue` | bool | ❌（默认 `false`） | change ↔ GitHub issue 联动开关 |
 | `github.pr` | `"auto"` \| `"always"` \| `"never"` | ❌（默认 `"never"`） | archive 时的 PR 策略：`auto` = 在非默认分支且有 remote 时自动建 PR |
-| `sync` | object | ❌ | `eo-sync` 适配器启用制（缺省由 `board`/`github` 兼容映射派生）；schema 见下 |
+| `sync` | object \| null | ❌ | `eo-sync` 适配器启用制。**键存在性决定是否回落**：缺省（键不在）→ 由 `board`/`github` 兼容映射派生；键存在（含空 `{}` 或显式 `null`）→ 完全以其为准、绝不回落，其中 `{}`/`null` = 显式零目标；object 以外的类型（数字/字符串等）→ 配置错误。schema 见下 |
 
 缺省 `board` / `github` 字段 = 全部关闭（向后兼容 v1 生成的配置）。
 
@@ -102,7 +102,7 @@ mv ~/.eo-skills.json "$EO_HOME/config.json"
 | `sync.<name>.enabled` | bool，仅 `true` 的适配器会被 `eo-sync run` 执行 |
 | `sync.<name>.<其它>` | 该适配器的自定义参数，`enabled` 之外的键原样透传给适配器 |
 
-**兼容映射**：合并配置**无** `sync` 段时由存量 `board` / `github` 段等价派生启用集（`board.enabled`→`obsidian`、`github.issue`/`pr`→`github`）；`sync` 段存在则完全以其为准，不与 `board`/`github` 深合并。存量项目无需改配置即按等价映射生效。正式收编（init 停写旧段 + 存量迁移）时机见 change `sync-plugin-layer` 的 OQ-1。协议契约见 [../../docs/sync-adapter-protocol.md](../../docs/sync-adapter-protocol.md)。
+**兼容映射**：以**键是否存在**判定（非「值是否非空」）——合并配置**无** `sync` 键时由存量 `board` / `github` 段等价派生启用集（`board.enabled`→`obsidian`、`github.issue`/`pr`→`github`）；`sync` 键**存在**（含空 `{}` 或显式 `null`）则完全以其为准、不与 `board`/`github` 深合并，其中 `{}`/`null` 是用户显式选择的零目标（绝不回落存量段）；`sync` 值为 object 以外的类型 → 配置校验失败（不静默降级）。存量项目无需改配置即按等价映射生效。正式收编（init 停写旧段 + 存量迁移）时机见 change `sync-plugin-layer` 的 OQ-1。协议契约见 [../../docs/sync-adapter-protocol.md](../../docs/sync-adapter-protocol.md)。
 
 **设计约束**：
 - `project_root` 永远是绝对路径。vault 模式不依赖软链——软链只是给用户查看方便，skill 一律走 `project_root`。

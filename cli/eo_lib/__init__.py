@@ -5,7 +5,7 @@
 
 from .config import ConfigError, find_project_config, load_project_config
 from .freshness import compute_freshness_key
-from .gitio import run_git, list_worktrees
+from .gitio import run_git, list_worktrees, list_worktrees_status
 from .frontmatter import (
     split_frontmatter,
     parse_yaml_subset,
@@ -39,6 +39,7 @@ __all__ = [
     "compute_freshness_key",
     "run_git",
     "list_worktrees",
+    "list_worktrees_status",
     "split_frontmatter",
     "parse_yaml_subset",
     "parse_yaml_scalar",

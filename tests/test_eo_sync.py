@@ -571,6 +571,11 @@ class ResponseSchemaTests(unittest.TestCase):
         self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
         self.assertIn("缺少必填", r.stderr)
 
+    def test_missing_writeback_field_isolated(self):
+        r, root = self._run("apply_no_wb")  # 响应缺必填 writeback
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("缺少必填", r.stderr)
+
 
 class SyncSegmentSemanticsTests(unittest.TestCase):
     """显式 sync 段（含空 {} / null）关闭存量兼容映射；非法类型为配置错误。"""
@@ -616,6 +621,14 @@ class SyncSegmentSemanticsTests(unittest.TestCase):
             r = run_sync(repo, root / "home", "run")  # sync:null 经真实 config 加载
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertIn("未启用任何同步目标", r.stdout)
+
+    def test_sync_null_contract_documented(self):
+        # 代码-文档一致化：sync:null 的合法性须写进公开契约（对表格管道转义鲁棒）
+        cfg_md = (REPO_ROOT / "eo-project-init" / "references" / "config.md").read_text(encoding="utf-8")
+        proto = (REPO_ROOT / "docs" / "sync-adapter-protocol.md").read_text(encoding="utf-8")
+        self.assertIn("显式 `null`", cfg_md)
+        self.assertIn("零目标", cfg_md)
+        self.assertIn("null", proto)
 
 
 class GithubFixTests(unittest.TestCase):
@@ -695,6 +708,63 @@ class IdentitiesScalarTests(unittest.TestCase):
         self.assertNotIn("fix_consumed", ids)
         for v in ids.values():
             self.assertNotIsInstance(v, (list, dict))
+
+
+class AtomicScanTests(unittest.TestCase):
+    """快照与其完整性同源同时刻：build_scan 单一原子结构，worktree 枚举降级即判不完整。"""
+
+    def _cfg_repo(self, root):
+        from eo_lib import load_project_config, find_project_config
+        repo = init_repo(root, {"project_name": "p", "mode": "local", "project_root": str(root / "pm"),
+                                "doc_root": "eo-doc", "sync": {"obsidian": {"enabled": True}}},
+                         changes=[{"cid": "c1", "seq": 1}])
+        return load_project_config(find_project_config(repo)), repo
+
+    def test_list_worktrees_status_ok_signal(self):
+        from eo_lib import list_worktrees_status
+        with tempfile.TemporaryDirectory() as d:
+            wts, ok = list_worktrees_status(d)  # 非 git 目录：单目录、完整
+            self.assertTrue(ok)
+            self.assertEqual(len(wts), 1)
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d) / "r"
+            repo.mkdir()
+            (repo / "x").write_text("x", encoding="utf-8")
+            git(repo, "init", "-q")
+            git(repo, "add", "-A")
+            git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "i")
+            wts, ok = list_worktrees_status(repo)  # git 仓库正常枚举
+            self.assertTrue(ok)
+
+    def test_build_scan_complete_clean_full(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            cfg, repo = self._cfg_repo(root)
+            scan = eo_sync.build_scan(cfg, str(repo), None, str(repo), [])
+            self.assertTrue(scan["complete"])
+            self.assertIn("c1", scan["resolved"])
+
+    def test_build_scan_incomplete_on_filter(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            cfg, repo = self._cfg_repo(root)
+            scan = eo_sync.build_scan(cfg, str(repo), "c1", str(repo), [])
+            self.assertFalse(scan["complete"])
+            self.assertIn("选择性过滤", scan["reasons"])
+
+    def test_build_scan_incomplete_on_worktree_degradation(self):
+        # 降级信号与快照来自同一次 build_scan：枚举降级 → complete=False（同源同时刻，杜绝旧判定配新快照）
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            cfg, repo = self._cfg_repo(root)
+            orig = eo_sync.list_worktrees_status
+            eo_sync.list_worktrees_status = lambda anchor: ([{"path": str(repo), "branch": None}], False)
+            try:
+                scan = eo_sync.build_scan(cfg, str(repo), None, str(repo), [])
+            finally:
+                eo_sync.list_worktrees_status = orig
+            self.assertFalse(scan["complete"])
+            self.assertIn("worktree 枚举降级", scan["reasons"])
 
 
 if __name__ == "__main__":

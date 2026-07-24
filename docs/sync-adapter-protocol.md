@@ -5,7 +5,7 @@
 ## 发现与启用
 
 - **发现**（有哪些）：核扫描 `PATH`，凡命名为 `eo-sync-<name>` 的可执行文件即一个适配器，`<name>` 为其名字。同名取 `PATH` 靠前者。
-- **启用**（跑哪些）：只有合并配置（`.eo-project.json` + 可选 `.eo-project.local.json`）`sync` 段里 `enabled: true` 的适配器才会被执行。发现 ≠ 执行——这是第三方可执行文件的信任边界。
+- **启用**（跑哪些）：只有合并配置（`.eo-project.json` + 可选 `.eo-project.local.json`）`sync` 段里 `enabled: true` 的适配器才会被执行。发现 ≠ 执行——这是第三方可执行文件的信任边界。`sync` 段以**键是否存在**判定：缺省（键不在）→ 回落 `board`/`github` 兼容映射；键存在（含空 `{}` 或显式 `null`）→ 段生效、`{}`/`null` 即零启用（绝不回落）；`sync` 为 object 以外类型 → 配置错误。
 - **配置形态**：`"sync": { "<name>": { "enabled": true, ...适配器自定义参数 } }`。`sync` 段存在时完全以其为准；缺席时由存量 `board`/`github` 段等价映射（`board.enabled`→`obsidian`、`github.issue`/`pr`→`github`）。
 
 ## 调用形态
@@ -115,9 +115,10 @@ eo-sync-<name> apply          < request.json   > response.json
 }
 ```
 
-- `results[]`：逐动作结果。含 `"error"` 非空的项被核视为该适配器本次**存在失败**（计入 run 总退出码）。
-- `writeback`：见「回写」。无则空对象。
-- `bookkeeping`：**整个命名空间的新值**（核原样持久化，不做合并）。见「簿记」。
+- `results[]`（**必填**）：逐动作结果，每项须含 `change_id` 与 `op`；含 `"error"` 非空的项被核视为该适配器本次**存在失败**（计入 run 总退出码）。
+- `writeback`（**必填**）：见「回写」。**无回写也须显式给空对象 `{}`**，不得省略键。
+- `bookkeeping`（**必填**）：**整个命名空间的新值**（核原样持久化，不做合并）。见「簿记」。
+- **必填契约（v1）**：`apply` 响应缺 `results` / `writeback` / `bookkeeping` 任一键即协议违规——核按该适配器失败隔离（其余目标照常、run 退出码 1），绝不把缺字段当空成功；`plan` 响应同理必含 `actions`，每个 action 必含 `op`/`change_id`/`projection`。
 
 ## change 快照字段
 

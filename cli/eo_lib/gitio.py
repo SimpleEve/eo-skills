@@ -15,8 +15,7 @@ def run_git(args, cwd=None):
     return res.stdout
 
 
-def list_worktrees(anchor_dir):
-    out = run_git(["worktree", "list", "--porcelain"], cwd=str(anchor_dir))
+def _parse_worktree_porcelain(out):
     worktrees = []
     cur = {}
     for line in out.splitlines():
@@ -34,10 +33,25 @@ def list_worktrees(anchor_dir):
             cur["branch"] = None
     if cur:
         worktrees.append(cur)
+    return worktrees
+
+
+def list_worktrees_status(anchor_dir):
+    """同一次枚举返回 (worktrees, enum_ok)。enum_ok=False 仅当这是 git 仓库却枚举不出 worktree
+    （落到单目录 fallback，可能漏扫其它 worktree 的内容 → 快照不可证完整）；非 git 仓库单目录即完整。
+    worktrees 与 enum_ok 同源同时刻，供调用方把快照与完整性绑定为原子结果。"""
+    out = run_git(["worktree", "list", "--porcelain"], cwd=str(anchor_dir))
+    worktrees = _parse_worktree_porcelain(out)
     if not worktrees:
-        # 非 git 仓库或 git 不可用：退化为把当前目录当唯一 worktree
-        return [{"path": str(anchor_dir), "branch": None}]
+        # out 为空：区分「非 git 仓库」（合法单目录、完整）与「git 仓库但枚举失败」（降级）
+        is_repo = run_git(["rev-parse", "--is-inside-work-tree"], cwd=str(anchor_dir)).strip() == "true"
+        return [{"path": str(anchor_dir), "branch": None}], (not is_repo)
     for wt in worktrees:
         branch = run_git(["branch", "--show-current"], cwd=wt["path"]).strip()
         wt["branch"] = branch or wt.get("branch")
+    return worktrees, True
+
+
+def list_worktrees(anchor_dir):
+    worktrees, _ = list_worktrees_status(anchor_dir)
     return worktrees

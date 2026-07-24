@@ -36,6 +36,7 @@ from eo_lib import (
     count_todo,
     find_project_config,
     list_worktrees,
+    list_worktrees_status,
     load_project_config,
     resolve_change,
     run_git,
@@ -311,16 +312,19 @@ def build_snapshot(rec, default_branch):
     }
 
 
-def scan_snapshots(cfg, worktrees, change_filter, origin_wt, warnings):
-    """扫描并消歧，返回 (resolved {id: 权威 rec}, snapshots [snap...], scan_clean)。
+def build_scan(cfg, anchor, change_filter, origin_wt, warnings):
+    """原子扫描：**同一次** worktree 枚举 + change 消歧 + 完整性判定，返回单一结构
+    ``{resolved, snapshots, complete, reasons}``。
 
-    权威 rec 由 resolve_change 一次选定，计划快照与身份回写落点共用同一份；同状态内容分叉的
-    change 计划与回写一并跳过（fail-closed 告警）。snapshots 按 change_filter 过滤、按 id 排序。
-    scan_clean = 本次扫描/消歧期间零告警（无解析失败、无撞号、无分叉）——用于判定快照是否可证完整。
+    完整性与快照**同源同时刻**——worktrees 与降级信号来自同一次 `list_worktrees_status`，扫描告警
+    在同一遍统计；每次调用（含锁内复扫）都由本函数一并算出，杜绝「旧判定配新快照 / 新判定配旧快照」。
+    ``complete=True`` 仅当同时满足：无选择性过滤、扫描/消歧零告警（解析失败·撞号·分叉）、worktree 枚举未降级。
+    权威 rec 由 resolve_change 一次选定，计划快照与身份回写落点共用同一份。
     """
     mark = len(warnings)
-    grouped = scan_changes_grouped(cfg, worktrees, warnings)
+    worktrees, enum_ok = list_worktrees_status(anchor)
     default_branch = worktrees[0].get("branch") if worktrees else None
+    grouped = scan_changes_grouped(cfg, worktrees, warnings)
     resolved, snapshots = {}, []
     for cid in sorted(grouped):
         if change_filter and cid != change_filter:
@@ -332,15 +336,21 @@ def scan_snapshots(cfg, worktrees, change_filter, origin_wt, warnings):
         resolved[cid] = rec
         snapshots.append(build_snapshot(rec, default_branch))
     scan_clean = len(warnings) == mark
-    return resolved, snapshots, scan_clean
+    reasons = []
+    if change_filter is not None:
+        reasons.append("选择性过滤")
+    if not scan_clean:
+        reasons.append("扫描告警")
+    if not enum_ok:
+        reasons.append("worktree 枚举降级")
+    return {"resolved": resolved, "snapshots": snapshots, "complete": not reasons, "reasons": reasons}
 
 
-def _worktrees_enumerated_ok(anchor):
-    """worktree 枚举是否可信：非 git 仓库单目录即完整；git 仓库须能列出 worktree（列不出=降级，可能漏扫）。"""
-    inside = run_git(["rev-parse", "--is-inside-work-tree"], cwd=anchor).strip()
-    if inside != "true":
-        return True
-    return bool(run_git(["worktree", "list", "--porcelain"], cwd=anchor).strip())
+def _warn_incomplete(scan, warnings):
+    if not scan["complete"]:
+        warnings.append(
+            f"快照不可证完整（{' / '.join(scan['reasons'])}），本轮跳过孤儿投影清理以防误删范围外投影"
+        )
 
 
 # --------------------------------------------------------------------------- 适配器排序与 capabilities
@@ -497,16 +507,17 @@ def _validate_apply_response(resp):
         return "apply 响应缺少必填字段 bookkeeping"
     if not isinstance(resp["bookkeeping"], dict):
         return "apply.bookkeeping 不是对象"
-    wb = resp.get("writeback")
-    if wb is not None and not isinstance(wb, dict):
+    if "writeback" not in resp:
+        return "apply 响应缺少必填字段 writeback"
+    wb = resp["writeback"]
+    if not isinstance(wb, dict):
         return "apply.writeback 不是对象"
-    if isinstance(wb, dict):
-        for cid, fields in wb.items():
-            if not isinstance(fields, dict):
-                return f"apply.writeback[{cid}] 不是对象"
-            for k, v in fields.items():
-                if isinstance(v, (dict, list)):
-                    return f"apply.writeback[{cid}][{k}] 不是标量"
+    for cid, fields in wb.items():
+        if not isinstance(fields, dict):
+            return f"apply.writeback[{cid}] 不是对象"
+        for k, v in fields.items():
+            if isinstance(v, (dict, list)):
+                return f"apply.writeback[{cid}][{k}] 不是标量"
     drift = resp.get("drift")
     if drift is not None and not isinstance(drift, list):
         return "apply.drift 不是列表"
@@ -639,23 +650,12 @@ def cmd_run(cfg, args):
             print(f"⏸ 另一个 eo-sync run 正持锁{hint}，本次干净退出。稍后重跑。", file=sys.stderr)
             return EXIT_LOCKED
 
-    # 孤儿删除只在「快照可证完整」时执行：显式过滤 / 扫描告警（解析失败·撞号·分叉）/ worktree 枚举降级
-    # 任一成立 → snapshot_complete=False，本轮跳过删除并告警，绝不据缺席误删范围外投影（fail-safe）
-    worktrees_ok = _worktrees_enumerated_ok(anchor)
-
+    # 孤儿删除只在「快照可证完整」时执行：build_scan 把 worktree 枚举 + 扫描 + 完整性判定绑成原子结果，
+    # snapshot 与 complete 同源同时刻；锁内每次（含复扫）都由 build_scan 一并重算，绝不旧判定配新快照（fail-safe）
     try:
         book = load_bookkeeping(bk_path)
-        resolved, snapshots, scan_clean = scan_snapshots(cfg, worktrees, args.change, origin_wt, warnings)
-        snapshot_complete = (args.change is None) and scan_clean and worktrees_ok
-        if not snapshot_complete:
-            why = []
-            if args.change is not None:
-                why.append("选择性过滤")
-            if not scan_clean:
-                why.append("扫描告警")
-            if not worktrees_ok:
-                why.append("worktree 枚举降级")
-            warnings.append(f"快照不可证完整（{' / '.join(why)}），本轮跳过孤儿投影清理以防误删范围外投影")
+        scan = build_scan(cfg, anchor, args.change, origin_wt, warnings)
+        _warn_incomplete(scan, warnings)
 
         all_display = []  # (change_id, adapter, item)
         all_drift = []
@@ -667,7 +667,7 @@ def cmd_run(cfg, args):
             book_ns = book["adapters"].get(name, {})
             params = enabled[name]
             display, writeback, new_ns, drift, ok = run_adapter_phase(
-                name, info, context, snapshots, book_ns, params, dry_run, snapshot_complete, warnings
+                name, info, context, scan["snapshots"], book_ns, params, dry_run, scan["complete"], warnings
             )
             if not ok:
                 failure = True
@@ -677,15 +677,16 @@ def cmd_run(cfg, args):
             if not dry_run:
                 book["adapters"][name] = new_ns
                 identity_fields = info["caps"].get("identity_fields") or []
-                written = apply_writeback(writeback, identity_fields, resolved, warnings)
+                written = apply_writeback(writeback, identity_fields, scan["resolved"], warnings)
                 if written:
                     wrote_back = True
 
-        # 回写后刷新快照，令纯投影适配器读到新平台身份
+        # 回写后复扫：快照与其完整性由同一次 build_scan 一并重算，令纯投影适配器读到新平台身份
         if wrote_back and not dry_run:
-            resolved, snapshots, refresh_clean = scan_snapshots(cfg, worktrees, args.change, origin_wt, warnings)
-            if not refresh_clean:
-                snapshot_complete = False  # sticky：刷新扫描降级也禁删
+            was_complete = scan["complete"]
+            scan = build_scan(cfg, anchor, args.change, origin_wt, warnings)
+            if was_complete and not scan["complete"]:
+                _warn_incomplete(scan, warnings)
 
         # 阶段二
         for name in pure_after:
@@ -693,7 +694,7 @@ def cmd_run(cfg, args):
             book_ns = book["adapters"].get(name, {})
             params = enabled[name]
             display, writeback, new_ns, drift, ok = run_adapter_phase(
-                name, info, context, snapshots, book_ns, params, dry_run, snapshot_complete, warnings
+                name, info, context, scan["snapshots"], book_ns, params, dry_run, scan["complete"], warnings
             )
             if not ok:
                 failure = True
