@@ -6,7 +6,7 @@ created: 2026-07-25
 updated: 2026-07-25
 status: active
 summary: >
-  首轮审查不通过：选择性同步会误删范围外投影，另有协议、身份回写、GitHub 幂等与流程退役问题。
+  第 2 轮复审不通过：扫描降级仍可误删投影，协议快照、响应校验、空值配置与注释纪律仍未闭合。
 ---
 
 # eo-sync 插件层与存量适配器迁移代码审查报告
@@ -27,15 +27,15 @@ summary: >
 
 | ID | 级别 | 摘要 | 位置 | 状态 | 根因 | 首见/最近轮 | 基线/修复 commit |
 |----|------|------|------|------|------|-------------|------------------|
-| P0-1 | P0 | `--change` 把范围外 change 当成孤儿并删除其投影 | `cli/eo-sync:305`; `cli/eo-sync-obsidian:132` | fixed | implementation | 1/1 | `2a6644f` / `7167f35` |
-| P1-1 | P1 | 通用 `identity_fields` 回写后不会进入后续 change 快照 | `cli/eo-sync:275`; `cli/eo_lib/changes.py:183` | fixed | implementation | 1/1 | `2a6644f` / `7167f35` |
-| P1-2 | P1 | 同状态 worktree 的计划来源与回写落点使用两套选择规则 | `cli/eo-sync:307`; `cli/eo_lib/changes.py:235` | fixed | implementation | 1/1 | `2a6644f` / `7167f35` |
-| P1-3 | P1 | 核未校验协议响应结构，合法 JSON 的坏形状可中断整次 run | `cli/eo-sync:437`; `cli/eo-sync:452` | fixed | implementation | 1/1 | `2a6644f` / `7167f35` |
-| P1-4 | P1 | 显式空 `sync` 段错误回落到存量配置 | `cli/eo-sync:129`; `cli/eo_lib/config.py:72` | fixed | implementation | 1/1 | `2a6644f` / `7167f35` |
-| P1-5 | P1 | GitHub apply 会提前提交失败簿记并把 PR 失败报告为成功 | `cli/eo-sync-github:225`; `cli/eo-sync-github:234` | fixed | implementation | 1/1 | `2a6644f` / `7167f35` |
-| P1-6 | P1 | archived issue 每次 run 都再次计划 close，第二次不能全 skip | `cli/eo-sync-github:120` | fixed | implementation | 1/1 | `2a6644f` / `7167f35` |
-| P1-7 | P1 | 逐流转投影退役仍残留执行指令与旧收口语义 | `eo-change/SKILL.md:123`; `eo-implement/SKILL.md:134` | fixed | implementation | 1/1 | `2a6644f` / `7167f35` |
-| P1-8 | P1 | 新增代码注释保留 change/AC/Batch 流程溯源 | `cli/eo_lib/changes.py:258`; `tests/fixtures/eo-sync-fixture:7`; `tests/test_eo_sync_smoke.py:1` | fixed | implementation | 1/1 | `2a6644f` / `7167f35` |
+| P0-1 | P0 | 不完整扫描仍被标成完整快照并删除缺席投影 | `cli/eo-sync:618`; `cli/eo-sync:623` | fixed | implementation | 1/2 | `2a6644f` / `3be8ca2` |
+| P1-1 | P1 | `identities` 含非标量 frontmatter，违反协议 v1 快照契约 | `cli/eo-sync:265`; `docs/sync-adapter-protocol.md:133` | fixed | implementation | 1/2 | `2a6644f` / `3be8ca2` |
+| P1-2 | P1 | 同状态 worktree 的计划来源与回写落点使用两套选择规则 | `cli/eo-sync:311`; `cli/eo_lib/changes.py:225` | verified | implementation | 1/2 | `2a6644f` / `7167f35` |
+| P1-3 | P1 | 协议响应校验仍把缺少必填字段的响应当成成功 | `cli/eo-sync:446`; `cli/eo-sync:465` | fixed | implementation | 1/2 | `2a6644f` / `3be8ca2` |
+| P1-4 | P1 | 显式 `sync: null` 仍被当成缺段并回落存量配置 | `cli/eo_lib/config.py:51`; `cli/eo_lib/config.py:76` | fixed | implementation | 1/2 | `2a6644f` / `3be8ca2` |
+| P1-5 | P1 | GitHub apply 会提前提交失败簿记并把 PR 失败报告为成功 | `cli/eo-sync-github:240`; `cli/eo-sync-github:260` | verified | implementation | 1/2 | `2a6644f` / `7167f35` |
+| P1-6 | P1 | archived issue 每次 run 都再次计划 close，第二次不能全 skip | `cli/eo-sync-github:133` | verified | implementation | 1/2 | `2a6644f` / `7167f35` |
+| P1-7 | P1 | 逐流转投影退役仍残留执行指令与旧收口语义 | `eo-change/SKILL.md:123`; `eo-implement/SKILL.md:134` | verified | implementation | 1/2 | `2a6644f` / `7167f35` |
+| P1-8 | P1 | 新增测试 docstring 再次写入 P0/P1 流程溯源 | `tests/test_eo_sync.py:429`; `tests/test_eo_sync.py:612` | fixed | implementation | 1/2 | `2a6644f` / `3be8ca2` |
 
 ## 审查总结（首轮快照）
 
@@ -156,21 +156,41 @@ summary: >
 - 三态 dry-run：draft 仅 stub create、issue/pr skip；confirmed issue+stub create、pr skip；archived issue+stub create、默认分支 auto PR skip；仓库与旁车零写入。
 - `git show --check 21458aa 7771c58 5da3e6a 2a6644f`、`git diff --check 5f38497..2a6644f`、`sh -n install.sh`：通过。
 
+## 第 2 轮记录（revision 1 · 2026-07-25）
+
+- 审查基线：`7167f35`
+- 核销：P1-2、P1-5、P1-6、P1-7 → `verified`。
+- 未核销：P0-1、P1-1、P1-3、P1-4、P1-8 由 `fixed` 回 `open`；这些 finding 尚未到过 `verified`，本轮不记复发。
+- 新增：无。本轮只复核第 1 轮台账；AC-1/AC-8 仍归 `/eo-test`，其余 AC 不重做全量验收。
+
+### 未核销证据
+
+1. **P0-1**：`snapshot_complete` 只看有没有 `--change`，不看扫描是否降级。定向复现先全量生成 `c1/c2` stub，再让 `c2/change.md` 暂时缺少 frontmatter；第二次全量 run 已告警跳过 `c2`，却仍计划并执行 `c2 → delete`，退出码为 0，stub 从存在变为被删。同状态内容分叉导致快照缺项时也会走同一路径。
+2. **P1-1**：第三方身份字段的读路径已可工作，旁车删除后会 skip；但 `_read_identities()` 原样返回全部 frontmatter。本 change 的实际快照含列表值 `fix_consumed`、`commits`，与协议 v1 声明的「全部标量字段映射」不一致。
+3. **P1-3**：容器错型已能隔离，但最小结构仍未校验。对只有 `protocol_version` 的 plan/apply 响应，两个校验函数都返回通过；缺少 `actions`、`results`、`writeback`、`bookkeeping` 的适配器会被静默当成成功，而不是隔离并令 run 退出 1。
+4. **P1-4**：`sync: {}` 与普通非法字符串已覆盖；但 `_validate_merged()` 把显式 JSON `null` 与字段缺席混为一类。定向配置 `sync: null` 加 `board.enabled: true` 可成功加载，并实际回落启用 `obsidian`，违反 `sync` 必须为 object 的配置契约。
+5. **P1-8**：旧三处溯源已删除，但修复测试新增七个带 `P0-1` / `P1-x` 的类 docstring；自检又没有扫描 `tests/test_eo_sync.py`，因此绿灯没有覆盖违规所在文件。
+
+### 已核销证据
+
+- **P1-2**：`resolve_change()` 一次选定权威 rec，`scan_snapshots()` 保存该对象，`apply_writeback()` 直接复用；定向用例确认计划与回写路径一致、分叉返回空权威项。
+- **P1-5 / P1-6**：GitHub edit/close/PR 成败矩阵确认失败不推进簿记、非零结果如实返回，PR 成功只调用一次并回写 URL；成功 close 写 `issue_closed`，下一次 plan 为 skip。
+- **P1-7**：回炉确认已改为「下次 eo-sync 重算」，轻档收口只保留 archive 内嵌调用所需的 `eo-sync run` 语义，原非投影流程步骤仍在。
+- `python3 -m unittest tests.test_eo_sync tests.test_eo_sync_smoke`：50 tests，全部通过；上述反例表明现有测试尚未覆盖五个未核销边界。
+
+本轮结论：不通过（P0 1 条，P1 4 条）。`status` 保持 `implementing`，当前不可置 `reviewed`。
+
 ## 速报
 
-结论：不通过（P0 1 条，P1 8 条）［第 1 轮 · revision 1 · 基线 `2a6644f`］
+结论：不通过（P0 1 条，P1 4 条）［第 2 轮 · revision 1 · 基线 `7167f35`］
 
 P0（阻塞）：
-1. `--change` 会把范围外 change 当孤儿并删除其投影 — `cli/eo-sync:305`
+1. 扫描降级时仍宣称快照完整，会把暂时缺席的 change 投影当孤儿删除 — `cli/eo-sync:618`
 
 P1（应修）：
-1. 通用身份字段没有进入后续快照 — `cli/eo-sync:275`
-2. same-status worktree 的计划来源与回写落点错位 — `cli/eo-sync:307`
-3. 协议响应缺少结构校验，坏适配器可打断全局 — `cli/eo-sync:437`
-4. 显式空 `sync` 错误启用存量目标 — `cli/eo-sync:129`
-5. GitHub 失败会污染簿记或被报告为成功 — `cli/eo-sync-github:225`
-6. archived issue 第二次仍计划 close — `cli/eo-sync-github:120`
-7. 流转期投影退役仍有语义残留 — `eo-change/SKILL.md:123`
-8. 新增注释保留流程溯源标记 — `cli/eo_lib/changes.py:258`
+1. `identities` 快照带列表值，违反协议 v1 的标量映射契约 — `cli/eo-sync:265`
+2. plan/apply 缺少必填字段仍通过 schema 校验并被当成成功 — `cli/eo-sync:446`
+3. `sync: null` 被当成字段缺席并回落启用存量目标 — `cli/eo_lib/config.py:51`
+4. 修复测试的类 docstring 重新写入 P0/P1 流程溯源 — `tests/test_eo_sync.py:429`
 
-下一步：回 `/eo-implement` 模式二修复；修复提交后重跑 `/eo-review`，P0/P1 清零后再进入 `/eo-test` 核验 AC-1/AC-8。
+下一步：回 `/eo-implement` 模式二修复；修复提交后重跑 `/eo-review`。P0/P1 清零后才可明示具备置 `reviewed` 条件，实际置位按本 change 编排在 `/eo-test` 通过后执行。
