@@ -45,8 +45,8 @@ eo-board 是当前唯一呈现层，其内部已经手写了一整套「文件�
 
 - [x] AC-1 抽取后行为不变：同一仓库状态下，eo-board 终端 / `--html` / `--serve` 三形态输出与抽取前一致（验证：基线取自 `792522d`——临时 worktree 上运行终端 / `--html` 形态并直接调 `build_data` 采样 JSON，抽取后 diff 逐字段等价（生成时间类字段除外）；`--serve` 数据面与 `/data.json` 同源自 `build_data`，起服务的端到端对照由测试阶段以同法比较）
 - [x] AC-2 共享库可独立复用：不经 eo-board，直接 `python3 -c "import ..."` 即可调用五域能力——frontmatter 解析、change 目录扫描、AC/TODO 计数、git 封装、配置加载（验证：对本仓跑一段冒烟脚本，各域返回结构化结果）
-- [ ] AC-3 local 覆盖生效：仓库存在 `.eo-project.local.json` 时，eo-board 按顶层字段覆盖后的合并结果工作（如 local 覆盖 `project_root` 后，backlog/roadmap 从新位置读取）；无 local 文件时行为与现在完全一致（验证：临时写一个覆盖 `project_root` 的 local 文件跑终端形态，观察 backlog 数据源变化，验后删除复原）
-- [ ] AC-4 local 解析失败可见：`.eo-project.local.json` 存在但 JSON 非法时，用户看到指明该文件与原因的报错并退出（与主配置解析失败同口径），而非静默忽略或裸 traceback
+- [x] AC-3 local 覆盖生效：仓库存在 `.eo-project.local.json` 时，eo-board 按顶层字段覆盖后的合并结果工作（如 local 覆盖 `project_root` 后，backlog/roadmap 从新位置读取）；无 local 文件时行为与现在完全一致（验证：临时写一个覆盖 `project_root` 的 local 文件跑终端形态，观察 backlog 数据源变化，验后删除复原）
+- [x] AC-4 local 解析失败可见：`.eo-project.local.json` 存在但 JSON 非法时，用户看到指明该文件与原因的报错并退出（与主配置解析失败同口径），而非静默忽略或裸 traceback
 - [ ] AC-5 缓存命中：`--serve` 运行中仓库无变化时，后续 `/data.json` 轮询由缓存直接应答、不再全量重扫（验证：以 `build_data` 调用计数断言——同状态连续两次请求，第二次不触发全量扫描（计数不增）；stderr 的 hit/miss 诊断行仅作辅助观察，不作为通过依据）
 - [ ] AC-6 缓存新鲜：`--serve` 运行中出现新 commit、任何 ref 更新（含同 SHA 分支切换）、change.md / backlog 卡 / roadmap.md 改动，或跨过日期边界后，一个轮询周期（3 秒）内数据即反映变化（停滞天数、本月直改等派生字段同步刷新），无需重启服务（验证：serve 运行中手改某 change.md 的 status，浏览器 3-6 秒内看到卡片移列；日期/refs 类失效由确定性用例覆盖，见 TODO-4 完成判据）
 
@@ -57,7 +57,7 @@ eo-board 是当前唯一呈现层，其内部已经手写了一整套「文件�
 - [x] TODO-2 `cli/eo-board` 改为消费共享包：删除被平移的实现，头部加符号链接安全的导入引导（`Path(__file__).resolve()` 定位真实仓库内 `cli/` 后 import）；board 专属逻辑（gates 门禁判定、backlog/roadmap 聚合、渲染、HTTP 服务）留在原文件，并在入口捕获 `ConfigError` 格式化退出（文件：修改: cli/eo-board；对应 AC-1；完成判据：不起服务——终端 / `--html` 形态输出及 `build_data` 直调 JSON 与 `792522d` 基线 diff 等价，经符号链接调用亦正常；`--serve` 端到端对照归测试阶段）
 
 ### Batch 2a（local 合并）
-- [ ] TODO-3 `config.py` 实现 `.eo-project.local.json` 顶层字段覆盖合并（local 优先，合并后再做缺省填充；local 存在但 JSON 非法 → 与主配置同口径报错退出），eo-board 经共享包自动获得（文件：修改: cli/eo_lib/config.py；对应 AC-3、AC-4）
+- [x] TODO-3 `config.py` 实现 `.eo-project.local.json` 顶层字段覆盖合并（local 优先，合并后再做缺省填充；local 存在但 JSON 非法 → 与主配置同口径报错退出），eo-board 经共享包自动获得（文件：修改: cli/eo_lib/config.py；对应 AC-3、AC-4）
 
 ### Batch 2b（--serve 缓存）
 - [ ] TODO-4 共享包新增新鲜度键计算，闭合 `build_data` 全部动态输入：各 worktree (路径, 分支名, HEAD sha) 三元组、refs 指纹（`git for-each-ref` 输出摘要，覆盖 `git log --all` 的「本月直改」统计输入）、当天日期（覆盖停滞天数 / 当月边界等日期派生字段）、`<doc_root>/changes/` 目录树 max-mtime、backlog / roadmap 数据源 mtime，产出可比较的键（文件：新增: cli/eo_lib/freshness.py；对应 AC-5、AC-6；完成判据：同状态两次计算键相等；三类确定性用例各证键变化——① 跨日/跨月（mock 日期）② 同 SHA 切换分支 ③ 仅 ref 更新（如新建 tag/分支、worktree 集合不变）；另 changes/backlog/roadmap 任一源改动后键变化）

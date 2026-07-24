@@ -34,6 +34,10 @@ def _load_json_object(path, label):
 
 def load_project_config(path):
     raw = _load_json_object(path, ".eo-project.json")
+    local_path = path.parent / ".eo-project.local.json"
+    if local_path.is_file():
+        # 顶层字段整体覆盖（local 优先），覆盖后再做缺省填充
+        raw = {**raw, **_load_json_object(local_path, ".eo-project.local.json")}
     return {
         "project_name": raw.get("project_name") or path.parent.name,
         "mode": raw.get("mode") or "local",
