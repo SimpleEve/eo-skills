@@ -16,7 +16,8 @@ usage() {
   - ~/.claude/skills          (Claude Code)
   - ~/.agents/skills          (Codex)
   - ~/.gemini/antigravity/skills  (Antigravity)
-  并把 cli/eo-board 链接为 eo-board 命令 (默认 ~/.local/bin，可用 EO_BIN_DIR 覆盖)
+  并把 cli/ 下的命令 (eo-board 看板 + eo-sync 同步核 + eo-sync-obsidian/eo-sync-github 适配器)
+  链接进 EO_BIN_DIR (默认 ~/.local/bin，可覆盖)。这些 CLI 为 POSIX-only。
 EOF
 }
 
@@ -161,28 +162,38 @@ link_skills() {
   fi
 }
 
-install_cli() {
-  cli_src="$repo_root/cli/eo-board"
-  bin_dir=${EO_BIN_DIR:-"$HOME/.local/bin"}
+link_one_cli() {
+  cli_name=$1
+  bin_dir=$2
+  cli_src="$repo_root/cli/$cli_name"
 
   if [ ! -f "$cli_src" ]; then
-    echo "[CLI] 未找到 cli/eo-board，跳过命令安装（仓库版本过旧？）" >&2
+    echo "[CLI] 未找到 cli/$cli_name，跳过（仓库版本过旧？）" >&2
     return 0
   fi
 
-  mkdir -p "$bin_dir"
-  target_path="$bin_dir/eo-board"
+  target_path="$bin_dir/$cli_name"
 
   if [ -e "$target_path" ] || [ -L "$target_path" ]; then
     if [ "$(readlink "$target_path" 2>/dev/null || true)" = "$cli_src" ]; then
-      echo "[CLI] eo-board 已链接: $target_path"
+      echo "[CLI] $cli_name 已链接: $target_path"
     else
-      echo "[CLI] 跳过 eo-board，目标已存在且指向别处: $target_path"
+      echo "[CLI] 跳过 $cli_name，目标已存在且指向别处: $target_path"
     fi
   else
     ln -s "$cli_src" "$target_path"
-    echo "[CLI] 已链接 eo-board -> $target_path"
+    echo "[CLI] 已链接 $cli_name -> $target_path"
   fi
+}
+
+install_cli() {
+  bin_dir=${EO_BIN_DIR:-"$HOME/.local/bin"}
+  mkdir -p "$bin_dir"
+
+  # eo-board 只读看板；eo-sync 投影同步核 + 两个内置适配器（POSIX-only）
+  for cli_name in eo-board eo-sync eo-sync-obsidian eo-sync-github; do
+    link_one_cli "$cli_name" "$bin_dir"
+  done
 
   case ":$PATH:" in
     *":$bin_dir:"*) ;;

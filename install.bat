@@ -44,6 +44,7 @@ if "%INSTALL_CODEX%"=="1" call :link_skills "%USERPROFILE%\.agents\skills" "Code
 if "%INSTALL_ANTIGRAVITY%"=="1" call :link_skills "%USERPROFILE%\.gemini\antigravity\skills" "Antigravity" || exit /b 1
 
 echo 安装完成。
+echo 提示: eo-* CLI (eo-board / eo-sync 及其适配器) 暂不支持 Windows 原生安装 (eo-sync 的并发锁依赖 POSIX fcntl)，可在 WSL 下用 install.sh 接线。
 echo 提示: eo-flow 依赖 tmux + smux 提供的 tmux-bridge；如果只用单 agent 流，可以先不装。
 exit /b 0
 
