@@ -426,7 +426,7 @@ class BookkeepingIsolationTests(unittest.TestCase):
 
 
 class SelectiveRunTests(unittest.TestCase):
-    """P0-1：--change 过滤不得把范围外投影当孤儿删除。"""
+    """选择性 run（--change）不得把范围外投影当孤儿删除。"""
 
     def _setup(self):
         d = tempfile.TemporaryDirectory()
@@ -468,9 +468,21 @@ class SelectiveRunTests(unittest.TestCase):
         self.assertFalse((board / "c2.md").is_file(), "全量 run 未清理孤儿 stub")
         self.assertTrue((board / "c1.md").is_file())
 
+    def test_scan_degradation_suppresses_delete(self):
+        # c2 的 change.md 损坏（无 frontmatter）→ 扫描告警 → 快照不可证完整 → 本轮禁删，c2 stub 保留
+        root, repo = self._setup()
+        run_sync(repo, root / "home", "run")
+        board = root / "pm" / "board"
+        (repo / "eo-doc" / "changes" / "02-c2" / "change.md").write_text("无 frontmatter", encoding="utf-8")
+        git(repo, "add", "-A")
+        git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "corrupt c2")
+        r = run_sync(repo, root / "home", "run")
+        self.assertTrue((board / "c2.md").is_file(), "扫描降级下 c2 stub 被误删")
+        self.assertIn("跳过孤儿投影清理", r.stderr)
+
 
 class IdentityReadPathTests(unittest.TestCase):
-    """P1-1：写回的身份字段下次扫描应交还适配器（旁车丢失后仍能定位原对象）。"""
+    """写回的身份字段下次扫描应交还适配器（旁车丢失后仍能定位原对象）。"""
 
     def test_read_identity_after_sidecar_loss(self):
         import shutil
@@ -492,7 +504,7 @@ class IdentityReadPathTests(unittest.TestCase):
 
 
 class ResolveChangeUnifiedTests(unittest.TestCase):
-    """P1-2：计划来源与回写落点共用同一 resolve_change 结果。"""
+    """计划来源与回写落点共用同一 resolve_change 结果。"""
 
     def _rec(self, path, status, wt):
         return {"id": "c1", "status": status, "path": str(path), "worktree": str(wt)}
@@ -524,7 +536,7 @@ class ResolveChangeUnifiedTests(unittest.TestCase):
 
 
 class ResponseSchemaTests(unittest.TestCase):
-    """P1-3：结构合法 JSON 但 schema 非法的响应仅隔离该适配器，不中断全局。"""
+    """结构合法 JSON 但 schema 非法/缺必填字段的响应仅隔离该适配器，不中断全局。"""
 
     def _run(self, bad_shape):
         d = tempfile.TemporaryDirectory()
@@ -548,9 +560,20 @@ class ResponseSchemaTests(unittest.TestCase):
         self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
         self.assertIn("结构非法", r.stderr)
 
+    def test_missing_plan_field_isolated(self):
+        r, root = self._run("plan_missing")  # 响应缺必填 actions
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("缺少必填", r.stderr)
+        self.assertTrue((root / "pm" / "board" / "c1.md").is_file())
+
+    def test_missing_apply_field_isolated(self):
+        r, root = self._run("apply_missing")  # 响应缺必填 bookkeeping
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("缺少必填", r.stderr)
+
 
 class SyncSegmentSemanticsTests(unittest.TestCase):
-    """P1-4：显式空 sync 段关闭存量兼容映射；非法类型为配置错误。"""
+    """显式 sync 段（含空 {} / null）关闭存量兼容映射；非法类型为配置错误。"""
 
     def test_empty_sync_disables_compat(self):
         self.assertEqual(eo_sync.resolve_enabled({"sync": {}, "board": {"enabled": True}}), {})
@@ -580,9 +603,23 @@ class SyncSegmentSemanticsTests(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertIn("未启用任何同步目标", r.stdout)
 
+    def test_null_sync_disables_compat(self):
+        # 显式 sync: null 是「段存在」，视为零目标，绝不回落 board/github
+        self.assertEqual(eo_sync.resolve_enabled({"sync": None, "board": {"enabled": True}}), {})
+
+    def test_null_sync_config_run_exit_zero(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            repo = init_repo(root, {"project_name": "p", "mode": "local", "project_root": str(root / "pm"),
+                                    "doc_root": "eo-doc", "sync": None, "board": {"enabled": True}},
+                             changes=[{"cid": "c1", "seq": 1}])
+            r = run_sync(repo, root / "home", "run")  # sync:null 经真实 config 加载
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("未启用任何同步目标", r.stdout)
+
 
 class GithubFixTests(unittest.TestCase):
-    """P1-5/P1-6：gh 结果如实进簿记与输出；archived issue 关闭幂等。"""
+    """gh 结果如实进簿记与输出；archived issue 关闭幂等。"""
 
     def test_gh_unavailable_surfaced_and_bookkeeping_clean(self):
         with tempfile.TemporaryDirectory() as d:
@@ -609,7 +646,7 @@ class GithubFixTests(unittest.TestCase):
 
 
 class RetirementDisciplineTests(unittest.TestCase):
-    """P1-7/P1-8：语义退役无残留 + 新代码注释无流程溯源。"""
+    """语义退役无残留 + 新代码/测试注释无流程溯源。"""
 
     def test_no_immediate_projection_in_skills(self):
         eo_change = (REPO_ROOT / "eo-change" / "SKILL.md").read_text(encoding="utf-8")
@@ -618,17 +655,46 @@ class RetirementDisciplineTests(unittest.TestCase):
         self.assertNotIn("GitHub 联动 → stub 终态", eo_impl)
         self.assertNotIn("GitHub 联动 → stub", eo_impl)
 
-    def test_no_process_traceability_in_code_comments(self):
+    def test_no_process_traceability(self):
         import re as _re
-        pat = _re.compile(r"§5\.|Batch\s*[0-9]|AC-[0-9]|TODO-[0-9]|P[01]-[0-9]")
+        # finding 号与 change 节号是纯流程溯源，任何文件（含 test docstring）都不该出现；
+        # pattern 由片段拼接构造，避免匹配本函数自身。
+        finding = _re.compile("P" + r"[01]-\d")
+        section = _re.compile(chr(0xa7) + r"5\.\d")
+        # 章节/批次/AC 号在真实 change 内容里合法，只查非测试文件（代码/夹具）的注释
+        soft = _re.compile(r"AC-\d|" + r"Batch\s*\d|" + r"TODO-\d")
+        code_files = ["cli/eo-sync", "cli/eo-sync-obsidian", "cli/eo-sync-github",
+                      "tests/fixtures/eo-sync-fixture", "cli/eo_lib/changes.py",
+                      "cli/eo_lib/config.py", "cli/eo_lib/frontmatter.py"]
+        test_files = ["tests/test_eo_sync.py", "tests/test_eo_sync_smoke.py"]
         offenders = []
-        for f in ["cli/eo-sync", "cli/eo-sync-obsidian", "cli/eo-sync-github",
-                  "tests/fixtures/eo-sync-fixture", "cli/eo_lib/changes.py",
-                  "cli/eo_lib/config.py", "cli/eo_lib/frontmatter.py"]:
+        for f in code_files + test_files:
             for i, line in enumerate((REPO_ROOT / f).read_text(encoding="utf-8").splitlines(), 1):
-                if "#" in line and pat.search(line.split("#", 1)[1]):
+                if finding.search(line) or section.search(line):
                     offenders.append(f"{f}:{i}")
-        self.assertEqual(offenders, [], f"注释含流程溯源标记：{offenders}")
+                elif f in code_files and "#" in line and soft.search(line.split("#", 1)[1]):
+                    offenders.append(f"{f}:{i}")
+        self.assertEqual(offenders, [], f"含流程溯源标记：{offenders}")
+
+
+class IdentitiesScalarTests(unittest.TestCase):
+    """快照 identities 只暴露标量身份，列表/对象 frontmatter 被排除（协议 v1 标量契约）。"""
+
+    def test_identities_excludes_non_scalar(self):
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        p = Path(d.name) / "change.md"
+        p.write_text(
+            "---\nid: c1\nissue: 7\npr: https://x/pull/2\npage_id: pg-9\n"
+            "commits: [a, b]\nfix_consumed: [rev1]\n---\n\n# T\n",
+            encoding="utf-8")
+        ids = eo_sync._read_identities({"path": str(p)})
+        self.assertEqual(ids.get("issue"), 7)
+        self.assertEqual(ids.get("page_id"), "pg-9")
+        self.assertNotIn("commits", ids)
+        self.assertNotIn("fix_consumed", ids)
+        for v in ids.values():
+            self.assertNotIsInstance(v, (list, dict))
 
 
 if __name__ == "__main__":

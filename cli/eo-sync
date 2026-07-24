@@ -126,10 +126,12 @@ def invoke_adapter(exe_path, verb, request, timeout):
 # --------------------------------------------------------------------------- 配置解析与启用
 
 def resolve_enabled(cfg):
-    """返回 {adapter_name: params}。sync 段**存在**（含显式空 `{}`）则完全以其为准、不回落；
-    仅当 sync 段缺席（None）才由存量 board/github 段等价映射。"""
-    sync = cfg.get("sync")
-    if sync is not None:
+    """返回 {adapter_name: params}。sync 段**存在**（键在合并配置里，含显式 `null` / 空 `{}`）则
+    完全以其为准、绝不回落；仅当 sync 段**缺席**（键不存在）才由存量 board/github 段等价映射。"""
+    if "sync" in cfg:
+        sync = cfg["sync"]
+        if not isinstance(sync, dict):  # 显式 null 等 → 用户显式选择零目标
+            return {}
         enabled = {}
         for name, conf in sync.items():
             if isinstance(conf, dict) and conf.get("enabled"):
@@ -263,13 +265,14 @@ def compute_project_root(cfg, main_wt_path):
 
 
 def _read_identities(rec):
-    """就地重解析 change.md frontmatter 取全部标量身份字段（含第三方 page_id 等），供适配器读回。
+    """就地重解析 change.md frontmatter，取**标量**字段供适配器读回身份（含第三方 page_id 等）。
+    列表/对象（commits/fix_consumed 等）不是身份字段，一律排除——协议 v1 快照身份值只允许标量。
     只在 eo-sync 快照层做，不污染 eo_lib 共享 rec 与 eo-board 输出。"""
     try:
         fm, _ = split_frontmatter(Path(rec["path"]).read_text(encoding="utf-8"))
     except OSError:
         fm = None
-    return dict(fm or {})
+    return {k: v for k, v in (fm or {}).items() if not isinstance(v, (list, dict))}
 
 
 def build_snapshot(rec, default_branch):
@@ -309,11 +312,13 @@ def build_snapshot(rec, default_branch):
 
 
 def scan_snapshots(cfg, worktrees, change_filter, origin_wt, warnings):
-    """扫描并消歧，返回 (resolved {id: 权威 rec}, snapshots [snap...])。
+    """扫描并消歧，返回 (resolved {id: 权威 rec}, snapshots [snap...], scan_clean)。
 
     权威 rec 由 resolve_change 一次选定，计划快照与身份回写落点共用同一份；同状态内容分叉的
     change 计划与回写一并跳过（fail-closed 告警）。snapshots 按 change_filter 过滤、按 id 排序。
+    scan_clean = 本次扫描/消歧期间零告警（无解析失败、无撞号、无分叉）——用于判定快照是否可证完整。
     """
+    mark = len(warnings)
     grouped = scan_changes_grouped(cfg, worktrees, warnings)
     default_branch = worktrees[0].get("branch") if worktrees else None
     resolved, snapshots = {}, []
@@ -326,7 +331,16 @@ def scan_snapshots(cfg, worktrees, change_filter, origin_wt, warnings):
             continue
         resolved[cid] = rec
         snapshots.append(build_snapshot(rec, default_branch))
-    return resolved, snapshots
+    scan_clean = len(warnings) == mark
+    return resolved, snapshots, scan_clean
+
+
+def _worktrees_enumerated_ok(anchor):
+    """worktree 枚举是否可信：非 git 仓库单目录即完整；git 仓库须能列出 worktree（列不出=降级，可能漏扫）。"""
+    inside = run_git(["rev-parse", "--is-inside-work-tree"], cwd=anchor).strip()
+    if inside != "true":
+        return True
+    return bool(run_git(["worktree", "list", "--porcelain"], cwd=anchor).strip())
 
 
 # --------------------------------------------------------------------------- 适配器排序与 capabilities
@@ -444,17 +458,22 @@ VALID_OPS = {"create", "update", "delete", "skip"}
 
 
 def _validate_plan_response(resp):
-    actions = resp.get("actions", [])
+    if "actions" not in resp:
+        return "plan 响应缺少必填字段 actions"
+    actions = resp["actions"]
     if not isinstance(actions, list):
         return "plan.actions 不是列表"
     for a in actions:
         if not isinstance(a, dict):
             return "plan.actions 含非对象元素"
-        if a.get("op") not in VALID_OPS:
+        for key in ("op", "change_id", "projection"):
+            if key not in a:
+                return f"plan.action 缺少必填字段 {key}"
+        if a["op"] not in VALID_OPS:
             return f"plan.action.op 非法：{a.get('op')!r}"
-        if not isinstance(a.get("change_id"), str):
+        if not isinstance(a["change_id"], str):
             return "plan.action.change_id 不是字符串"
-        if not isinstance(a.get("projection"), str):
+        if not isinstance(a["projection"], str):
             return "plan.action.projection 不是字符串"
     drift = resp.get("drift")
     if drift is not None and not isinstance(drift, list):
@@ -463,13 +482,21 @@ def _validate_plan_response(resp):
 
 
 def _validate_apply_response(resp):
-    results = resp.get("results")
-    if results is not None and not isinstance(results, list):
+    if "results" not in resp:
+        return "apply 响应缺少必填字段 results"
+    results = resp["results"]
+    if not isinstance(results, list):
         return "apply.results 不是列表"
-    if isinstance(results, list):
-        for r in results:
-            if not isinstance(r, dict):
-                return "apply.results 含非对象元素"
+    for r in results:
+        if not isinstance(r, dict):
+            return "apply.results 含非对象元素"
+        for key in ("change_id", "op"):
+            if key not in r:
+                return f"apply.result 缺少必填字段 {key}"
+    if "bookkeeping" not in resp:
+        return "apply 响应缺少必填字段 bookkeeping"
+    if not isinstance(resp["bookkeeping"], dict):
+        return "apply.bookkeeping 不是对象"
     wb = resp.get("writeback")
     if wb is not None and not isinstance(wb, dict):
         return "apply.writeback 不是对象"
@@ -480,9 +507,6 @@ def _validate_apply_response(resp):
             for k, v in fields.items():
                 if isinstance(v, (dict, list)):
                     return f"apply.writeback[{cid}][{k}] 不是标量"
-    bk = resp.get("bookkeeping")
-    if bk is not None and not isinstance(bk, dict):
-        return "apply.bookkeeping 不是对象"
     drift = resp.get("drift")
     if drift is not None and not isinstance(drift, list):
         return "apply.drift 不是列表"
@@ -615,12 +639,23 @@ def cmd_run(cfg, args):
             print(f"⏸ 另一个 eo-sync run 正持锁{hint}，本次干净退出。稍后重跑。", file=sys.stderr)
             return EXIT_LOCKED
 
-    # --change 过滤后快照不完整：适配器不得据「簿记有、快照无」推导 delete，否则会删掉范围外投影
-    snapshot_complete = args.change is None
+    # 孤儿删除只在「快照可证完整」时执行：显式过滤 / 扫描告警（解析失败·撞号·分叉）/ worktree 枚举降级
+    # 任一成立 → snapshot_complete=False，本轮跳过删除并告警，绝不据缺席误删范围外投影（fail-safe）
+    worktrees_ok = _worktrees_enumerated_ok(anchor)
 
     try:
         book = load_bookkeeping(bk_path)
-        resolved, snapshots = scan_snapshots(cfg, worktrees, args.change, origin_wt, warnings)
+        resolved, snapshots, scan_clean = scan_snapshots(cfg, worktrees, args.change, origin_wt, warnings)
+        snapshot_complete = (args.change is None) and scan_clean and worktrees_ok
+        if not snapshot_complete:
+            why = []
+            if args.change is not None:
+                why.append("选择性过滤")
+            if not scan_clean:
+                why.append("扫描告警")
+            if not worktrees_ok:
+                why.append("worktree 枚举降级")
+            warnings.append(f"快照不可证完整（{' / '.join(why)}），本轮跳过孤儿投影清理以防误删范围外投影")
 
         all_display = []  # (change_id, adapter, item)
         all_drift = []
@@ -648,7 +683,9 @@ def cmd_run(cfg, args):
 
         # 回写后刷新快照，令纯投影适配器读到新平台身份
         if wrote_back and not dry_run:
-            resolved, snapshots = scan_snapshots(cfg, worktrees, args.change, origin_wt, warnings)
+            resolved, snapshots, refresh_clean = scan_snapshots(cfg, worktrees, args.change, origin_wt, warnings)
+            if not refresh_clean:
+                snapshot_complete = False  # sticky：刷新扫描降级也禁删
 
         # 阶段二
         for name in pure_after:

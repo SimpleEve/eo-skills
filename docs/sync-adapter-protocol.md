@@ -70,7 +70,7 @@ eo-sync-<name> apply          < request.json   > response.json
 }
 ```
 
-- **`snapshot_complete`**（布尔）：本次 `changes` 是否为全部 change 的完整集。`eo-sync run --change <id>` 等选择性同步会给出**部分快照**，此时为 `false`——适配器**禁止**从「簿记有、快照无」推导 `delete`（否则会误删范围外投影，是数据破坏）。仅当 `true`（全量 run）时，缺席才等于放弃、可计划孤儿删除。字段缺省时按 `true` 处理（向后兼容）。
+- **`snapshot_complete`**（布尔，fail-safe）：本次 `changes` 是否为**可证完整**的全集。核只在同时满足「无选择性过滤（`--change`）+ 扫描/消歧零告警（无解析失败·撞号·内容分叉）+ worktree 枚举未降级」时才置 `true`；**任一不满足即 `false`**。适配器**禁止**在 `false` 时从「簿记有、快照无」推导 `delete`——那可能是被过滤/降级/告警漏掉的 change，据缺席删除即数据破坏。仅 `true`（全量、无降级）时缺席才等于放弃、可计划孤儿删除。**字段缺省时按 `false`（不完整）处理**——未显式声明完整性的核不得触发删除，这是 fail-safe 的默认。
 
 响应：
 
@@ -130,7 +130,7 @@ eo-sync-<name> apply          < request.json   > response.json
 | `title` / `summary` / `status` / `tier` / `type` / `created` | change frontmatter 同名字段 |
 | `base_commit` | 首次实施登记的 HEAD |
 | `issue` / `pr` | 已回写的平台身份字段（可为 null；**同轮内**身份字段适配器回写后，核刷新快照，纯投影适配器随即读到新值） |
-| `identities` | change frontmatter **全部标量字段**的映射（含第三方身份字段如 `page_id`）。适配器据此把自己声明的身份字段**读回**——旁车簿记丢失/重建后仍能从 SoT 定位已创建对象，而非当作新对象重建。通用平台身份的读路径，不偏袒内置字段 |
+| `identities` | change frontmatter 里**仅标量**字段的映射（列表/对象如 `commits`/`fix_consumed` 一律排除——身份值按协议 v1 只允许标量）。含第三方身份字段如 `page_id`。适配器据此把自己声明的身份字段**读回**——旁车簿记丢失/重建后仍能从 SoT 定位已创建对象，而非当作新对象重建。通用平台身份的读路径，不偏袒内置字段 |
 | `intent` | §1 意图正文（供 issue body 等） |
 | `ac` | §2 验收项列表 `[{code,done,text,manual,note}]` |
 | `todo` | §3 TODO 分批 `[{batch, items:[{code,done,text}]}]` |

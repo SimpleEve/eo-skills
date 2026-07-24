@@ -68,11 +68,15 @@ def do_capabilities():
 
 
 def do_plan(req):
-    if os.environ.get("EO_FIXTURE_BAD_SHAPE") == "plan":
+    bad = os.environ.get("EO_FIXTURE_BAD_SHAPE")
+    if bad == "plan":
         _emit({"actions": "not-a-list", "drift": []})  # JSON 合法、结构非法
         return
+    if bad == "plan_missing":
+        _emit({"drift": []})  # 缺必填 actions
+        return
     changes = req.get("changes") or []
-    snapshot_complete = req.get("snapshot_complete", True)
+    snapshot_complete = req.get("snapshot_complete", False)  # fail-safe：未声明完整不删
     wb_field = os.environ.get("EO_FIXTURE_WB_FIELD", "fixture_ref")
     force_wb = os.environ.get("EO_FIXTURE_FORCE_WB") == "1"
     book = req.get("bookkeeping") or {}
@@ -103,8 +107,12 @@ def do_plan(req):
 
 
 def do_apply(req):
-    if os.environ.get("EO_FIXTURE_BAD_SHAPE") == "apply":
+    bad = os.environ.get("EO_FIXTURE_BAD_SHAPE")
+    if bad == "apply":
         _emit({"results": [], "writeback": [], "bookkeeping": {}})  # writeback 应为对象却给列表
+        return
+    if bad == "apply_missing":
+        _emit({"results": [], "writeback": {}})  # 缺必填 bookkeeping
         return
     actions = req.get("actions") or []
     book = dict(req.get("bookkeeping") or {})

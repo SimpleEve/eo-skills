@@ -65,15 +65,18 @@ def load_project_config(path):
         # 顶层字段整体覆盖（local 优先）；必填校验看合并结果，单个文件不要求自包含
         raw = {**raw, **_load_json_object(local_path, ".eo-project.local.json")}
     _validate_merged(raw, path)
-    return {
+    merged = {
         "project_name": raw["project_name"],
         "mode": raw["mode"],
         "project_root": raw["project_root"],
         "doc_root": raw["doc_root"],
         "board": raw.get("board") if isinstance(raw.get("board"), dict) else {},
         "github": raw.get("github") if isinstance(raw.get("github"), dict) else {},
-        # sync 段存在性保留：缺席 → None（走 board/github 兼容映射）；显式 {} → 空段（零目标，不回落）
-        "sync": raw.get("sync") if isinstance(raw.get("sync"), dict) else None,
         "config_path": path,
         "repo_root": path.parent,
     }
+    # sync 段的键存在性用 `"sync" in merged` 判定：缺席（键不在）→ 走 board/github 兼容映射；
+    # 键存在（含显式 null / 空 {} / dict）→ 完全以其为准。仅原样透传值（类型已在 _validate 校验，null 合法）。
+    if "sync" in raw:
+        merged["sync"] = raw["sync"]
+    return merged

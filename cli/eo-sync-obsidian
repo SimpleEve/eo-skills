@@ -122,8 +122,9 @@ def do_plan(req):
     changes = req.get("changes") or []
     book = req.get("bookkeeping") or {}
     project_name = context.get("project_name") or ""
-    # 快照完整（全量 run）时缺席才等于放弃；--change 过滤等部分快照下不得据缺席删除
-    snapshot_complete = req.get("snapshot_complete", True)
+    # 仅当核显式声明快照完整（全量、无降级）时，缺席才等于放弃；缺省 False 为 fail-safe：
+    # 未声明完整性（部分快照 / 降级 / 非 conformant 核）一律不据缺席删除
+    snapshot_complete = req.get("snapshot_complete", False)
 
     actions = []
     seen = set()
