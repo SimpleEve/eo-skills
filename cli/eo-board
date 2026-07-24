@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from eo_lib import (
     CHANGE_STATUS_ORDER,
     ConfigError,
+    compute_freshness_key,
     count_ac,
     count_todo,
     find_project_config,
@@ -1446,6 +1447,27 @@ def cmd_html(cfg, args):
             print("（无法自动打开浏览器，请手动打开上方路径）")
 
 
+# --serve 专用：每项目一个进程内缓存槽（新鲜度键 → build_data 结果），不落盘
+_BOARD_CACHE = {}
+_BOARD_CACHE_LOCK = threading.Lock()
+
+
+def get_board_data_cached(cfg):
+    key = compute_freshness_key(cfg)
+    slot = str(cfg["config_path"])
+    with _BOARD_CACHE_LOCK:
+        cached = _BOARD_CACHE.get(slot)
+        if cached is not None and cached[0] == key:
+            print(f"[eo-board] cache hit（{cfg['project_name']}）", file=sys.stderr)
+            return cached[1]
+    data = build_data(cfg)
+    data["serve"] = True
+    with _BOARD_CACHE_LOCK:
+        _BOARD_CACHE[slot] = (key, data)
+    print(f"[eo-board] cache miss，已重扫（{cfg['project_name']}）", file=sys.stderr)
+    return data
+
+
 class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
     cfg = None
 
@@ -1463,12 +1485,10 @@ class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?", 1)[0]
         if path == "/":
-            data = build_data(self.cfg)
-            data["serve"] = True
+            data = get_board_data_cached(self.cfg)
             self._send(200, "text/html; charset=utf-8", render_html(data).encode("utf-8"))
         elif path == "/data.json":
-            data = build_data(self.cfg)
-            data["serve"] = True
+            data = get_board_data_cached(self.cfg)
             self._send(200, "application/json; charset=utf-8", json.dumps(data, ensure_ascii=False).encode("utf-8"))
         elif path == "/favicon.ico":
             # 页面已经内嵌 data-URI favicon；这里单纯不让浏览器的随手请求落进 404 分支

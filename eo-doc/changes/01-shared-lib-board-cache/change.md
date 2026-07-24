@@ -60,8 +60,8 @@ eo-board 是当前唯一呈现层，其内部已经手写了一整套「文件�
 - [x] TODO-3 `config.py` 实现 `.eo-project.local.json` 顶层字段覆盖合并（local 优先，合并后再做缺省填充；local 存在但 JSON 非法 → 与主配置同口径报错退出），eo-board 经共享包自动获得（文件：修改: cli/eo_lib/config.py；对应 AC-3、AC-4）
 
 ### Batch 2b（--serve 缓存）
-- [ ] TODO-4 共享包新增新鲜度键计算，闭合 `build_data` 全部动态输入：各 worktree (路径, 分支名, HEAD sha) 三元组、refs 指纹（`git for-each-ref` 输出摘要，覆盖 `git log --all` 的「本月直改」统计输入）、当天日期（覆盖停滞天数 / 当月边界等日期派生字段）、`<doc_root>/changes/` 目录树 max-mtime、backlog / roadmap 数据源 mtime，产出可比较的键（文件：新增: cli/eo_lib/freshness.py；对应 AC-5、AC-6；完成判据：同状态两次计算键相等；三类确定性用例各证键变化——① 跨日/跨月（mock 日期）② 同 SHA 切换分支 ③ 仅 ref 更新（如新建 tag/分支、worktree 集合不变）；另 changes/backlog/roadmap 任一源改动后键变化）
-- [ ] TODO-5 `--serve` 请求处理接入每项目进程内缓存：`/data.json` 与 `/` 请求先算新鲜度键，命中返回缓存的 build_data 结果，miss 才重扫并更新缓存；hit/miss 各在 stderr 记一行诊断（文件：修改: cli/eo-board；对应 AC-5、AC-6；完成判据：不起 HTTP 服务——对缓存层/handler 以 `build_data` 计数替身做确定性检查：同键第二次取数不进入 `build_data`，键变化后重新进入；起服务的端到端断言归测试阶段）
+- [x] TODO-4 共享包新增新鲜度键计算，闭合 `build_data` 全部动态输入：各 worktree (路径, 分支名, HEAD sha) 三元组、refs 指纹（`git for-each-ref` 输出摘要，覆盖 `git log --all` 的「本月直改」统计输入）、当天日期（覆盖停滞天数 / 当月边界等日期派生字段）、`<doc_root>/changes/` 目录树 max-mtime、backlog / roadmap 数据源 mtime，产出可比较的键（文件：新增: cli/eo_lib/freshness.py；对应 AC-5、AC-6；完成判据：同状态两次计算键相等；三类确定性用例各证键变化——① 跨日/跨月（mock 日期）② 同 SHA 切换分支 ③ 仅 ref 更新（如新建 tag/分支、worktree 集合不变）；另 changes/backlog/roadmap 任一源改动后键变化）
+- [x] TODO-5 `--serve` 请求处理接入每项目进程内缓存：`/data.json` 与 `/` 请求先算新鲜度键，命中返回缓存的 build_data 结果，miss 才重扫并更新缓存；hit/miss 各在 stderr 记一行诊断（文件：修改: cli/eo-board；对应 AC-5、AC-6；完成判据：不起 HTTP 服务——对缓存层/handler 以 `build_data` 计数替身做确定性检查：同键第二次取数不进入 `build_data`，键变化后重新进入；起服务的端到端断言归测试阶段）
 
 ## 4. 涉及文件
 

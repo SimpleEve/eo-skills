@@ -4,6 +4,7 @@
 """
 
 from .config import ConfigError, find_project_config, load_project_config
+from .freshness import compute_freshness_key
 from .gitio import run_git, list_worktrees
 from .frontmatter import split_frontmatter, parse_yaml_subset, parse_yaml_scalar, unquote
 from .changes import (
@@ -24,6 +25,7 @@ __all__ = [
     "ConfigError",
     "find_project_config",
     "load_project_config",
+    "compute_freshness_key",
     "run_git",
     "list_worktrees",
     "split_frontmatter",
