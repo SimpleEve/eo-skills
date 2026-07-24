@@ -1,0 +1,196 @@
+#!/usr/bin/env python3
+"""eo-sync-obsidian —— 内置 Obsidian 看板 stub 适配器。
+
+投影 change frontmatter 为 `<project_root>/<stub_dir>/<change-id>.md` 看板卡（board-github.md §一）：
+整文件覆盖写、字段集与省略规则等价、archived 只改 status 不动 tags/文件位置、放弃草稿删 stub 不留孤儿、
+正文纯文本相对路径。生命周期起点 draft；自身不产生平台身份，identity_fields 为空。
+
+只用标准库、不 import eo_lib（内置适配器与第三方同协议、无特权通道）。
+"""
+
+import datetime
+import hashlib
+import json
+import os
+import sys
+from pathlib import Path
+
+PROTOCOL_VERSION = 1
+
+
+def _emit(resp):
+    resp["protocol_version"] = PROTOCOL_VERSION
+    sys.stdout.write(json.dumps(resp, ensure_ascii=False))
+    sys.stdout.flush()
+
+
+def _today():
+    override = os.environ.get("EO_SYNC_TODAY")
+    if override:
+        return override
+    return datetime.date.today().isoformat()
+
+
+def stub_path(context, params, cid):
+    project_root = context.get("project_root") or ""
+    stub_dir = params.get("stub_dir") or "board"
+    return Path(project_root) / stub_dir / f"{cid}.md"
+
+
+def build_stub(change, project_name, updated_value):
+    """整文件内容。字段顺序与省略规则对齐 board-github.md §一 与存量卡。"""
+    fm = [f"id: {change['id']}"]
+    if change.get("seq") is not None:
+        fm.append(f"seq: {change['seq']}")
+    fm.append(f"title: {change.get('title') or change['id']}")
+    fm.append(f"project: {project_name}")
+    fm.append(f"status: {change.get('status')}")
+    fm.append(f"type: {change.get('type') or 'feature'}")
+    fm.append(f"tier: {change.get('tier') or 'full'}")
+    fm.append(f"summary: {change.get('summary') or ''}")
+    if change.get("branch"):
+        fm.append(f"branch: {change['branch']}")
+    fm.append(f"todo_done: {change.get('todo_done', 0)}")
+    fm.append(f"todo_total: {change.get('todo_total', 0)}")
+    fm.append(f"ac_done: {change.get('ac_done', 0)}")
+    fm.append(f"ac_total: {change.get('ac_total', 0)}")
+    if change.get("issue") is not None:
+        fm.append(f"issue: {change['issue']}")
+    if change.get("pr"):
+        fm.append(f"pr: {change['pr']}")
+    fm.append(f"created: {change.get('created')}")
+    fm.append(f"updated: {updated_value}")
+    fm.append("tags: [eo-change]")
+    body = "`" + (change.get("rel_path") or "") + "`"
+    return "---\n" + "\n".join(fm) + "\n---\n\n" + body + "\n"
+
+
+def _semantic(text):
+    """去掉易变的 updated 行后的语义内容（用于 skip 判定与内容 hash）。"""
+    return "\n".join(l for l in text.split("\n") if not l.startswith("updated:"))
+
+
+def _existing_updated(text):
+    for l in text.split("\n"):
+        if l.startswith("updated:"):
+            return l[len("updated:"):].strip()
+    return None
+
+
+def do_capabilities():
+    _emit({
+        "name": "obsidian",
+        "entities": ["change"],
+        "projections": [{"id": "stub", "lifecycle_start": "draft", "ops": ["create", "update", "delete", "skip"]}],
+        "identity_fields": [],
+    })
+
+
+def _plan_change(change, context, params, project_name, book):
+    cid = change["id"]
+    path = stub_path(context, params, cid)
+    desired_probe = build_stub(change, project_name, "PROBE")
+    desired_semantic = _semantic(desired_probe)
+    content_hash = hashlib.sha256(desired_semantic.encode("utf-8")).hexdigest()
+
+    existing = None
+    if path.is_file():
+        try:
+            existing = path.read_text(encoding="utf-8")
+        except OSError:
+            existing = None
+
+    if existing is not None and _semantic(existing) == desired_semantic:
+        updated_value = _existing_updated(existing) or _today()
+        return {
+            "op": "skip", "projection": "stub", "change_id": cid, "reason": "内容未变",
+            "payload": {"content_hash": content_hash},
+        }
+    updated_value = _today()
+    content = build_stub(change, project_name, updated_value)
+    op = "update" if existing is not None else "create"
+    reason = "内容变化" if existing is not None else "首次投影"
+    return {
+        "op": op, "projection": "stub", "change_id": cid, "reason": reason,
+        "payload": {"path": str(path), "content": content, "content_hash": content_hash},
+    }
+
+
+def do_plan(req):
+    context = req.get("context") or {}
+    params = req.get("params") or {}
+    changes = req.get("changes") or []
+    book = req.get("bookkeeping") or {}
+    project_name = context.get("project_name") or ""
+
+    actions = []
+    seen = set()
+    for change in changes:
+        seen.add(change["id"])
+        actions.append(_plan_change(change, context, params, project_name, book))
+
+    # 孤儿清理：簿记记过、当前快照已无 → 放弃草稿，删 stub
+    for cid in book:
+        if cid in seen:
+            continue
+        path = stub_path(context, params, cid)
+        actions.append({
+            "op": "delete", "projection": "stub", "change_id": cid, "reason": "change 已放弃",
+            "payload": {"path": str(path)},
+        })
+    _emit({"actions": actions, "drift": []})
+
+
+def do_apply(req):
+    actions = req.get("actions") or []
+    book = dict(req.get("bookkeeping") or {})
+    results = []
+    for a in actions:
+        cid = a.get("change_id")
+        op = a.get("op")
+        payload = a.get("payload") or {}
+        try:
+            if op == "skip":
+                if payload.get("content_hash"):
+                    book.setdefault(cid, {})
+                    book[cid] = {"content_hash": payload["content_hash"], "synced_status": "stub", "synced_at": _today()}
+                results.append({"change_id": cid, "op": op, "ok": True})
+            elif op in ("create", "update"):
+                path = Path(payload["path"])
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(payload["content"], encoding="utf-8")
+                book[cid] = {"content_hash": payload.get("content_hash"), "synced_status": "stub", "synced_at": _today()}
+                results.append({"change_id": cid, "op": op, "ok": True})
+            elif op == "delete":
+                path = Path(payload["path"])
+                if path.is_file():
+                    path.unlink()
+                book.pop(cid, None)
+                results.append({"change_id": cid, "op": op, "ok": True})
+            else:
+                results.append({"change_id": cid, "op": op, "ok": False, "error": f"未知 op {op}"})
+        except OSError as e:
+            results.append({"change_id": cid, "op": op, "ok": False, "error": str(e)})
+    _emit({"results": results, "writeback": {}, "bookkeeping": book, "drift": []})
+
+
+def main():
+    verb = sys.argv[1] if len(sys.argv) > 1 else ""
+    try:
+        raw = sys.stdin.read()
+        req = json.loads(raw) if raw.strip() else {}
+    except ValueError:
+        req = {}
+    if verb == "capabilities":
+        do_capabilities()
+    elif verb == "plan":
+        do_plan(req)
+    elif verb == "apply":
+        do_apply(req)
+    else:
+        sys.stderr.write(f"未知子命令：{verb}\n")
+        sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()

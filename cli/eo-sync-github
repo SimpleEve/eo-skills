@@ -1,0 +1,279 @@
+#!/usr/bin/env python3
+"""eo-sync-github —— 内置 GitHub issue/PR 适配器（board-github.md §二/§三）。
+
+issue：自 confirmed 建（回写号去重、绝不靠标题）、body 按档生成与幂等刷新、archive 兜底关闭。
+PR：按 auto/always/never 策略仅对 archived 创建。漂移检测：issue 已在 GitHub 关闭但 change 未
+archived → 只报不回写。issue 号 / PR URL 经身份字段 identity_fields ["issue","pr"] 交核回写。
+`gh` 不可用 / 无 remote → 提示跳过不阻塞。
+
+只用标准库、不 import eo_lib（内置适配器与第三方同协议、无特权通道）。
+plan 是纯函数：create/update/skip 决策只依据 change 状态 + frontmatter 身份字段 + 策略，不依赖
+live gh（漂移检测是 gh 可用时的 best-effort 只读，失败即空）。
+"""
+
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+
+PROTOCOL_VERSION = 1
+ISSUE_START = "confirmed"
+PR_START = "archived"
+ISSUE_ACTIVE_STATUSES = {"confirmed", "implementing", "reviewed", "archived"}
+
+
+def _emit(resp):
+    resp["protocol_version"] = PROTOCOL_VERSION
+    sys.stdout.write(json.dumps(resp, ensure_ascii=False))
+    sys.stdout.flush()
+
+
+def gh_available():
+    return shutil.which("gh") is not None
+
+
+def has_remote(repo_root):
+    try:
+        out = subprocess.run(["git", "remote"], cwd=repo_root, capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return out.returncode == 0 and bool(out.stdout.strip())
+
+
+# --------------------------------------------------------------------------- body 生成
+
+def _ac_lines(change):
+    lines = []
+    for a in change.get("ac") or []:
+        mark = "x" if a.get("done") else " "
+        code = a.get("code") or ""
+        lines.append(f"- [{mark}] {code} {a.get('text', '')}".rstrip())
+    return lines
+
+
+def _todo_lines(change):
+    lines = []
+    for batch in change.get("todo") or []:
+        for it in batch.get("items") or []:
+            mark = "x" if it.get("done") else " "
+            code = it.get("code") or ""
+            lines.append(f"- [{mark}] {code} {it.get('text', '')}".rstrip())
+    return lines
+
+
+def issue_body(change):
+    parts = [f"意图：{change.get('summary') or ''}", "", "## 验收清单", *_ac_lines(change)]
+    if (change.get("tier") or "full") != "light":
+        parts += ["", "## TODO", *_todo_lines(change)]
+    return "\n".join(parts).rstrip() + "\n"
+
+
+def pr_body(change):
+    ac = change.get("ac") or []
+    parts = [change.get("summary") or "", "", "## 验收清单", *_ac_lines(change), ""]
+    issue = change.get("issue")
+    all_done = bool(ac) and all(a.get("done") for a in ac)
+    if issue is not None:
+        parts.append(f"Closes #{issue}" if all_done else f"Linked to #{issue} (partial)")
+    return "\n".join(parts).rstrip() + "\n"
+
+
+def _hash(text):
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+# --------------------------------------------------------------------------- plan
+
+def do_capabilities():
+    _emit({
+        "name": "github",
+        "entities": ["change"],
+        "projections": [
+            {"id": "issue", "lifecycle_start": ISSUE_START, "ops": ["create", "update", "skip"]},
+            {"id": "pr", "lifecycle_start": PR_START, "ops": ["create", "update", "skip"]},
+        ],
+        "identity_fields": ["issue", "pr"],
+    })
+
+
+def _plan_issue(change, params, book):
+    if not params.get("issue"):
+        return None
+    cid = change["id"]
+    status = change.get("status")
+    issue = change.get("issue")
+    if status == "draft":
+        return {"op": "skip", "projection": "issue", "change_id": cid,
+                "reason": "draft：issue 起点 confirmed，不建", "payload": {}}
+    if status not in ISSUE_ACTIVE_STATUSES:
+        return {"op": "skip", "projection": "issue", "change_id": cid, "reason": "状态未到 issue 起点", "payload": {}}
+
+    body = issue_body(change)
+    body_hash = _hash(body)
+    title = f"{cid} {change.get('title') or ''}".strip()
+
+    if issue is None:
+        return {"op": "create", "projection": "issue", "change_id": cid, "reason": "confirmed 起建 issue",
+                "payload": {"mode": "create", "title": title, "body": body, "body_hash": body_hash}}
+    if status == "archived":
+        return {"op": "update", "projection": "issue", "change_id": cid, "reason": "archived 兜底关闭 issue",
+                "payload": {"mode": "close", "issue": issue, "comment": f"archived: {', '.join(change.get('commits') or []) or 'change 已归档'}"}}
+    prev = (book.get(cid) or {}).get("issue_body_hash")
+    if prev == body_hash:
+        return {"op": "skip", "projection": "issue", "change_id": cid, "reason": "issue body 未变", "payload": {}}
+    return {"op": "update", "projection": "issue", "change_id": cid, "reason": "刷新 issue body",
+            "payload": {"mode": "edit_body", "issue": issue, "body": body, "body_hash": body_hash}}
+
+
+def _plan_pr(change, params):
+    policy = params.get("pr") or "never"
+    if policy == "never":
+        return None
+    cid = change["id"]
+    if change.get("status") != "archived":
+        return {"op": "skip", "projection": "pr", "change_id": cid, "reason": "PR 仅对 archived 创建", "payload": {}}
+    if change.get("pr"):
+        return {"op": "skip", "projection": "pr", "change_id": cid, "reason": "PR 已存在", "payload": {}}
+    on_default = change.get("branch") is None
+    if policy == "auto" and on_default:
+        return {"op": "skip", "projection": "pr", "change_id": cid, "reason": "默认分支，auto 跳过", "payload": {}}
+    reason = "非默认分支，建 PR" if policy == "auto" else f"策略 {policy}，建 PR"
+    return {"op": "create", "projection": "pr", "change_id": cid, "reason": reason,
+            "payload": {"mode": "create", "branch": change.get("branch"), "title": f"{cid} {change.get('title') or ''}".strip(),
+                        "body": pr_body(change)}}
+
+
+def _detect_drift(changes, context):
+    """best-effort：gh 可用时查已回写 issue 是否在 GitHub 被关闭但 change 未 archived。失败即空。"""
+    if not gh_available() or not has_remote(context.get("repo_root") or "."):
+        return []
+    drift = []
+    for change in changes:
+        issue = change.get("issue")
+        if issue is None or change.get("status") == "archived":
+            continue
+        try:
+            out = subprocess.run(
+                ["gh", "issue", "view", str(issue), "--json", "state", "-q", ".state"],
+                cwd=context.get("repo_root"), capture_output=True, text=True, timeout=20,
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if out.returncode == 0 and out.stdout.strip().upper() == "CLOSED":
+            drift.append(f"issue #{issue}（{change['id']}）已在 GitHub 关闭但 change 未 archived")
+    return drift
+
+
+def do_plan(req):
+    changes = req.get("changes") or []
+    params = req.get("params") or {}
+    book = req.get("bookkeeping") or {}
+    context = req.get("context") or {}
+    actions = []
+    for change in changes:
+        for act in (_plan_issue(change, params, book), _plan_pr(change, params)):
+            if act is not None:
+                actions.append(act)
+    _emit({"actions": actions, "drift": _detect_drift(changes, context)})
+
+
+# --------------------------------------------------------------------------- apply
+
+def _gh(args, cwd):
+    return subprocess.run(["gh", *args], cwd=cwd, capture_output=True, text=True, timeout=120)
+
+
+def do_apply(req):
+    actions = req.get("actions") or []
+    context = req.get("context") or {}
+    book = dict(req.get("bookkeeping") or {})
+    repo_root = context.get("repo_root") or "."
+    writeback = {}
+    results = []
+
+    if not gh_available() or not has_remote(repo_root):
+        for a in actions:
+            if a.get("op") == "skip":
+                results.append({"change_id": a.get("change_id"), "op": "skip", "ok": True})
+            else:
+                results.append({"change_id": a.get("change_id"), "op": a.get("op"), "ok": True,
+                                "skipped": True, "note": "gh 不可用或无 remote，已跳过（不阻塞）"})
+        _emit({"results": results, "writeback": {}, "bookkeeping": book, "drift": []})
+        return
+
+    for a in actions:
+        cid = a.get("change_id")
+        op = a.get("op")
+        payload = a.get("payload") or {}
+        mode = payload.get("mode")
+        if op == "skip":
+            results.append({"change_id": cid, "op": op, "ok": True})
+            continue
+        try:
+            if a.get("projection") == "issue" and mode == "create":
+                r = _gh(["issue", "create", "--title", payload["title"], "--body", payload["body"]], repo_root)
+                if r.returncode != 0:
+                    results.append({"change_id": cid, "op": op, "ok": False, "error": r.stderr.strip()[:200]})
+                    continue
+                num = _parse_issue_number(r.stdout)
+                if num is not None:
+                    writeback.setdefault(cid, {})["issue"] = num
+                book.setdefault(cid, {})["issue_body_hash"] = payload.get("body_hash")
+                results.append({"change_id": cid, "op": op, "ok": True})
+            elif a.get("projection") == "issue" and mode == "edit_body":
+                r = _gh(["issue", "edit", str(payload["issue"]), "--body", payload["body"]], repo_root)
+                book.setdefault(cid, {})["issue_body_hash"] = payload.get("body_hash")
+                results.append({"change_id": cid, "op": op, "ok": r.returncode == 0,
+                                **({"error": r.stderr.strip()[:200]} if r.returncode else {})})
+            elif a.get("projection") == "issue" and mode == "close":
+                r = _gh(["issue", "close", str(payload["issue"]), "--comment", payload.get("comment", "archived")], repo_root)
+                results.append({"change_id": cid, "op": op, "ok": r.returncode == 0,
+                                **({"error": r.stderr.strip()[:200]} if r.returncode else {})})
+            elif a.get("projection") == "pr" and mode == "create":
+                if payload.get("branch"):
+                    _gh(["pr", "create", "--head", payload["branch"], "--title", payload["title"], "--body", payload["body"]], repo_root)
+                r = _gh(["pr", "create", "--title", payload["title"], "--body", payload["body"]], repo_root) \
+                    if not payload.get("branch") else _gh(["pr", "view", "--json", "url", "-q", ".url"], repo_root)
+                url = r.stdout.strip() if r.returncode == 0 else None
+                if url and url.startswith("http"):
+                    writeback.setdefault(cid, {})["pr"] = url
+                results.append({"change_id": cid, "op": op, "ok": True})
+            else:
+                results.append({"change_id": cid, "op": op, "ok": False, "error": f"未知动作 {mode}"})
+        except (OSError, subprocess.SubprocessError) as e:
+            results.append({"change_id": cid, "op": op, "ok": False, "error": str(e)})
+
+    _emit({"results": results, "writeback": writeback, "bookkeeping": book, "drift": []})
+
+
+def _parse_issue_number(stdout):
+    for token in (stdout or "").split():
+        if token.startswith("http") and "/issues/" in token:
+            tail = token.rstrip("/").rsplit("/", 1)[-1]
+            if tail.isdigit():
+                return int(tail)
+    return None
+
+
+def main():
+    verb = sys.argv[1] if len(sys.argv) > 1 else ""
+    try:
+        raw = sys.stdin.read()
+        req = json.loads(raw) if raw.strip() else {}
+    except ValueError:
+        req = {}
+    if verb == "capabilities":
+        do_capabilities()
+    elif verb == "plan":
+        do_plan(req)
+    elif verb == "apply":
+        do_apply(req)
+    else:
+        sys.stderr.write(f"未知子命令：{verb}\n")
+        sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()

@@ -45,7 +45,7 @@ created: 2026-07-24
 ## 2. 验收清单
 
 - [ ] AC-1 用户跑 `eo-sync run` 后，看板 stub 与 GitHub issue/PR 投影与 board-github.md 现行写法逐字段等价（stub 整文件重写、issue 靠回写号去重，含同轮回写的平台身份字段）；紧接着再跑一次，全部目标 skip、无任何副作用（验证：本项目 board/ 下存量卡对拍零语义 diff；GitHub 侧用测试配置验）
-- [ ] AC-2 生命周期起点差异保留：同一次 run 内，draft change 只产出 stub 不建 issue，confirmed 起才建 issue，PR 仅对 archived change 按 `github.pr` 策略创建
+- [x] AC-2 生命周期起点差异保留：同一次 run 内，draft change 只产出 stub 不建 issue，confirmed 起才建 issue，PR 仅对 archived change 按 `github.pr` 策略创建（验证：三态样本端到端 dry-run，draft→仅 obsidian/stub、github/issue skip；confirmed→github/issue create；archived→pr 按 auto/默认分支判定）
 - [ ] AC-3 `eo-sync run --dry-run` 逐行输出「change × 目标 → create/update/delete/skip + 原因」的计划，全程零写入（投影介质、change frontmatter、簿记文件都不动），并明示其为提示性计划（落地以持锁重算为准）
 - [ ] AC-4 第三方接入：PATH 上放可执行 `eo-sync-<name>` 并在配置启用后，`eo-sync adapters` 能列出其 capabilities 且 run 将其纳入；适配器输出非法 JSON / 协议主版本不匹配 / 非零退出时，仅该适配器报错跳过，其余目标照常完成，run 总退出码非零标示存在失败（0 = 全部成功）
 - [ ] AC-5 配置零成本与兼容：合并配置既无 `sync` 段也无 `board`/`github` 段 → run 提示无启用目标并以退出码 0 结束；仅有存量 `board`/`github` 段的项目无需改配置，行为按等价映射生效
@@ -62,11 +62,11 @@ created: 2026-07-24
 
 ### Batch 2a（与 2b 并行：文件集不相交，均只依赖 Batch 1 协议）
 
-- [ ] TODO-3 内置 Obsidian 适配器：stub 投影行为等价 board-github.md §一——整文件覆盖写、frontmatter 字段集与省略规则、archived 只改 status 不动 tags/文件位置、放弃草稿删 stub 不留孤儿、正文纯文本路径；生命周期起点 draft；平台身份字段照抄 change frontmatter（自身不产生回写，`identity_fields` 为空）（文件：新增: cli/eo-sync-obsidian；对应 AC-1/2；完成判据：对本项目存量 board/ 卡重投影零语义 diff）
+- [x] TODO-3 内置 Obsidian 适配器：stub 投影行为等价 board-github.md §一——整文件覆盖写、frontmatter 字段集与省略规则、archived 只改 status 不动 tags/文件位置、放弃草稿删 stub 不留孤儿、正文纯文本路径；生命周期起点 draft；平台身份字段照抄 change frontmatter（自身不产生回写，`identity_fields` 为空）（文件：新增: cli/eo-sync-obsidian；对应 AC-1/2；完成判据：对本项目存量 board/ 卡重投影零语义 diff）
 
 ### Batch 2b
 
-- [ ] TODO-4 内置 GitHub 适配器：issue 自 confirmed 建（回写号去重、绝不靠标题）、body 按档生成与幂等刷新、archive 兜底关闭；PR 按 auto/always/never 策略仅对 archived 创建；漂移检测告警（只报不回写）；issue 号 / PR URL 经通用身份字段契约（`identity_fields: ["issue","pr"]`）返回交核回写，无特权通道；`gh` 不可用/无 remote → 提示跳过不阻塞（文件：新增: cli/eo-sync-github；对应 AC-1/2；完成判据：dry-run 下对 draft/confirmed/archived 三态样本产出的计划与 board-github.md §二/§三逐条一致）
+- [x] TODO-4 内置 GitHub 适配器：issue 自 confirmed 建（回写号去重、绝不靠标题）、body 按档生成与幂等刷新、archive 兜底关闭；PR 按 auto/always/never 策略仅对 archived 创建；漂移检测告警（只报不回写）；issue 号 / PR URL 经通用身份字段契约（`identity_fields: ["issue","pr"]`）返回交核回写，无特权通道；`gh` 不可用/无 remote → 提示跳过不阻塞（文件：新增: cli/eo-sync-github；对应 AC-1/2；完成判据：dry-run 下对 draft/confirmed/archived 三态样本产出的计划与 board-github.md §二/§三逐条一致）
 
 ### Batch 3（瘦身与收尾）
 
