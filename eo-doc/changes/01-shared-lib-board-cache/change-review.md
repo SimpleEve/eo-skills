@@ -21,11 +21,11 @@ summary: >
 
 | ID | 级别 | 摘要 | 位置 | 状态 | 处置（修订方填） |
 |----|------|------|------|------|------------------|
-| P0-1 | P0 | 审查基线不存在待抽取的 eo-board 及其安装入口 | §1、§3、§4 | open | |
-| P0-2 | P0 | 缓存键未覆盖日期、分支名和 `git log --all` 等真实输入 | §2 AC-6、§3 TODO-4/5、§5 | open | |
-| P1-1 | P1 | `type: refactor` 与新增可见行为不符 | frontmatter、§1、§2 | open | |
-| P1-2 | P1 | 共享配置库的错误所有权未定义 | §3 TODO-1/3、§5 | open | |
-| P1-3 | P1 | TODO 完成判据越过 auto-heavy 验证归属且缓存命中证据偏弱 | §2 AC-1/5/6、§3 TODO-2/5 | open | |
+| P0-1 | P0 | 审查基线不存在待抽取的 eo-board 及其安装入口 | §1、§3、§4 | verified | 前置工作已由总控结算至 `792522d`（含 cli/eo-board、install.sh 安装入口、local 合并契约）；§1 已钉决策新增「变更前基线 = 792522d」行并约束 `base_commit` 不得早于它；AC-1 验证栏、TODO-1/2 完成判据、§4 install.sh 行全部改锚该 commit |
+| P0-2 | P0 | 缓存键未覆盖日期、分支名和 `git log --all` 等真实输入 | §2 AC-6、§3 TODO-4/5、§5 | verified | §5 缓存设计改为依赖闭合表（逐项映射 build_data 动态输入→键成分：worktree 三元组含分支名、refs 指纹、当天日期、changes/backlog/roadmap mtime）；TODO-4 键组成同步扩展并加三类确定性用例（跨日/月、同 SHA 换分支、ref-only 更新）；AC-6 声明扩至 ref 更新与日期边界；§1 假设行同步 |
+| P1-1 | P1 | `type: refactor` 与新增可见行为不符 | frontmatter、§1、§2 | verified | 采纳：frontmatter `type` 改 `enhance`，§1 补一句归类理由（抽库保留为内部重构子任务）；INDEX 与 stub 类型列同步 |
+| P1-2 | P1 | 共享配置库的错误所有权未定义 | §3 TODO-1/3、§5 | verified | 采纳：§5 新增「错误所有权」节（库抛 `ConfigError` 不退进程，CLI 入口捕获格式化退出）；§1 假设行新增；TODO-1 完成判据加「库内无 sys.exit/die」，TODO-2 补入口捕获职责 |
+| P1-3 | P1 | TODO 完成判据越过 auto-heavy 验证归属且缓存命中证据偏弱 | §2 AC-1/5/6、§3 TODO-2/5 | verified | 采纳：TODO-2 判据改为不起服务（终端/--html + build_data 直调 JSON 对照基线，serve 端到端归测试阶段）；TODO-5 判据改为 build_data 计数替身的 handler 级确定性检查；AC-1 验证栏改锚 792522d 基线并分流 serve 对照；AC-5 验证改调用计数断言、诊断行降为辅助 |
 
 ## P0 - 必须修订（阻塞 implement）
 
@@ -128,15 +128,22 @@ Batch 1 可形成抽库 MVP；Batch 2a 文件集为 `config.py`，Batch 2b 文�
 | §3 TODO（Batch） | ❌ | 映射和并行拆分成立，但缓存键方案与修改对象基线存在 P0 |
 | 条件节 §4-§8 | ⚠️ | §4/§5/§8 触发合理，§6/§7 无触发；§5 依赖模型需补齐 |
 
+## 复审记录（第 2 轮 · 全量 · 2026-07-24）
+
+- 模式判定：自动升级全量。命中两条机械信号：§1 已钉决策新增基线、缓存依赖闭合和错误所有权；AC-1/5/6 发生语义性改写。
+- 核销 P0-1：verified。`git cat-file -e 792522d:cli/eo-board` 成功，基线文件为 1925 行；同一基线的 `install.sh` 含 CLI 符号链接入口，skill 侧 local 合并契约可追溯。§1、AC-1、TODO-1/2、§4 均统一锚定 `792522d`。
+- 核销 P0-2：verified。§5 已把 worktree 路径/分支/HEAD、refs 指纹、当天日期和 changes/backlog/roadmap mtime 与 `build_data` 输入逐项对应；TODO-4 与 AC-6 覆盖跨日/月、同 SHA 换分支和 ref-only 更新。
+- 核销 P1-1：verified。frontmatter 与 INDEX 均改为 `type: enhance`，§1 明确抽库只是内部重构子任务。
+- 核销 P1-2：verified。§1、TODO-1/2 与 §5 一致规定共享层抛 `ConfigError`、CLI 入口负责格式化与退出。
+- 核销 P1-3：verified。TODO-2/5 的完成门均改为不起服务的确定性检查；`--serve` 端到端对照留给测试阶段，AC-5 以 `build_data` 调用计数为通过依据。
+- 全量复核：6 条 AC 均可验证且含异常路径；5 条 TODO 与 AC 双向覆盖，无占位符或循环依赖；Batch 2a/2b 文件集不相交且无逻辑依赖；全文 105 行、TODO 5 条，粒度合规；§4/§5/§8 触发合理，§6/§7 无触发。
+- 新增 finding：无。
+- 未决：无。结论：通过。
+
 ## 速报
 
-结论：不通过（P0 2 条）［第 1 轮 · 全量］
-P0（阻塞 implement）：
-1. 审查基线不存在待抽取的 eo-board 及其安装入口 — change.md §1/§3/§4
-2. 缓存键未覆盖日期、分支名和 `git log --all` 等真实输入 — change.md §2/§3/§5
-P1（移交起草方裁决，不阻塞循环）：
-1. `type: refactor` 与新增可见行为不符 — change.md frontmatter/§1/§2
-2. 共享配置库的错误所有权未定义 — change.md §3/§5
-3. TODO 完成判据与 auto-heavy 验证归属混线 — change.md §2/§3
+结论：通过（P0 0 条）［第 2 轮 · 全量］
+P0（阻塞 implement）：无
+P1（移交起草方裁决，不阻塞循环）：无（上一轮 3 条均已 verified）
 P2（可后置）：无
-下一步：回 `/eo-change eo-doc/changes/01-shared-lib-board-cache/change.md` 逐条处置：修复的在台账标注改动落点，不认同的标 wont-fix 附理由；然后再跑 `/eo-change-review` 复审（默认增量，锚变动自动升全量），循环到 **P0=0**。当前第 1/3 轮。🚫 不要跳过复审直接 implement，不要跑 /eo-review（代码还没写）。
+下一步：`/eo-implement eo-doc/changes/01-shared-lib-board-cache/change.md`（status 仍为 draft，先回 /eo-change 对话确认）。未决 P1：无。注意：`/eo-review` 是代码审查，要在 implement 之后，现在还不轮到它。

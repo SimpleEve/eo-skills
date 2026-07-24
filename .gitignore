@@ -1,5 +1,6 @@
 .claude/
 .DS_Store
+__pycache__/
 
 # eo 临时工件不入库
 tmp/
