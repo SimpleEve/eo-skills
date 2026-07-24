@@ -1,0 +1,9 @@
+{
+  "project_name": "eo-skills",
+  "mode": "vault",
+  "project_root": "/Users/debugeve/Sync/EveOS/30-我的项目/eo-skills",
+  "doc_root": "eo-doc",
+  "kanban_path": null,
+  "board": { "enabled": true },
+  "github": { "issue": false, "pr": "never" }
+}

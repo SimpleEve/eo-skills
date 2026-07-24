@@ -1,0 +1,1925 @@
+#!/usr/bin/env python3
+"""eo-board —— eo-skills 工作流的只读项目看板。
+
+三种运行形态：
+  eo-board                终端摘要
+  eo-board --html [-o P]  生成自包含静态 HTML 快照
+  eo-board --serve        本地只读 HTTP 服务（仅绑 127.0.0.1）
+
+只用标准库，零第三方依赖。不写入项目仓库任何文件。
+"""
+
+import argparse
+import http.server
+import json
+import re
+import subprocess
+import sys
+import tempfile
+import threading
+import webbrowser
+from datetime import date, datetime
+from pathlib import Path
+
+STALE_DAYS_THRESHOLD = 30
+
+CHANGE_STATUS_ORDER = ["draft", "confirmed", "implementing", "reviewed", "archived"]
+BOARD_STATUS_ORDER = ["backlog"] + CHANGE_STATUS_ORDER
+STATUS_ZH = {
+    "backlog": "待办池",
+    "draft": "草稿",
+    "confirmed": "已确认",
+    "implementing": "实施中",
+    "reviewed": "审查通过",
+    "archived": "已归档",
+}
+
+
+# ============================================================
+# .eo-project.json 定位与解析
+# ============================================================
+
+def find_project_config(start):
+    cur = start.resolve()
+    while True:
+        candidate = cur / ".eo-project.json"
+        if candidate.is_file():
+            return candidate
+        if cur.parent == cur:
+            return None
+        cur = cur.parent
+
+
+def load_project_config(path):
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as e:
+        die(f"❌ .eo-project.json 解析失败：{path}（{e}）")
+    if not isinstance(raw, dict):
+        die(f"❌ .eo-project.json 内容不是一个 JSON 对象：{path}")
+    return {
+        "project_name": raw.get("project_name") or path.parent.name,
+        "mode": raw.get("mode") or "local",
+        "project_root": raw.get("project_root"),
+        "doc_root": raw.get("doc_root") or "eo-doc",
+        "board": raw.get("board") if isinstance(raw.get("board"), dict) else {},
+        "github": raw.get("github") if isinstance(raw.get("github"), dict) else {},
+        "config_path": path,
+        "repo_root": path.parent,
+    }
+
+
+def die(msg):
+    print(msg, file=sys.stderr)
+    sys.exit(1)
+
+
+# ============================================================
+# git 封装
+# ============================================================
+
+def run_git(args, cwd=None):
+    try:
+        res = subprocess.run(
+            ["git"] + args, cwd=cwd, capture_output=True, text=True, timeout=15
+        )
+    except Exception:
+        return ""
+    if res.returncode != 0:
+        return ""
+    return res.stdout
+
+
+def list_worktrees(anchor_dir):
+    out = run_git(["worktree", "list", "--porcelain"], cwd=str(anchor_dir))
+    worktrees = []
+    cur = {}
+    for line in out.splitlines():
+        if not line.strip():
+            if cur:
+                worktrees.append(cur)
+                cur = {}
+            continue
+        if line.startswith("worktree "):
+            cur = {"path": line[len("worktree "):].strip()}
+        elif line.startswith("branch "):
+            ref = line[len("branch "):].strip()
+            cur["branch"] = ref[len("refs/heads/"):] if ref.startswith("refs/heads/") else ref
+        elif line.startswith("detached"):
+            cur["branch"] = None
+    if cur:
+        worktrees.append(cur)
+    if not worktrees:
+        # 非 git 仓库或 git 不可用：退化为把当前目录当唯一 worktree
+        return [{"path": str(anchor_dir), "branch": None}]
+    for wt in worktrees:
+        branch = run_git(["branch", "--show-current"], cwd=wt["path"]).strip()
+        wt["branch"] = branch or wt.get("branch")
+    return worktrees
+
+
+# ============================================================
+# frontmatter：手写简易 YAML 子集解析
+# ============================================================
+
+FRONTMATTER_RE = re.compile(r"^---[ \t]*\n(.*?)\n---[ \t]*\n?", re.DOTALL)
+
+
+def split_frontmatter(text):
+    if text.startswith("﻿"):
+        text = text[1:]
+    m = FRONTMATTER_RE.match(text)
+    if not m:
+        return None, text
+    return parse_yaml_subset(m.group(1)), text[m.end():]
+
+
+def parse_yaml_subset(text):
+    data = {}
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if ":" not in line:
+            continue  # 容错：解析不了的行直接忽略，不让整份 frontmatter 崩掉
+        key, _, value = line.partition(":")
+        key = key.strip()
+        if not key:
+            continue
+        data[key] = parse_yaml_scalar(value)
+    return data
+
+
+def parse_yaml_scalar(raw):
+    value = raw.strip()
+    if not value:
+        return None
+    if value[0] in "\"'":
+        q = value[0]
+        end = value.find(q, 1)
+        return value[1:end] if end != -1 else value.strip(q)
+    if value[0] == "[":
+        end = value.find("]")
+        inner = value[1:end] if end != -1 else value[1:]
+        return [unquote(x.strip()) for x in inner.split(",")] if inner.strip() else []
+    # 行内注释：# 前必须有空白才算注释，避免误伤内容本身
+    m = re.search(r"\s#", value)
+    if m:
+        value = value[: m.start()].strip()
+    if value in ("~", "null", "Null", "NULL", ""):
+        return None
+    if re.fullmatch(r"-?\d+", value):
+        return int(value)
+    return value
+
+
+def unquote(s):
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in "\"'":
+        return s[1:-1]
+    return s
+
+
+# ============================================================
+# change.md 正文解析
+# ============================================================
+
+HEADING2_RE = re.compile(r"^##\s*(\d+)\.?\s*.*$")
+HEADING3_RE = re.compile(r"^###\s*(.+?)\s*$")
+CHECKBOX_RE = re.compile(r"^[-*]\s+\[([ xX])\]\s*(?:([A-Za-z]+-\d+)\s*)?(.*)$")
+
+
+def split_body_sections(body_text):
+    """按 `## ` 标题切分正文；返回 (标题前内容行, {编号: 内容行列表})。"""
+    lines = body_text.splitlines()
+    start = 0
+    while start < len(lines) and not lines[start].strip():
+        start += 1
+    if start < len(lines) and lines[start].lstrip().startswith("# ") and not lines[start].lstrip().startswith("##"):
+        start += 1
+
+    sections, preamble = {}, []
+    cur_key, cur_lines = None, []
+
+    def flush():
+        if cur_key is None:
+            preamble.extend(cur_lines)
+        else:
+            sections[cur_key] = cur_lines
+
+    for line in lines[start:]:
+        m = HEADING2_RE.match(line.strip())
+        if m:
+            flush()
+            cur_key, cur_lines = m.group(1), []
+            continue
+        cur_lines.append(line)
+    flush()
+    return preamble, sections
+
+
+def strip_trailing_paren(text):
+    """摘掉行尾一组配对括号（全角/半角），返回 (正文, 括号内容 or None)。"""
+    s = text.rstrip()
+    for op, cl in (("（", "）"), ("(", ")")):
+        if s.endswith(cl):
+            depth = 0
+            for i in range(len(s) - 1, -1, -1):
+                if s[i] == cl:
+                    depth += 1
+                elif s[i] == op:
+                    depth -= 1
+                    if depth == 0:
+                        return s[:i].rstrip(), s[i + 1: -1]
+            break
+    return s, None
+
+
+def parse_intent(preamble, section1_lines):
+    lines = section1_lines if section1_lines is not None else preamble
+    text_lines, decisions = [], []
+    in_decisions = False
+    for line in lines:
+        stripped = line.strip()
+        if not in_decisions and "已钉决策" in stripped:
+            in_decisions = True
+            continue
+        if in_decisions:
+            if stripped[:1] in ("-", "*"):
+                item_text = stripped[1:].strip()
+                decisions.append({"text": item_text, "assume": "假设" in item_text})
+                continue
+            if not stripped:
+                continue
+            in_decisions = False
+        text_lines.append(line)
+    intent_text = "\n".join(text_lines).strip()
+    intent_text = re.sub(r"^意图[:：]\s*", "", intent_text)
+    return intent_text, decisions
+
+
+def parse_ac_section(lines):
+    items = []
+    for line in lines:
+        m = CHECKBOX_RE.match(line.strip())
+        if not m:
+            continue
+        done = m.group(1).lower() == "x"
+        code, rest = m.group(2), m.group(3).strip()
+        text, paren = strip_trailing_paren(rest)
+        note, manual = None, False
+        if paren:
+            if paren.startswith("人工"):
+                manual, note = True, paren
+            elif paren.startswith("验证") or paren.startswith("锁定"):
+                note = paren
+            else:
+                text = rest  # 不认识的括注：原样并回正文，避免吞信息
+        items.append({"code": code, "done": done, "text": text, "note": note, "manual": manual})
+    return items
+
+
+def parse_todo_section(lines):
+    batches = []
+    cur_batch = None
+    for line in lines:
+        stripped = line.strip()
+        m3 = HEADING3_RE.match(stripped)
+        if m3:
+            cur_batch = {"batch": m3.group(1), "items": []}
+            batches.append(cur_batch)
+            continue
+        mck = CHECKBOX_RE.match(stripped)
+        if not mck:
+            continue
+        done, code, rest = mck.group(1).lower() == "x", mck.group(2), mck.group(3).strip()
+        text, paren = strip_trailing_paren(rest)
+        file_, ac_, crit = None, None, None
+        if paren:
+            for part in re.split("[；;]", paren):
+                part = part.strip()
+                if part.startswith("文件"):
+                    file_ = re.sub(r"^文件[:：]\s*", "", part)
+                elif part.startswith("对应"):
+                    ac_ = part.replace("对应", "", 1).strip()
+                elif part.startswith("完成判据"):
+                    crit = re.sub(r"^完成判据[:：]\s*", "", part)
+                elif part:
+                    text = text + "（" + part + "）"
+        item = {"code": code, "done": done, "text": text, "file": file_, "ac": ac_}
+        if crit:
+            item["criteria"] = crit
+        if cur_batch is None:
+            cur_batch = {"batch": "TODO", "items": []}
+            batches.append(cur_batch)
+        cur_batch["items"].append(item)
+    return batches
+
+
+def parse_oq_section(lines):
+    items = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped[:1] not in ("-", "*"):
+            continue
+        content = stripped[1:].strip()
+        m = re.match(r"(OQ-\d+)\s*(.*)", content)
+        items.append({"code": m.group(1), "text": m.group(2)} if m else {"code": None, "text": content})
+    return items
+
+
+def parse_change_file(path, worktree_path, dirname, warnings):
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception as e:
+        warnings.append(f"change 文件读取失败，已跳过：{path}（{e}）")
+        return None
+    fm, body = split_frontmatter(text)
+    if fm is None:
+        warnings.append(f"缺少 frontmatter，已跳过：{path}")
+        return None
+
+    cid = str(fm.get("id") or re.sub(r"^\d+-", "", dirname))
+    status = fm.get("status") or "draft"
+    if status == "done":
+        status = "reviewed"  # 旧口径兼容
+    tier = fm.get("tier") or "full"
+
+    intent_text, decisions, ac_items, todo_batches, oq_items = "", [], [], None, []
+    try:
+        preamble, sections = split_body_sections(body)
+        intent_text, decisions = parse_intent(preamble, sections.get("1"))
+        ac_items = parse_ac_section(sections.get("2", []))
+        if "3" in sections:
+            todo_batches = parse_todo_section(sections["3"])
+        oq_items = parse_oq_section(sections.get("8", []))
+    except Exception as e:
+        warnings.append(f"正文解析出错，已降级为仅 frontmatter：{path}（{e}）")
+
+    return {
+        "kind": "change",
+        "id": cid,
+        "seq": fm.get("seq"),
+        "title": fm.get("title") or cid,
+        "summary": fm.get("summary") or "",
+        "status": status,
+        "tier": tier,
+        "type": fm.get("type") or "feature",
+        "created": fm.get("created"),
+        "base_commit": fm.get("base_commit"),
+        "commits": fm.get("commits") or [],
+        "issue": fm.get("issue"),
+        "pr": fm.get("pr"),
+        "test_lock_commit": fm.get("test_lock_commit"),
+        "intent": intent_text,
+        "decisions": decisions,
+        "ac": ac_items,
+        "todo": todo_batches,
+        "oq": oq_items,
+        "dirname": dirname,
+        "worktree": str(worktree_path),
+        "path": str(path),
+    }
+
+
+def probe_change_artifacts(rec, doc_root):
+    # 存在性只做卡面小标签用；精确的轮次/结论/卡点见 gates（compute_gates）
+    dir_path = Path(rec["worktree"]) / doc_root / "changes" / rec["dirname"]
+    rec["artifacts"] = {
+        "review": {"exists": (dir_path / "review.md").is_file()},
+        "test": {"exists": (dir_path / "test.md").is_file()},
+        "change_review": {"exists": (dir_path / "change-review.md").is_file()},
+    }
+
+
+def compute_change_git_stats(rec, doc_root, main_worktree_path):
+    slug = rec["id"]
+    wt_path = rec["worktree"]
+    out = run_git(["log", "--all", "--oneline", "--fixed-strings", "--grep", f"[{slug}]"], cwd=wt_path)
+    rec["commit_count"] = len([l for l in out.splitlines() if l.strip()])
+
+    rel_dir = str(Path(doc_root) / "changes" / rec["dirname"])
+    last_out = run_git(["log", "--all", "-1", "--format=%cI", "--", rel_dir], cwd=wt_path).strip()
+    if last_out:
+        rec["last_touch"] = last_out[:10]
+    else:
+        dir_path = Path(wt_path) / rel_dir
+        mtimes = [p.stat().st_mtime for p in dir_path.rglob("*") if p.is_file()] if dir_path.is_dir() else []
+        rec["last_touch"] = (
+            datetime.fromtimestamp(max(mtimes)).strftime("%Y-%m-%d") if mtimes else rec.get("created")
+        )
+
+    rec["stale"], rec["stale_days"] = False, None
+    if rec["tier"] == "light" and rec["status"] != "archived" and rec.get("last_touch"):
+        try:
+            dt = datetime.strptime(rec["last_touch"], "%Y-%m-%d").date()
+            days = (date.today() - dt).days
+            if days > STALE_DAYS_THRESHOLD:
+                rec["stale"], rec["stale_days"] = True, days
+        except ValueError:
+            pass
+
+    rec["is_default_worktree"] = Path(wt_path).resolve() == Path(main_worktree_path).resolve()
+    rec["worktree_name"] = Path(wt_path).name
+
+
+# ============================================================
+# 质量门（review / test / change-review / acceptance）解析
+# ============================================================
+
+PXX_HEADING_TMPL = r"^#{{3,4}}\s*\[{prefix}-[^\]]+\]\s*(.+?)\s*$"  # 编号后缀不限数字：实测有 P2-S1 / P1-D1 这类字母后缀
+CHANGE_REVIEW_ROUND_RE = re.compile(
+    r"^##\s*复审记录\s*[（(]第\s*(\d+)\s*轮\s*[·・]\s*(增量|全量)\s*[·・]\s*([\d-]+)[）)]",
+    re.MULTILINE,
+)
+ACCEPTANCE_CHECK_RE = re.compile(r"^-\s*\[([ xX])\]\s*通过")
+
+
+def file_last_touch(worktree_path, rel_path):
+    out = run_git(["log", "--all", "-1", "--format=%cI", "--", rel_path], cwd=worktree_path).strip()
+    if out:
+        return out[:10]
+    full = Path(worktree_path) / rel_path
+    if full.is_file():
+        return datetime.fromtimestamp(full.stat().st_mtime).strftime("%Y-%m-%d")
+    return None
+
+
+def split_by_h2(text):
+    """按任意 `## ` 标题切分（区别于 change.md 的按数字编号切分），用于报告类文件。"""
+    sections, cur_title, cur_lines = [], None, []
+    for line in text.splitlines():
+        if line.startswith("## "):
+            sections.append((cur_title, cur_lines))
+            cur_title, cur_lines = line[3:].strip(), []
+        else:
+            cur_lines.append(line)
+    sections.append((cur_title, cur_lines))
+    return sections
+
+
+def parse_pxx_headings(text, prefix):
+    pat = re.compile(PXX_HEADING_TMPL.format(prefix=re.escape(prefix)), re.MULTILINE)
+    return [m.group(1).strip() for m in pat.finditer(text)]
+
+
+def parse_speed_report(text):
+    """定位末节标题含"速报"的节，抓「结论：」「下一步：」两行；解析不出返回 (None, None)——
+    容错优先，宁可不给结论也不误判卡点。"""
+    lines = text.splitlines()
+    start = None
+    for i, line in enumerate(lines):
+        if re.match(r"^##\s*.*速报", line.strip()):
+            start = i
+    if start is None:
+        return None, None
+    verdict, next_step = None, None
+    for line in lines[start + 1:]:
+        s = line.strip()
+        m = re.match(r"^结论[:：]\s*(.+)$", s)
+        if m:
+            verdict = m.group(1).strip()
+            continue
+        m = re.match(r"^下一步[:：]\s*(.+)$", s)
+        if m:
+            next_step = m.group(1).strip()
+    return verdict, next_step
+
+
+def estimate_rounds_approx(fm, worktree_path, rel_path):
+    """review.md/test.md 没有显式轮次字段，只能估算：commit 数（未提交存在时至少 1）
+    与 frontmatter updated>created 信号（成立则至少 2），取两者较大值。"""
+    out = run_git(["log", "--all", "--oneline", "--", rel_path], cwd=worktree_path)
+    commit_n = len([l for l in out.splitlines() if l.strip()])
+    git_based = commit_n if commit_n > 0 else 1
+    created, updated = fm.get("created"), fm.get("updated")
+    fm_based = 2 if (created and updated and str(updated) > str(created)) else 1
+    return max(git_based, fm_based)
+
+
+def parse_review_gate(path, worktree_path, rel_path, warnings):
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception as e:
+        warnings.append(f"review.md 读取失败，仅报存在性：{path}（{e}）")
+        return {"exists": True}
+    fm, body = split_frontmatter(text)
+    fm = fm or {}
+    p0_titles = parse_pxx_headings(body, "P0")
+    p1_titles = parse_pxx_headings(body, "P1")
+    p2_titles = parse_pxx_headings(body, "P2")
+    verdict, next_step = parse_speed_report(body)
+    return {
+        "exists": True,
+        "rounds_approx": estimate_rounds_approx(fm, worktree_path, rel_path),
+        "verdict": verdict,
+        "next": next_step,
+        "p0": len(p0_titles),
+        "p1": len(p1_titles),
+        "p2": len(p2_titles),
+        "p0_titles": p0_titles[:3],
+        "date": fm.get("updated") or fm.get("created"),
+    }
+
+
+def parse_test_gate(path, worktree_path, rel_path, warnings):
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception as e:
+        warnings.append(f"test.md 读取失败，仅报存在性：{path}（{e}）")
+        return {"exists": True}
+    fm, body = split_frontmatter(text)
+    fm = fm or {}
+    fail_titles = parse_pxx_headings(body, "FAIL")
+    verdict, next_step = parse_speed_report(body)
+    return {
+        "exists": True,
+        "rounds_approx": estimate_rounds_approx(fm, worktree_path, rel_path),
+        "verdict": verdict,
+        "next": next_step,
+        "fail_count": len(fail_titles),
+        "fail_titles": fail_titles[:3],
+        "date": fm.get("updated") or fm.get("created"),
+    }
+
+
+def parse_finding_ledger_open_p0(body):
+    """在「...台账」节里找 Markdown 表格，数级别=P0 且状态=open 的行；列位置按表头文字定位，
+    找不到表头就退回模板默认列序（级别第 1 列、状态第 4 列）。"""
+    target_lines = None
+    for title, lines in split_by_h2(body):
+        if title and "台账" in title:
+            target_lines = lines
+            break
+    if target_lines is None:
+        return 0
+    table_rows = [l for l in target_lines if l.strip().startswith("|")]
+    if not table_rows:
+        return 0
+    header_cells = [c.strip() for c in table_rows[0].strip().strip("|").split("|")]
+    level_idx, status_idx = 1, 4
+    for idx, cell in enumerate(header_cells):
+        if "级别" in cell:
+            level_idx = idx
+        if "状态" in cell:
+            status_idx = idx
+    open_p0 = 0
+    for row in table_rows[1:]:
+        stripped = row.strip().strip("|")
+        if re.fullmatch(r"[\s:|-]+", stripped):
+            continue  # 表格分隔行
+        cells = [c.strip() for c in stripped.split("|")]
+        if len(cells) <= max(level_idx, status_idx):
+            continue
+        if cells[level_idx].upper() == "P0" and cells[status_idx].lower() == "open":
+            open_p0 += 1
+    return open_p0
+
+
+def parse_change_review_gate(path, warnings):
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception as e:
+        warnings.append(f"change-review.md 读取失败，仅报存在性：{path}（{e}）")
+        return {"exists": True}
+    fm, body = split_frontmatter(text)
+    fm = fm or {}
+
+    round_matches = list(CHANGE_REVIEW_ROUND_RE.finditer(body))
+    rounds = 1 + len(round_matches)
+    if round_matches:
+        last = round_matches[-1]
+        mode, round_date = last.group(2), last.group(3)
+    else:
+        mode, round_date = "全量", None  # 首轮无复审记录节，必为全量
+
+    verdict, next_step = parse_speed_report(body)
+    return {
+        "exists": True,
+        "rounds": rounds,
+        "mode": mode,
+        "open_p0": parse_finding_ledger_open_p0(body),
+        "verdict": verdict,
+        "next": next_step,
+        "date": round_date or fm.get("created"),
+    }
+
+
+def parse_acceptance_gate(path, warnings):
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception as e:
+        warnings.append(f"acceptance.md 读取失败，仅报存在性：{path}（{e}）")
+        return {"exists": True}
+    total = unchecked = 0
+    for line in text.splitlines():
+        m = ACCEPTANCE_CHECK_RE.match(line.strip())
+        if m:
+            total += 1
+            if m.group(1) == " ":
+                unchecked += 1
+    return {"exists": True, "total": total, "unchecked": unchecked}
+
+
+def compute_gates(rec, doc_root, warnings):
+    """汇总四类质量门文件，并合成单一 blocker：候选按 gate 文件末次触碰时间取最新一条。"""
+    wt_path = rec["worktree"]
+    rel_dir = f"{doc_root}/changes/{rec['dirname']}"
+    dir_path = Path(wt_path) / rel_dir
+    gates = {}
+    candidates = []  # (touch_date, blocker_text)
+
+    cr_path = dir_path / "change-review.md"
+    if cr_path.is_file():
+        g = parse_change_review_gate(cr_path, warnings)
+        gates["change_review"] = g
+        if g.get("open_p0"):
+            text = f"change-review 第{g['rounds']}轮 · P0×{g['open_p0']} 未决"
+            if g["rounds"] >= 3:
+                text += "（已到轮限，待用户裁决）"
+            candidates.append((file_last_touch(wt_path, f"{rel_dir}/change-review.md") or "", text))
+
+    review_path = dir_path / "review.md"
+    if review_path.is_file():
+        g = parse_review_gate(review_path, wt_path, f"{rel_dir}/review.md", warnings)
+        gates["review"] = g
+        if g.get("verdict") and "不通过" in g["verdict"]:
+            text = f"review P0×{g.get('p0', 0)} 待修"
+            if g.get("rounds_approx", 1) >= 2:
+                text += f"（第≈{g['rounds_approx']}轮）"
+            candidates.append((file_last_touch(wt_path, f"{rel_dir}/review.md") or "", text))
+
+    test_path = dir_path / "test.md"
+    if test_path.is_file():
+        g = parse_test_gate(test_path, wt_path, f"{rel_dir}/test.md", warnings)
+        gates["test"] = g
+        if g.get("verdict") and "不通过" in g["verdict"]:
+            text = f"test 不通过 · FAIL×{g.get('fail_count', 0)}"
+            candidates.append((file_last_touch(wt_path, f"{rel_dir}/test.md") or "", text))
+
+    acc_path = dir_path / "acceptance.md"
+    if acc_path.is_file():
+        g = parse_acceptance_gate(acc_path, warnings)
+        gates["acceptance"] = g
+        if rec["status"] in ("reviewed", "implementing") and g.get("unchecked"):
+            text = f"人工验收 {g['unchecked']} 项待勾"
+            candidates.append((file_last_touch(wt_path, f"{rel_dir}/acceptance.md") or "", text))
+
+    rec["gates"] = gates
+    rec["blocker"] = max(candidates, key=lambda c: c[0])[1] if candidates else None
+
+
+def compute_monthly_direct_commits(anchor_dir):
+    since = date.today().replace(day=1).isoformat()
+    out = run_git(["log", "--all", "--pretty=%s", "--since", since], cwd=str(anchor_dir))
+    fix_n = sum(1 for s in out.splitlines() if s.startswith("fix:"))
+    ui_n = sum(1 for s in out.splitlines() if s.startswith("ui:"))
+    return {"fix": fix_n, "ui": ui_n, "total": fix_n + ui_n, "since": since}
+
+
+# ============================================================
+# 多 worktree change 汇总与去重
+# ============================================================
+
+def scan_all_changes(cfg, worktrees, warnings):
+    by_id = {}
+    for wt in worktrees:
+        changes_dir = Path(wt["path"]) / cfg["doc_root"] / "changes"
+        if not changes_dir.is_dir():
+            continue
+        for child in sorted(changes_dir.iterdir()):
+            cf = child / "change.md"
+            if not child.is_dir() or not cf.is_file():
+                continue
+            rec = parse_change_file(cf, wt["path"], child.name, warnings)
+            if rec is None:
+                continue
+            rec["branch"] = wt.get("branch")
+            by_id.setdefault(rec["id"], []).append(rec)
+
+    def status_rank(r):
+        try:
+            return CHANGE_STATUS_ORDER.index(r["status"])
+        except ValueError:
+            return -1
+
+    winners = [recs[0] if len(recs) == 1 else max(recs, key=status_rank) for recs in by_id.values()]
+
+    seq_map = {}
+    for w in winners:
+        if w.get("seq") is not None:
+            seq_map.setdefault(w["seq"], set()).add(w["id"])
+    for seq, ids in sorted(seq_map.items(), key=lambda kv: str(kv[0])):
+        if len(ids) > 1:
+            warnings.append(f"撞号：seq #{seq} 同时被 {', '.join(sorted(ids))} 占用")
+
+    return winners
+
+
+# ============================================================
+# backlog 扫描
+# ============================================================
+
+def parse_backlog_file(path, warnings):
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception as e:
+        warnings.append(f"backlog 卡读取失败，已跳过：{path}（{e}）")
+        return None
+    fm, body = split_frontmatter(text)
+    if fm is None:
+        warnings.append(f"backlog 卡缺少 frontmatter，已跳过：{path}")
+        return None
+    return {
+        "kind": "backlog",
+        "id": path.stem,
+        "title": fm.get("title") or path.stem,
+        "status": fm.get("status") or "backlog",
+        "tags": fm.get("tags") or [],
+        "created": fm.get("created"),
+        "issue": fm.get("issue"),
+        "body": body.strip(),
+        "path": str(path),
+    }
+
+
+def scan_backlog_dir(dir_path, warnings):
+    if not dir_path.is_dir():
+        return []
+    return [
+        rec
+        for f in sorted(dir_path.glob("*.md"))
+        for rec in [parse_backlog_file(f, warnings)]
+        if rec is not None
+    ]
+
+
+def scan_backlog_archive(dir_path, warnings):
+    arc = dir_path / "archive"
+    stats = {"count": 0, "adopted": 0, "dropped": 0}
+    if not arc.is_dir():
+        return stats
+    for f in sorted(arc.glob("*.md")):
+        stats["count"] += 1
+        rec = parse_backlog_file(f, warnings)
+        if rec and rec["status"] == "adopted":
+            stats["adopted"] += 1
+        elif rec and rec["status"] == "dropped":
+            stats["dropped"] += 1
+    return stats
+
+
+def scan_backlog_all(cfg, worktrees, warnings):
+    if cfg["mode"] == "vault" and cfg.get("project_root"):
+        root = Path(cfg["project_root"]) / "backlog"
+        cards = scan_backlog_dir(root, warnings)
+        archive_stats = scan_backlog_archive(root, warnings)
+    else:
+        # local 模式：.eo-project/ 是 gitignored 目录，各 worktree 独立，需逐个合并扫
+        cards, seen = [], set()
+        archive_stats = {"count": 0, "adopted": 0, "dropped": 0}
+        for wt in worktrees:
+            root = Path(wt["path"]) / ".eo-project" / "backlog"
+            for c in scan_backlog_dir(root, warnings):
+                if c["path"] in seen or Path(c["path"]).name in {Path(x).name for x in seen}:
+                    continue
+                seen.add(c["path"])
+                c["worktree"] = wt["path"]
+                cards.append(c)
+            arc = scan_backlog_archive(root, warnings)
+            for k in archive_stats:
+                archive_stats[k] += arc[k]
+    cards.sort(key=lambda c: c.get("created") or "")
+    return cards, archive_stats
+
+
+def read_roadmap(project_root, warnings):
+    if not project_root:
+        return None
+    path = Path(project_root) / "roadmap.md"
+    if not path.is_file():
+        return None
+    try:
+        fm, _ = split_frontmatter(path.read_text(encoding="utf-8"))
+        if fm is None:
+            return None
+        return {
+            "status": fm.get("status"),
+            "phase": fm.get("phase"),
+            "summary": fm.get("summary"),
+            "updated": fm.get("updated"),
+            "path": str(path),
+        }
+    except Exception as e:
+        warnings.append(f"roadmap.md 解析失败：{path}（{e}）")
+        return None
+
+
+# ============================================================
+# 汇总入口
+# ============================================================
+
+def build_data(cfg):
+    warnings = []
+    anchor = cfg["repo_root"]
+    worktrees = list_worktrees(anchor)
+    main_wt = worktrees[0]
+
+    changes = scan_all_changes(cfg, worktrees, warnings)
+    for rec in changes:
+        probe_change_artifacts(rec, cfg["doc_root"])
+        compute_change_git_stats(rec, cfg["doc_root"], main_wt["path"])
+        compute_gates(rec, cfg["doc_root"], warnings)
+    changes.sort(key=lambda c: (c.get("seq") is None, c.get("seq") or 0))
+
+    if cfg["mode"] == "vault":
+        project_root = cfg.get("project_root")
+    else:
+        project_root = str(Path(main_wt["path"]) / ".eo-project")
+
+    roadmap = read_roadmap(project_root, warnings)
+    backlog_cards, backlog_archive = scan_backlog_all(cfg, worktrees, warnings)
+    direct_commits = compute_monthly_direct_commits(anchor)
+
+    active_changes = [c for c in changes if c["status"] != "archived"]
+    stale_changes = [c for c in changes if c.get("stale")]
+    blocked_changes = [c for c in changes if c.get("blocker")]
+
+    return {
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "serve": False,
+        "project": {
+            "name": cfg["project_name"],
+            "mode": cfg["mode"],
+            "project_root": project_root,
+            "doc_root": cfg["doc_root"],
+            "board_enabled": bool(cfg["board"].get("enabled")),
+            "github_issue": bool(cfg["github"].get("issue")),
+            "github_pr": cfg["github"].get("pr") or "never",
+        },
+        "roadmap": roadmap,
+        "worktrees": [
+            {"path": w["path"], "branch": w.get("branch"), "name": Path(w["path"]).name, "is_main": w is main_wt}
+            for w in worktrees
+        ],
+        "scanned_worktrees": len(worktrees),
+        "changes": changes,
+        "backlog": backlog_cards,
+        "backlog_archive": backlog_archive,
+        "stats": {
+            "active_changes": len(active_changes),
+            "backlog_count": len(backlog_cards),
+            "direct_commits": direct_commits,
+            "stale_count": len(stale_changes),
+            "blocked_count": len(blocked_changes),
+        },
+        "warnings": warnings,
+    }
+
+
+# ============================================================
+# 终端渲染
+# ============================================================
+
+def fmt_progress(done, total):
+    return f"{done}/{total}" if total else "-"
+
+
+def render_terminal(data):
+    out = []
+    proj = data["project"]
+    out.append(f"eo board · {proj['name']} ({proj['mode']})")
+    rm = data["roadmap"]
+    if rm:
+        parts = [p for p in (rm.get("status"), rm.get("phase")) if p]
+        line = "roadmap：" + (" · ".join(parts) if parts else "（缺少 status/phase）")
+        if rm.get("updated"):
+            line += f"  updated {rm['updated']}"
+        out.append(line)
+    else:
+        out.append("roadmap：未找到 roadmap.md（降级显示）")
+    out.append(f"扫描了 {data['scanned_worktrees']} 个 worktree · 生成于 {data['generated_at']}")
+    out.append("")
+
+    by_status = {s: [] for s in CHANGE_STATUS_ORDER}
+    for c in data["changes"]:
+        by_status.setdefault(c["status"], []).append(c)
+
+    for status in CHANGE_STATUS_ORDER:
+        items = sorted(by_status.get(status, []), key=lambda c: (c.get("seq") is None, c.get("seq") or 0))
+        out.append(f"[{status} · {STATUS_ZH[status]}] ({len(items)})")
+        if not items:
+            out.append("  （无）")
+            out.append("")
+            continue
+        header = ["SEQ", "SLUG", "TIER", "TYPE", "AC", "TODO", "分支", "警告"]
+        rows = []
+        for c in items:
+            seq = f"#{c['seq']}" if c.get("seq") is not None else "#?"
+            ac_done = sum(1 for a in c["ac"] if a["done"])
+            if c["todo"] is not None:
+                todo_items = [it for b in c["todo"] for it in b["items"]]
+                todo_str = fmt_progress(sum(1 for t in todo_items if t["done"]), len(todo_items))
+            else:
+                todo_str = "-"
+            branch = "-"
+            if not c.get("is_default_worktree"):
+                branch = f"⎇{c.get('branch') or '?'}@{c.get('worktree_name')}"
+            warn_parts = []
+            if c.get("stale"):
+                warn_parts.append(f"⚠ {c['stale_days']}天未动")
+            if c.get("blocker"):
+                b = c["blocker"]
+                warn_parts.append("⛔ " + (b if len(b) <= 24 else b[:24] + "…"))
+            warn = " ".join(warn_parts)
+            rows.append(
+                [seq, c["id"], c["tier"], c["type"], fmt_progress(ac_done, len(c["ac"])), todo_str, branch, warn]
+            )
+        widths = [max(len(r[i]) for r in rows + [header]) for i in range(8)]
+        out.append("  " + "  ".join(header[i].ljust(widths[i]) if i < 7 else header[i] for i in range(8)))
+        for r in rows:
+            out.append("  " + "  ".join(r[i].ljust(widths[i]) if i < 7 else r[i] for i in range(8)))
+        out.append("")
+
+    out.append(f"[backlog · 待办池] ({len(data['backlog'])})")
+    if not data["backlog"]:
+        out.append("  （无）")
+    else:
+        for card in data["backlog"]:
+            tags = " ".join(card.get("tags") or [])
+            out.append(f"  {card.get('created') or '?'}  {card['title']}" + (f"  [{tags}]" if tags else ""))
+    arc = data["backlog_archive"]
+    if arc["count"]:
+        out.append(f"  archive/：{arc['count']} 张（adopted×{arc['adopted']} · dropped×{arc['dropped']}）")
+    out.append("")
+
+    if data["warnings"]:
+        out.append(f"⚠ 警告 ({len(data['warnings'])})：")
+        for w in data["warnings"]:
+            out.append(f"  - {w}")
+        out.append("")
+
+    st = data["stats"]
+    dc = st["direct_commits"]
+    out.append(
+        f"统计：活跃 change {st['active_changes']} · backlog {st['backlog_count']} · "
+        f"本月直改 {dc['total']}（fix:×{dc['fix']} · ui:×{dc['ui']}） · "
+        f"停滞提醒 {st['stale_count']} · 卡点 {st['blocked_count']}"
+    )
+    return "\n".join(out)
+
+
+# ============================================================
+# HTML 生成（CSS/交互复用 eo-board-mockup.html 视觉稿；数据全部经 JSON 注入，JS 端渲染）
+# ============================================================
+
+def embed_json(data):
+    raw = json.dumps(data, ensure_ascii=False)
+    return raw.replace("</", "<\\/")  # 防止内容里出现 </script 提前收口标签；\/ 是合法 JSON 转义
+
+
+def escape_html_text(s):
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+HTML_TEMPLATE = r"""<title>__EO_BOARD_TITLE__</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗂️</text></svg>">
+<style>
+  :root {
+    --bg: #F2F4F7; --surface: #FFFFFF; --surface2: #F7F9FB;
+    --ink: #1B2432; --muted: #647084; --faint: #8B96A8; --line: #E2E6ED;
+    --accent: #B4530A; --accent-soft: #F6E8DC;
+    --st-backlog: #4E7A5A;   --st-backlog-soft: #E7F0E9;
+    --st-draft: #6B7A90;     --st-draft-soft: #ECEFF4;
+    --st-confirmed: #A87508; --st-confirmed-soft: #F7EEDA;
+    --st-implementing: #2563B0; --st-implementing-soft: #E4EEF9;
+    --st-reviewed: #0E8A74;  --st-reviewed-soft: #E0F2EE;
+    --st-archived: #8A93A1;  --st-archived-soft: #EEF0F3;
+    --warn: #B0451E;         --warn-soft: #F9E9E2;
+    --src-bg: #FBF4EC;
+    --shadow: 0 12px 40px rgba(15, 25, 45, 0.18);
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10141B; --surface: #171C25; --surface2: #1D2330;
+      --ink: #E6EAF1; --muted: #93A0B4; --faint: #6E7A8E; --line: #242B38;
+      --accent: #E08A3C; --accent-soft: #3A2717;
+      --st-backlog: #7FAF8C;   --st-backlog-soft: #1D2B22;
+      --st-draft: #97A6BC;     --st-draft-soft: #222938;
+      --st-confirmed: #D9A83E; --st-confirmed-soft: #33290F;
+      --st-implementing: #6CA5E8; --st-implementing-soft: #1A2A40;
+      --st-reviewed: #4CBFA6;  --st-reviewed-soft: #12312A;
+      --st-archived: #7C8798;  --st-archived-soft: #20262F;
+      --warn: #E37D53;         --warn-soft: #3A2018;
+      --src-bg: #2A2118;
+      --shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #F2F4F7; --surface: #FFFFFF; --surface2: #F7F9FB;
+    --ink: #1B2432; --muted: #647084; --faint: #8B96A8; --line: #E2E6ED;
+    --accent: #B4530A; --accent-soft: #F6E8DC;
+    --st-backlog: #4E7A5A;   --st-backlog-soft: #E7F0E9;
+    --st-draft: #6B7A90;     --st-draft-soft: #ECEFF4;
+    --st-confirmed: #A87508; --st-confirmed-soft: #F7EEDA;
+    --st-implementing: #2563B0; --st-implementing-soft: #E4EEF9;
+    --st-reviewed: #0E8A74;  --st-reviewed-soft: #E0F2EE;
+    --st-archived: #8A93A1;  --st-archived-soft: #EEF0F3;
+    --warn: #B0451E;         --warn-soft: #F9E9E2;
+    --src-bg: #FBF4EC;
+    --shadow: 0 12px 40px rgba(15, 25, 45, 0.18);
+  }
+  :root[data-theme="dark"] {
+    --bg: #10141B; --surface: #171C25; --surface2: #1D2330;
+    --ink: #E6EAF1; --muted: #93A0B4; --faint: #6E7A8E; --line: #242B38;
+    --accent: #E08A3C; --accent-soft: #3A2717;
+    --st-backlog: #7FAF8C;   --st-backlog-soft: #1D2B22;
+    --st-draft: #97A6BC;     --st-draft-soft: #222938;
+    --st-confirmed: #D9A83E; --st-confirmed-soft: #33290F;
+    --st-implementing: #6CA5E8; --st-implementing-soft: #1A2A40;
+    --st-reviewed: #4CBFA6;  --st-reviewed-soft: #12312A;
+    --st-archived: #7C8798;  --st-archived-soft: #20262F;
+    --warn: #E37D53;         --warn-soft: #3A2018;
+    --src-bg: #2A2118;
+    --shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--sans); font-size: 14px; line-height: 1.55;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .wrap { max-width: 1520px; margin: 0 auto; padding: 0 24px 64px; }
+
+  .topbar { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; padding: 20px 0 0; }
+  .wordmark { font-family: var(--mono); font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+  .wordmark .tail { color: var(--accent); }
+  .topmeta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: var(--mono); font-size: 11px; padding: 2px 8px;
+    border: 1px solid var(--line); border-radius: 4px; color: var(--muted);
+    background: var(--surface);
+  }
+  .chip b { color: var(--ink); font-weight: 600; }
+  .chip.serve-live { color: var(--st-implementing); border-color: var(--st-implementing); }
+  .gen { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--faint); }
+
+  .project-strip {
+    margin-top: 16px; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 8px; padding: 14px 18px;
+    display: flex; gap: 24px; align-items: center; flex-wrap: wrap;
+  }
+  .proj-main { min-width: 260px; flex: 1 1 300px; }
+  .proj-name-row { display: flex; align-items: center; gap: 10px; }
+  .proj-name { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+  .pill { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; letter-spacing: 0.03em; }
+  .pill.active { background: var(--st-reviewed-soft); color: var(--st-reviewed); }
+  .proj-phase { color: var(--muted); margin-top: 3px; font-size: 13px; }
+  .proj-phase .upd { color: var(--faint); font-family: var(--mono); font-size: 11px; margin-left: 8px; }
+  .stats { display: flex; gap: 0; border-left: 1px solid var(--line); padding-left: 24px; flex-wrap: wrap; }
+  .stat { padding: 0 20px 0 0; margin-right: 20px; }
+  .stat .num { font-family: var(--mono); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .stat .lbl { font-size: 11px; color: var(--muted); letter-spacing: 0.04em; }
+  .stat .sub { font-size: 10px; color: var(--faint); font-family: var(--mono); }
+  .src-toggle {
+    display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted);
+    cursor: pointer; user-select: none; padding: 6px 10px; border: 1px dashed var(--line); border-radius: 6px;
+  }
+  .src-toggle input { accent-color: var(--accent); cursor: pointer; }
+
+  .src {
+    display: none; font-family: var(--mono); font-size: 9.5px; color: var(--accent);
+    background: var(--src-bg); border: 1px dashed var(--accent);
+    border-radius: 3px; padding: 0 4px; margin-top: 2px; width: fit-content;
+    line-height: 1.6; opacity: 0.9; white-space: nowrap;
+  }
+  .show-src .src { display: inline-block; }
+
+  .warn-banner {
+    margin-top: 12px; background: var(--warn-soft); border: 1px solid var(--warn);
+    color: var(--warn); border-radius: 8px; padding: 10px 14px; font-size: 12.5px; line-height: 1.7;
+  }
+
+  .board-scroll { overflow-x: auto; margin-top: 20px; padding-bottom: 8px; }
+  .board { display: flex; gap: 14px; min-width: max-content; align-items: flex-start; }
+  .col { width: 268px; flex: none; }
+  .col-head {
+    display: flex; align-items: baseline; gap: 8px; padding: 4px 6px 8px;
+    border-bottom: 2px solid var(--col-color, var(--line)); margin-bottom: 10px;
+  }
+  .col-head .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--col-color); align-self: center; }
+  .col-head .name { font-weight: 700; font-size: 13px; letter-spacing: 0.02em; }
+  .col-head .en { font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+  .col-head .count {
+    margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .col-note { font-size: 11px; color: var(--faint); padding: 2px 6px 10px; line-height: 1.5; }
+
+  .cards { display: flex; flex-direction: column; gap: 10px; }
+  .card {
+    position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 11px 13px 12px; cursor: pointer; text-align: left; width: 100%;
+    transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+  }
+  .card::after {
+    content: "›"; position: absolute; top: 9px; right: 11px;
+    font-family: var(--mono); font-size: 13px; color: var(--faint); opacity: 0; transition: opacity 0.15s ease;
+  }
+  .card:hover { border-color: var(--accent); }
+  .card:hover::after { opacity: 1; }
+  @media (prefers-reduced-motion: no-preference) {
+    .card:hover { box-shadow: 0 3px 12px rgba(20, 30, 50, 0.08); transform: translateY(-1px); }
+  }
+  .card.dim { opacity: 0.62; }
+  .card.dim:hover { opacity: 1; }
+
+  .card-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding-right: 14px; }
+  .seq { font-family: var(--mono); font-size: 11.5px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tier { font-family: var(--mono); font-size: 9.5px; padding: 0.5px 6px; border-radius: 3px; letter-spacing: 0.05em; font-weight: 600; }
+  .tier.full { background: var(--st-implementing-soft); color: var(--st-implementing); }
+  .tier.light { border: 1px solid var(--line); color: var(--muted); }
+  .type { font-family: var(--mono); font-size: 10px; color: var(--faint); }
+  .card-title { font-size: 13.5px; font-weight: 650; margin-top: 5px; line-height: 1.4; text-wrap: balance; }
+  .card-summary { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+  .slug { font-family: var(--mono); font-size: 10px; color: var(--faint); margin-top: 4px; }
+
+  .progress { margin-top: 9px; display: flex; flex-direction: column; gap: 6px; }
+  .prog-row { display: flex; align-items: center; gap: 8px; }
+  .prog-lbl { font-family: var(--mono); font-size: 10px; color: var(--muted); width: 30px; flex: none; }
+  .bar { flex: 1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 2px; background: var(--bar-color, var(--st-implementing)); }
+  .prog-num { font-family: var(--mono); font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; width: 68px; flex: none; text-align: right; }
+
+  .card-foot { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; align-items: center; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--mono); font-size: 10px; padding: 1px 6px;
+    border-radius: 4px; background: var(--surface2); border: 1px solid var(--line); color: var(--muted);
+  }
+  .tag.ok { background: var(--st-reviewed-soft); border-color: transparent; color: var(--st-reviewed); }
+  .tag.warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); font-weight: 600; }
+  .tag.lock { background: var(--st-confirmed-soft); border-color: transparent; color: var(--st-confirmed); }
+  .tag.branch { background: var(--st-implementing-soft); border-color: transparent; color: var(--st-implementing); }
+  .date { font-family: var(--mono); font-size: 10px; color: var(--faint); margin-left: auto; }
+
+  .bl-title { font-size: 13px; font-weight: 600; line-height: 1.45; padding-right: 12px; }
+  .bl-note { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  .bl-tags { display: flex; gap: 4px; margin-top: 7px; flex-wrap: wrap; align-items: center; }
+
+  .backdrop {
+    position: fixed; inset: 0; background: rgba(10, 16, 28, 0.35);
+    opacity: 0; pointer-events: none; transition: opacity 0.2s ease; z-index: 40;
+  }
+  .backdrop.open { opacity: 1; pointer-events: auto; }
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 94vw);
+    background: var(--surface); border-left: 1px solid var(--line); box-shadow: var(--shadow);
+    transform: translateX(102%); transition: transform 0.22s ease; z-index: 50;
+    display: flex; flex-direction: column;
+  }
+  .drawer.open { transform: translateX(0); }
+  @media (prefers-reduced-motion: reduce) { .drawer, .backdrop, .card { transition: none; } }
+  .drawer-head { padding: 18px 20px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: flex-start; gap: 10px; }
+  .drawer-head .titles { flex: 1; min-width: 0; }
+  .drawer-chips { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .drawer-title { font-size: 17px; font-weight: 700; margin-top: 6px; line-height: 1.35; letter-spacing: -0.01em; }
+  .st-pill { font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 1px 8px; border-radius: 999px; letter-spacing: 0.04em; }
+  .close-btn {
+    flex: none; border: 1px solid var(--line); background: var(--surface2); color: var(--muted);
+    border-radius: 6px; width: 28px; height: 28px; font-size: 15px; line-height: 1; cursor: pointer; font-family: var(--mono);
+  }
+  .close-btn:hover { color: var(--ink); border-color: var(--faint); }
+  .drawer-body { overflow-y: auto; padding: 16px 20px 24px; flex: 1; }
+  .d-section { margin-bottom: 18px; }
+  .d-label {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; color: var(--faint);
+    font-family: var(--mono); margin-bottom: 7px; display: flex; align-items: baseline; gap: 8px;
+  }
+  .d-label .cnt { font-weight: 400; }
+  .meta-grid {
+    display: grid; grid-template-columns: auto 1fr; gap: 4px 14px;
+    font-size: 12px; background: var(--surface2); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px;
+  }
+  .meta-grid dt { color: var(--faint); font-family: var(--mono); font-size: 10.5px; margin: 0; align-self: baseline; }
+  .meta-grid dd { margin: 0; font-family: var(--mono); font-size: 11.5px; color: var(--ink); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .intent-text { font-size: 13px; line-height: 1.65; white-space: pre-wrap; }
+  .md-block { font-size: 13px; line-height: 1.65; }
+  .md-block p { margin: 0 0 8px; }
+  .md-block p:last-child { margin-bottom: 0; }
+  .md-block ul { margin: 2px 0 8px; padding-left: 18px; }
+  .md-block ul ul { margin: 2px 0; }
+  .md-block li { margin-bottom: 2px; }
+  .md-block blockquote {
+    margin: 6px 0; padding: 2px 10px; border-left: 2px solid var(--line); color: var(--muted); font-size: 12.5px;
+  }
+  .md-block h4 { font-size: 12px; font-weight: 700; color: var(--ink); margin: 10px 0 4px; }
+  .md-block h4:first-child { margin-top: 0; }
+  .md-block strong { font-weight: 700; color: var(--ink); }
+  .md-block code, .intent-text code, .decisions code {
+    font-family: var(--mono); font-size: 11px; background: var(--surface2); border: 1px solid var(--line); border-radius: 3px; padding: 0 3px;
+  }
+  .decisions { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
+  .decisions li { font-size: 12px; color: var(--muted); padding-left: 14px; position: relative; line-height: 1.55; }
+  .decisions li::before { content: "▸"; position: absolute; left: 0; color: var(--accent); font-size: 10px; top: 2px; }
+  .decisions li .assume { color: var(--faint); font-size: 10.5px; font-family: var(--mono); }
+
+  .cklist { display: flex; flex-direction: column; gap: 7px; margin: 0; padding: 0; list-style: none; }
+  .cklist li { display: flex; gap: 9px; font-size: 12.5px; line-height: 1.5; align-items: flex-start; }
+  .ck { flex: none; width: 14px; height: 14px; border-radius: 3px; border: 1.5px solid var(--faint); margin-top: 2px; position: relative; }
+  .ck.done { background: var(--st-reviewed); border-color: var(--st-reviewed); }
+  .ck.done::after {
+    content: ""; position: absolute; left: 4px; top: 1px; width: 3.5px; height: 7px;
+    border: solid #fff; border-width: 0 1.8px 1.8px 0; transform: rotate(42deg);
+  }
+  .ck-code { font-family: var(--mono); font-size: 10.5px; font-weight: 700; color: var(--muted); flex: none; margin-top: 1px; }
+  .ck-text .vnote { display: block; font-size: 11px; color: var(--faint); margin-top: 1px; }
+  .ck-text .vnote.manual { color: var(--st-confirmed); }
+  .ck-text .vnote code, .ck-text code { font-family: var(--mono); font-size: 10px; background: var(--surface2); border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; }
+  .batch-name { font-family: var(--mono); font-size: 10.5px; color: var(--muted); font-weight: 700; margin: 10px 0 6px; }
+  .batch-name:first-child { margin-top: 0; }
+
+  .gates { display: flex; flex-direction: column; gap: 8px; }
+  .gate-row { background: var(--surface2); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+  .gate-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 3px; }
+  .gate-name { font-family: var(--mono); font-weight: 700; font-size: 11.5px; color: var(--ink); }
+  .gate-rounds { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+  .gate-line { font-size: 12px; line-height: 1.6; color: var(--muted); }
+  .gate-line.gate-next { color: var(--faint); }
+  .gate-titles { margin: 5px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; }
+  .gate-titles li { font-size: 11px; color: var(--warn); }
+  .gate-titles code {
+    font-family: var(--mono); font-size: 10.5px; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 3px; padding: 0 4px; color: var(--ink);
+  }
+  .path-box {
+    font-family: var(--mono); font-size: 11px; background: var(--surface2);
+    border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px;
+    color: var(--muted); overflow-wrap: anywhere; user-select: all;
+  }
+  .path-hint { font-size: 10.5px; color: var(--faint); margin-top: 5px; }
+  .oq-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .oq-list li { font-size: 12px; color: var(--muted); line-height: 1.55; padding-left: 14px; position: relative; }
+  .oq-list li::before { content: "?"; position: absolute; left: 0; color: var(--st-confirmed); font-family: var(--mono); font-weight: 700; font-size: 11px; }
+
+  .prov { margin-top: 36px; }
+  .prov h2 { font-size: 16px; letter-spacing: -0.01em; margin: 0 0 4px; }
+  .prov .lede { color: var(--muted); font-size: 13px; margin: 0 0 16px; max-width: 62ch; }
+  .prov-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .prov-card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; }
+  .prov-card h3 { margin: 0; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .badge { font-family: var(--mono); font-size: 10px; padding: 1px 7px; border-radius: 999px; font-weight: 600; }
+  .badge.a { background: var(--st-reviewed-soft); color: var(--st-reviewed); }
+  .badge.b { background: var(--st-implementing-soft); color: var(--st-implementing); }
+  .badge.c { background: var(--warn-soft); color: var(--warn); }
+  .prov-card ul { margin: 10px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; }
+  .prov-card li { font-size: 12.5px; display: flex; gap: 8px; align-items: baseline; line-height: 1.5; }
+  .prov-card li code { font-family: var(--mono); font-size: 10.5px; background: var(--surface2); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; white-space: nowrap; }
+  .prov-card li .who { color: var(--faint); font-size: 11px; flex: none; margin-left: auto; font-family: var(--mono); }
+  .prov-card .note { font-size: 11.5px; color: var(--faint); margin-top: 10px; line-height: 1.5; }
+
+  .empty-hint { color: var(--faint); font-size: 12px; padding: 8px 4px; }
+</style>
+
+<div class="wrap">
+  <header class="topbar" id="topbar"></header>
+  <section class="project-strip" id="projectStrip"></section>
+  <div id="warnBanner"></div>
+
+  <div class="board-scroll"><main class="board" id="board"></main></div>
+
+  <section class="prov">
+    <h2>这块板的每一格数据从哪来</h2>
+    <p class="lede">打开右上角「标注数据来源」可逐元素查看来源标注；点任意卡片看详情抽屉。数据分三档：直接可读、现场推导、拿不到（需要新约定）。</p>
+    <div class="prov-grid">
+      <div class="prov-card">
+        <h3><span class="badge a">直接可读</span>frontmatter / .eo-project.json 一行解析</h3>
+        <ul>
+          <li><code>seq · title · summary · status · tier · type · created</code><span class="who">eo-change 写入</span></li>
+          <li><code>issue · pr · commits[] · test_lock_commit</code><span class="who">联动 / eo-implement 回写</span></li>
+          <li>backlog 卡全字段 + <code>adopted_by / dropped_reason</code><span class="who">eo-backlog</span></li>
+          <li>roadmap 的 <code>status · phase · summary · updated</code><span class="who">eo-project-init</span></li>
+          <li>项目名 / 模式 / 联动开关<span class="who">.eo-project.json</span></li>
+        </ul>
+      </div>
+      <div class="prov-card">
+        <h3><span class="badge b">现场推导</span>解析正文或问 git</h3>
+        <ul>
+          <li>AC 进度 = §2 checkbox 计数；TODO / Batch 进度 = §3<span class="who">正文解析</span></li>
+          <li>意图段落、已钉决策、开放问题<span class="who">§1 / §8 解析</span></li>
+          <li>review 结论与 P0/P1/P2 计数<span class="who">review.md 启发式解析</span></li>
+          <li>test.md / change-review.md 有无<span class="who">目录探测</span></li>
+          <li>所在 worktree、分支、commit 数<span class="who">git worktree + [slug] 前缀</span></li>
+          <li>末次活动时间、停滞天数<span class="who">git log 日期 / 目录 mtime 兜底</span></li>
+          <li>直改流量统计<span class="who">git log --grep '^fix:|^ui:'</span></li>
+        </ul>
+      </div>
+      <div class="prov-card">
+        <h3><span class="badge c">拿不到</span>现约定下不存在</h3>
+        <ul>
+          <li>负责人 / assignee——多人协作字段不存在</li>
+          <li>各状态停留时长——状态迁移不留历史时间戳</li>
+          <li>review 问题的核销状态——review.md 只有产出时快照</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="backdrop" id="backdrop"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+  <div class="drawer-head">
+    <div class="titles">
+      <div class="drawer-chips" id="drawerChips"></div>
+      <div class="drawer-title" id="drawerTitle"></div>
+    </div>
+    <button class="close-btn" id="closeBtn" aria-label="关闭详情">×</button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</aside>
+
+<script type="application/json" id="eo-board-data">__EO_BOARD_DATA_JSON__</script>
+<script>
+var DATA = JSON.parse(document.getElementById('eo-board-data').textContent);
+var STATUS = {
+  backlog:      { zh: '待办池',  cssVar: '--st-backlog' },
+  draft:        { zh: '草稿',    cssVar: '--st-draft' },
+  confirmed:    { zh: '已确认',  cssVar: '--st-confirmed' },
+  implementing: { zh: '实施中',  cssVar: '--st-implementing' },
+  reviewed:     { zh: '审查通过', cssVar: '--st-reviewed' },
+  archived:     { zh: '已归档',  cssVar: '--st-archived' }
+};
+var STATUS_ORDER = ['backlog', 'draft', 'confirmed', 'implementing', 'reviewed', 'archived'];
+var CARD_INDEX = {};
+var openDetailId = null;
+
+function esc(s) {
+  return String(s === null || s === undefined ? '' : s).replace(/[&<>"]/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+  });
+}
+
+// ── 安全迷你 markdown：白名单转换，且只作用在 esc() 之后的文本上 ──
+// applyInline 的入参必须已经过 esc()；** / ` 本身不在转义字符集里，转义后依旧原样可匹配，
+// 而载荷里夹带的 <script> 等已经变成 &lt;script&gt;，转换只会把它们包进 <strong>/<code>，不会变回真标签。
+function applyInline(escapedText) {
+  var s = escapedText.replace(/`([^`]+)`/g, function (_, code) { return '<code>' + code + '</code>'; });
+  s = s.replace(/\*\*([^*]+)\*\*/g, function (_, b) { return '<strong>' + b + '</strong>'; });
+  return s;
+}
+
+function mdInline(raw) {
+  return applyInline(esc(raw));
+}
+
+// 一层嵌套列表：缩进行归入上一个顶层 li 的子 <ul>
+function mdList(lines, startIdx) {
+  var top = [];
+  var i = startIdx;
+  while (i < lines.length) {
+    var m = lines[i].match(/^(\s*)[-*]\s+(.*)$/);
+    if (!m) break;
+    var text = applyInline(m[2]);
+    if (m[1].length === 0 || !top.length) {
+      top.push({ text: text, sub: [] });
+    } else {
+      top[top.length - 1].sub.push(text);
+    }
+    i++;
+  }
+  var html = '<ul>' + top.map(function (it) {
+    return '<li>' + it.text + (it.sub.length ? '<ul>' + it.sub.map(function (s) { return '<li>' + s + '</li>'; }).join('') + '</ul>' : '') + '</li>';
+  }).join('') + '</ul>';
+  return { html: html, next: i };
+}
+
+// 块级：段落 / 单行换行 / 列表 / 引用块 / ###·#### 子标题。
+// 全文先 esc() 一次再按行做结构识别——不引入通用 md 库，只认这几种白名单结构。
+function mdBlock(raw) {
+  if (!raw) return '';
+  var lines = esc(raw).split('\n');
+  var html = '';
+  var i = 0;
+  while (i < lines.length) {
+    var line = lines[i];
+    var trimmed = line.trim();
+    if (!trimmed) { i++; continue; }
+
+    var mHeading = trimmed.match(/^(#{3,4})\s+(.*)$/);
+    if (mHeading) {
+      html += '<h4>' + applyInline(mHeading[2]) + '</h4>';
+      i++;
+      continue;
+    }
+    if (/^&gt;\s?/.test(trimmed)) {
+      var quoteLines = [];
+      while (i < lines.length && /^&gt;\s?/.test(lines[i].trim())) {
+        quoteLines.push(applyInline(lines[i].trim().replace(/^&gt;\s?/, '')));
+        i++;
+      }
+      html += '<blockquote>' + quoteLines.join('<br>') + '</blockquote>';
+      continue;
+    }
+    if (/^(\s*)[-*]\s+/.test(line)) {
+      var listResult = mdList(lines, i);
+      html += listResult.html;
+      i = listResult.next;
+      continue;
+    }
+    var paraLines = [];
+    while (i < lines.length && lines[i].trim()
+           && !/^(#{3,4})\s+/.test(lines[i].trim())
+           && !/^&gt;\s?/.test(lines[i].trim())
+           && !/^(\s*)[-*]\s+/.test(lines[i])) {
+      paraLines.push(applyInline(lines[i].trim()));
+      i++;
+    }
+    if (paraLines.length) html += '<p>' + paraLines.join('<br>') + '</p>';
+  }
+  return html;
+}
+
+function stPill(status) {
+  var st = STATUS[status] || { zh: status, cssVar: '--st-draft' };
+  return '<span class="st-pill" style="background: var(' + st.cssVar + '-soft); color: var(' + st.cssVar + ')">'
+    + esc(status) + ' · ' + esc(st.zh) + '</span>';
+}
+
+function metaRow(dt, dd) { return '<dt>' + dt + '</dt><dd>' + dd + '</dd>'; }
+
+function ckItem(it) {
+  var noteCls = it.manual ? 'vnote manual' : 'vnote';
+  var html = '<li><span class="ck' + (it.done ? ' done' : '') + '"></span>';
+  if (it.code) html += '<span class="ck-code">' + esc(it.code) + '</span>';
+  html += '<span class="ck-text">' + mdInline(it.text);
+  if (it.note) html += '<span class="' + noteCls + '">' + esc(it.note) + '</span>';
+  if (it.file) {
+    html += '<span class="vnote"><code>' + esc(it.file) + '</code>'
+      + (it.ac ? ' · 对应 ' + esc(it.ac) : '')
+      + (it.criteria ? '（完成判据：' + esc(it.criteria) + '）' : '') + '</span>';
+  }
+  html += '</span></li>';
+  return html;
+}
+
+function gateRow(label, roundsText, g, detailTitles) {
+  var html = '<div class="gate-row"><div class="gate-head"><span class="gate-name">' + esc(label) + '</span>';
+  if (roundsText) html += '<span class="gate-rounds">' + esc(roundsText) + '</span>';
+  html += '</div>';
+  if (g.verdict || g.next) {
+    if (g.verdict) html += '<div class="gate-line">结论：' + mdInline(g.verdict) + '</div>';
+    if (g.next) html += '<div class="gate-line gate-next">下一步：' + mdInline(g.next) + '</div>';
+  } else {
+    html += '<div class="gate-line" style="color: var(--faint)">速报未解析到（文件可能偏离模板），仅确认文件存在</div>';
+  }
+  if (detailTitles && detailTitles.length) {
+    html += '<ul class="gate-titles">' + detailTitles.map(function (t) {
+      return '<li><code>' + mdInline(t) + '</code></li>';
+    }).join('') + '</ul>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderGates(d) {
+  var g = d.gates;
+  if (!g || !(g.change_review || g.review || g.test || g.acceptance)) return '';
+  var h = '<div class="d-section"><div class="d-label">质量门</div><div class="gates">';
+  if (g.change_review) {
+    var cr = g.change_review;
+    h += gateRow('change-review', '第 ' + cr.rounds + ' 轮 · ' + esc(cr.mode || '?')
+      + (cr.open_p0 ? (' · open P0×' + cr.open_p0) : ''), cr, null);
+  }
+  if (g.review) {
+    var rv = g.review;
+    h += gateRow('review', '≈' + rv.rounds_approx + ' 轮 · P0×' + rv.p0 + ' P1×' + rv.p1 + ' P2×' + rv.p2, rv, rv.p0_titles);
+  }
+  if (g.test) {
+    var ts = g.test;
+    h += gateRow('test', '≈' + ts.rounds_approx + ' 轮 · FAIL×' + ts.fail_count, ts, ts.fail_titles);
+  }
+  if (g.acceptance) {
+    var a = g.acceptance;
+    h += '<div class="gate-row"><div class="gate-head"><span class="gate-name">人工验收</span>'
+      + '<span class="gate-rounds">' + (a.total - a.unchecked) + '/' + a.total + ' 已勾</span></div>'
+      + (a.unchecked
+        ? '<div class="gate-line">待勾 ' + a.unchecked + ' 项</div>'
+        : '<div class="gate-line" style="color: var(--st-reviewed)">全部已勾</div>')
+      + '</div>';
+  }
+  h += '</div></div>';
+  return h;
+}
+
+function renderChange(d) {
+  var h = '';
+  var meta = metaRow('created', esc(d.created || '—'))
+    + metaRow('最近活动', esc(d.last_touch || '—') + ' <span class="src">git 推导</span>')
+    + metaRow('worktree', esc(d.worktree_name || '—') + (d.branch && !d.is_default_worktree ? ' ⎇ ' + esc(d.branch) : ''));
+  if (d.commit_count) meta += metaRow('commits', d.commit_count + ' 个（[' + esc(d.id) + '] 前缀）');
+  if (d.test_lock_commit) meta += metaRow('测试锁定', esc(d.test_lock_commit) + ' <span class="src">frontmatter·test_lock_commit</span>');
+  if (d.issue !== null && d.issue !== undefined) meta += metaRow('issue', '#' + esc(d.issue));
+  if (d.pr) meta += metaRow('PR', esc(d.pr));
+  if (d.stale) meta += metaRow('停滞', '<span style="color: var(--warn); font-weight: 700">' + d.stale_days + ' 天未动（防蒸发提醒）</span>');
+  h += '<div class="d-section"><dl class="meta-grid">' + meta + '</dl></div>';
+
+  h += '<div class="d-section"><div class="d-label">意图 §1 <span class="src">正文解析</span></div>'
+    + '<div class="md-block">' + (d.intent ? mdBlock(d.intent) : '<p style="color: var(--faint)">（未解析到意图正文）</p>') + '</div>';
+  if (d.decisions && d.decisions.length) {
+    h += '<ul class="decisions">' + d.decisions.map(function (dc) {
+      return '<li>' + mdInline(dc.text) + (dc.assume ? ' <span class="assume">（假设，未逐条确认）</span>' : '') + '</li>';
+    }).join('') + '</ul>';
+  }
+  h += '</div>';
+
+  var acDone = d.ac.filter(function (a) { return a.done; }).length;
+  h += '<div class="d-section"><div class="d-label">验收清单 §2 <span class="cnt">' + acDone + '/' + d.ac.length + '</span>'
+    + '<span class="src">§2 checkbox 现场计数</span></div>'
+    + (d.ac.length ? '<ul class="cklist">' + d.ac.map(ckItem).join('') + '</ul>' : '<div class="empty-hint">未解析到 AC（可能是正文格式不规整）</div>') + '</div>';
+
+  if (d.todo) {
+    var all = d.todo.reduce(function (acc, b) { return acc.concat(b.items); }, []);
+    var tdDone = all.filter(function (t) { return t.done; }).length;
+    h += '<div class="d-section"><div class="d-label">TODO §3 <span class="cnt">' + tdDone + '/' + all.length + '</span>'
+      + '<span class="src">§3 checkbox · Batch 分组</span></div>';
+    d.todo.forEach(function (b) {
+      h += '<div class="batch-name">' + esc(b.batch) + '</div><ul class="cklist">' + b.items.map(ckItem).join('') + '</ul>';
+    });
+    h += '</div>';
+  } else {
+    h += '<div class="d-section"><div class="d-label">TODO §3</div>'
+      + '<div class="intent-text" style="color: var(--faint); font-size: 12px">轻档无 TODO 节（AC 即工作清单）</div></div>';
+  }
+
+  h += renderGates(d);
+
+  if (d.oq && d.oq.length) {
+    h += '<div class="d-section"><div class="d-label">开放问题 §8</div><ul class="oq-list">'
+      + d.oq.map(function (q) { return '<li>' + (q.code ? '<b>' + esc(q.code) + '</b> ' : '') + esc(q.text) + '</li>'; }).join('')
+      + '</ul></div>';
+  }
+
+  h += '<div class="d-section"><div class="d-label">全文</div>'
+    + '<div class="path-box">' + esc(d.path) + '</div>'
+    + '<div class="path-hint">§4 涉及文件 / §5 技术方案 / §6 流程图 / §7 风险等条件节不进抽屉——复制路径进 IDE 看全文</div></div>';
+  return h;
+}
+
+function renderBacklog(d) {
+  var h = '';
+  var meta = metaRow('created', esc(d.created || '—'));
+  if (d.tags && d.tags.length) meta += metaRow('tags', d.tags.map(esc).join(' · '));
+  if (d.issue) meta += metaRow('issue', esc(d.issue) + ' <span class="src">frontmatter·issue（外来）</span>');
+  h += '<div class="d-section"><dl class="meta-grid">' + meta + '</dl></div>';
+  h += '<div class="d-section"><div class="d-label">正文 <span class="src">卡片全文，源数据可直接手改</span></div>'
+    + '<div class="intent-text">' + (d.body ? esc(d.body) : '<span style="color: var(--faint)">（无补充说明）</span>') + '</div></div>';
+  h += '<div class="d-section"><div class="d-label">文件</div><div class="path-box">' + esc(d.path) + '</div>'
+    + '<div class="path-hint">backlog 卡是源数据不是投影——改 title / tags / 正文直接编辑此文件即可</div></div>';
+  return h;
+}
+
+function changeCard(d) {
+  var acDone = d.ac.filter(function (a) { return a.done; }).length, acTotal = d.ac.length;
+  var acPct = acTotal ? Math.round(acDone / acTotal * 100) : 0;
+  var todoHtml = '';
+  if (d.todo) {
+    var all = d.todo.reduce(function (acc, b) { return acc.concat(b.items); }, []);
+    var tdDone = all.filter(function (t) { return t.done; }).length, tdTotal = all.length;
+    var tdPct = tdTotal ? Math.round(tdDone / tdTotal * 100) : 0;
+    var batchDone = d.todo.filter(function (b) { return b.items.length && b.items.every(function (i) { return i.done; }); }).length;
+    todoHtml = '<div class="prog-row"><span class="prog-lbl">TODO</span><span class="bar"><i style="width:' + tdPct + '%"></i></span>'
+      + '<span class="prog-num">' + tdDone + '/' + tdTotal + ' · B' + batchDone + '/' + d.todo.length + '</span></div>';
+  }
+  var foot = '';
+  if (d.branch && !d.is_default_worktree) foot += '<span class="tag branch">⎇ ' + esc(d.branch) + ' · ' + esc(d.worktree_name) + '</span>';
+  if (d.commit_count) foot += '<span class="tag">' + d.commit_count + ' commits</span>';
+  if (d.issue !== null && d.issue !== undefined) foot += '<span class="tag ok">issue #' + esc(d.issue) + '</span>';
+  if (d.pr) foot += '<span class="tag ok">PR ↗</span>';
+  if (d.test_lock_commit) foot += '<span class="tag lock">测试锁定 ' + esc(d.test_lock_commit) + '</span>';
+  if (d.artifacts && d.artifacts.change_review && d.artifacts.change_review.exists) foot += '<span class="tag">change-review ✓</span>';
+  if (d.artifacts && d.artifacts.test && d.artifacts.test.exists) foot += '<span class="tag">test.md ✓</span>';
+  if (d.stale) foot += '<span class="tag warn">⚠ ' + d.stale_days + ' 天未动</span>';
+  if (d.blocker) foot += '<span class="tag warn">⛔ ' + esc(d.blocker) + '</span>';
+
+  return '<article class="card' + (d.status === 'archived' ? ' dim' : '') + '" data-detail="' + esc(d._key)
+    + '" tabindex="0" role="button" aria-label="查看详情：#' + esc(d.seq != null ? d.seq : '?') + ' ' + esc(d.title) + '">'
+    + '<div class="card-top"><span class="seq">#' + esc(d.seq != null ? d.seq : '?') + '</span>'
+    + '<span class="tier ' + esc(d.tier) + '">' + esc(d.tier) + '</span>'
+    + '<span class="type">' + esc(d.type) + '</span><span class="src">frontmatter</span></div>'
+    + '<div class="card-title">' + esc(d.title) + '</div>'
+    + (d.summary ? '<div class="card-summary">' + esc(d.summary) + '</div>' : '')
+    + '<div class="slug">' + esc(d.dirname || d.id) + '/</div>'
+    + '<div class="progress">'
+    + '<div class="prog-row" style="--bar-color: var(--st-reviewed)"><span class="prog-lbl">AC</span><span class="bar"><i style="width:' + acPct + '%"></i></span><span class="prog-num">' + acDone + '/' + acTotal + '</span></div>'
+    + todoHtml
+    + '<span class="src">正文 checkbox 现场计数</span>'
+    + '</div>'
+    + '<div class="card-foot">' + foot + '<span class="date">' + esc(d.last_touch || '') + '</span></div>'
+    + '</article>';
+}
+
+function backlogCard(d) {
+  var tags = (d.tags || []).map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join('');
+  return '<article class="card" data-detail="' + esc(d._key) + '" tabindex="0" role="button" aria-label="查看详情：' + esc(d.title) + '">'
+    + '<div class="bl-title">' + esc(d.title) + '</div>'
+    + (d.body ? '<div class="bl-note">' + esc(d.body.length > 90 ? d.body.slice(0, 90) + '…' : d.body) + '</div>' : '')
+    + '<div class="bl-tags">' + tags + (d.issue ? '<span class="tag ok">外部 issue ↗</span>' : '') + '<span class="date">' + esc((d.created || '').slice(5)) + '</span></div>'
+    + '</article>';
+}
+
+function buildHeader() {
+  var p = DATA.project;
+  document.getElementById('topbar').innerHTML =
+    '<div class="wordmark">eo<span class="tail"> board</span></div>'
+    + '<div class="topmeta">'
+    + '<span class="chip">project <b>' + esc(p.name) + '</b><span class="src">.eo-project.json·project_name</span></span>'
+    + '<span class="chip">mode <b>' + esc(p.mode) + '</b><span class="src">.eo-project.json·mode</span></span>'
+    + '<span class="chip">github.issue <b>' + (p.github_issue ? 'on' : 'off') + '</b></span>'
+    + '<span class="chip">board <b>' + (p.board_enabled ? 'on' : 'off') + '</b></span>'
+    + (DATA.serve ? '<span class="chip serve-live">● 自动刷新中</span>' : '')
+    + '</div>'
+    + '<div class="gen">eo board' + (DATA.serve ? ' --serve' : ' --html') + ' · 扫描了 ' + DATA.scanned_worktrees
+    + ' 个 worktree · 生成于 ' + esc(DATA.generated_at) + ' · 只读投影，随时可重建</div>';
+
+  var rm = DATA.roadmap, s = DATA.stats;
+  var strip = '<div class="proj-main">';
+  if (rm) {
+    strip += '<div class="proj-name-row"><span class="proj-name">' + esc(p.name) + '</span>'
+      + (rm.status ? '<span class="pill active">' + esc(rm.status) + '</span>' : '')
+      + '<span class="src">roadmap.md·status</span></div>'
+      + '<div class="proj-phase">' + esc(rm.phase || rm.summary || '') + (rm.updated ? '<span class="upd">updated ' + esc(rm.updated) + '</span>' : '')
+      + ' <span class="src">roadmap.md·phase / updated</span></div>';
+  } else {
+    strip += '<div class="proj-name-row"><span class="proj-name">' + esc(p.name) + '</span></div>'
+      + '<div class="proj-phase" style="color:var(--faint)">未找到 roadmap.md（降级显示）</div>';
+  }
+  strip += '</div><div class="stats">'
+    + '<div class="stat"><div class="num">' + s.active_changes + '</div><div class="lbl">活跃 change</div><span class="src">status≠archived</span></div>'
+    + '<div class="stat"><div class="num">' + s.backlog_count + '</div><div class="lbl">backlog 卡</div><span class="src">backlog/*.md 计数</span></div>'
+    + '<div class="stat"><div class="num">' + s.direct_commits.total + '</div><div class="lbl">本月直改</div><div class="sub">fix:×' + s.direct_commits.fix + ' · ui:×' + s.direct_commits.ui + '</div><span class="src">git log --grep</span></div>'
+    + '<div class="stat"><div class="num">' + s.stale_count + '</div><div class="lbl">停滞提醒</div><div class="sub">轻档 &gt;30 天未动</div></div>'
+    + '<div class="stat"><div class="num" style="color: var(--warn)">' + s.blocked_count + '</div><div class="lbl">卡点</div><div class="sub">质量门未过</div></div>'
+    + '</div>'
+    + '<label class="src-toggle"><input type="checkbox" id="srcToggle"> 标注数据来源</label>';
+  document.getElementById('projectStrip').innerHTML = strip;
+  document.getElementById('srcToggle').addEventListener('change', function (e) {
+    document.documentElement.classList.toggle('show-src', e.target.checked);
+  });
+
+  var warnBox = document.getElementById('warnBanner');
+  warnBox.innerHTML = (DATA.warnings && DATA.warnings.length)
+    ? '<div class="warn-banner">⚠ ' + DATA.warnings.length + ' 条警告：' + DATA.warnings.map(esc).join(' ｜ ') + '</div>'
+    : '';
+}
+
+function buildBoard() {
+  CARD_INDEX = {};
+  var html = '';
+  STATUS_ORDER.forEach(function (status) {
+    var col = (status === 'backlog')
+      ? DATA.backlog
+      : DATA.changes.filter(function (c) { return c.status === status; });
+    var st = STATUS[status];
+    html += '<section class="col" style="--col-color: var(' + st.cssVar + ')">'
+      + '<div class="col-head"><span class="dot"></span><span class="name">' + st.zh + '</span>'
+      + '<span class="en">' + status + '</span><span class="count">' + col.length + '</span></div><div class="cards">';
+    if (!col.length) {
+      html += '<div class="empty-hint">（无）</div>';
+    }
+    col.forEach(function (d) {
+      d._key = (status === 'backlog' ? 'bl:' : 'ch:') + (d.id || d.path);
+      CARD_INDEX[d._key] = d;
+      html += status === 'backlog' ? backlogCard(d) : changeCard(d);
+    });
+    html += '</div>';
+    if (status === 'backlog' && DATA.backlog_archive && DATA.backlog_archive.count) {
+      html += '<div class="col-note">archive/ 另有 ' + DATA.backlog_archive.count + ' 张：adopted×' + DATA.backlog_archive.adopted + ' · dropped×' + DATA.backlog_archive.dropped + '<span class="src">backlog/archive/</span></div>';
+    }
+    if (status === 'implementing') html += '<div class="col-note">轻档无 TODO 节，只有 AC 进度；⚠ 为停滞提醒（轻档 &gt;30 天未动）</div>';
+    if (status === 'reviewed') html += '<div class="col-note">轻档跳过本列：完成门通过即 archived</div>';
+    html += '</section>';
+  });
+  document.getElementById('board').innerHTML = html;
+  bindCardEvents();
+}
+
+var drawer = document.getElementById('drawer');
+var backdrop = document.getElementById('backdrop');
+var lastFocus = null;
+
+function openDetail(key, isRefresh) {
+  var d = CARD_INDEX[key];
+  if (!d) return;
+  openDetailId = key;
+  var chips = d.kind === 'change'
+    ? '<span class="seq">#' + esc(d.seq != null ? d.seq : '?') + '</span><span class="tier ' + esc(d.tier) + '">' + esc(d.tier) + '</span><span class="type">' + esc(d.type) + '</span>' + stPill(d.status)
+    : stPill('backlog');
+  document.getElementById('drawerChips').innerHTML = chips;
+  document.getElementById('drawerTitle').textContent = d.title;
+  document.getElementById('drawerBody').innerHTML = d.kind === 'change' ? renderChange(d) : renderBacklog(d);
+  if (!isRefresh) document.getElementById('drawerBody').scrollTop = 0;
+  drawer.classList.add('open');
+  backdrop.classList.add('open');
+  if (!isRefresh) { lastFocus = document.activeElement; document.getElementById('closeBtn').focus(); }
+}
+
+function closeDetail() {
+  drawer.classList.remove('open');
+  backdrop.classList.remove('open');
+  openDetailId = null;
+  if (lastFocus) lastFocus.focus();
+}
+
+function bindCardEvents() {
+  document.querySelectorAll('.card[data-detail]').forEach(function (card) {
+    card.addEventListener('click', function () { openDetail(card.dataset.detail); });
+    card.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(card.dataset.detail); }
+    });
+  });
+}
+
+document.getElementById('closeBtn').addEventListener('click', closeDetail);
+backdrop.addEventListener('click', closeDetail);
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && drawer.classList.contains('open')) closeDetail(); });
+
+buildHeader();
+buildBoard();
+
+if (DATA.serve) {
+  var lastHash = null;
+  function hashStr(s) {
+    var h = 5381;
+    for (var i = 0; i < s.length; i++) { h = ((h << 5) + h + s.charCodeAt(i)) | 0; }
+    return h;
+  }
+  function refreshLoop() {
+    fetch('/data.json', { cache: 'no-store' }).then(function (r) { return r.text(); }).then(function (text) {
+      var h = hashStr(text);
+      if (h === lastHash) return;
+      lastHash = h;
+      DATA = JSON.parse(text);
+      buildHeader();
+      buildBoard();
+      if (openDetailId && CARD_INDEX[openDetailId]) {
+        openDetail(openDetailId, true);
+      } else if (openDetailId) {
+        closeDetail();
+      }
+    }).catch(function () { /* 网络抖动：静默跳过这一轮 */ });
+  }
+  setInterval(refreshLoop, 3000);
+}
+</script>
+"""
+
+
+def render_html(data):
+    html = HTML_TEMPLATE.replace("__EO_BOARD_TITLE__", escape_html_text(f"eo board · {data['project']['name']}"))
+    return html.replace("__EO_BOARD_DATA_JSON__", embed_json(data))
+
+
+# ============================================================
+# 三种运行形态
+# ============================================================
+
+def cmd_terminal(cfg):
+    print(render_terminal(build_data(cfg)))
+
+
+def cmd_html(cfg, args):
+    data = build_data(cfg)
+    html = render_html(data)
+    if args.output:
+        out_path = Path(args.output).expanduser().resolve()
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        tmp_dir = Path(tempfile.gettempdir()) / "eo-board"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        out_path = tmp_dir / f"eo-board-{cfg['project_name']}-{ts}.html"
+    out_path.write_text(html, encoding="utf-8")
+    print(f"已生成：{out_path}")
+    if not args.no_open:
+        try:
+            webbrowser.open(f"file://{out_path}")
+        except Exception:
+            print("（无法自动打开浏览器，请手动打开上方路径）")
+
+
+class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
+    cfg = None
+
+    def log_message(self, fmt, *a):
+        pass  # 静默：只读服务不需要逐请求刷屏
+
+    def _send(self, status, content_type, body_bytes, message=None):
+        # message 会被 http.server 按 latin-1 编码进状态行，只能传 ASCII；中文说明一律走 body。
+        self.send_response(status, message)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body_bytes)))
+        self.end_headers()
+        self.wfile.write(body_bytes)
+
+    def do_GET(self):
+        path = self.path.split("?", 1)[0]
+        if path == "/":
+            data = build_data(self.cfg)
+            data["serve"] = True
+            self._send(200, "text/html; charset=utf-8", render_html(data).encode("utf-8"))
+        elif path == "/data.json":
+            data = build_data(self.cfg)
+            data["serve"] = True
+            self._send(200, "application/json; charset=utf-8", json.dumps(data, ensure_ascii=False).encode("utf-8"))
+        elif path == "/favicon.ico":
+            # 页面已经内嵌 data-URI favicon；这里单纯不让浏览器的随手请求落进 404 分支
+            self.send_response(204)
+            self.end_headers()
+        else:
+            body = f"未找到：{path}".encode("utf-8")
+            self._send(404, "text/plain; charset=utf-8", body, message="Not Found")
+
+
+def safe_open(url):
+    try:
+        webbrowser.open(url)
+    except Exception:
+        pass
+
+
+def cmd_serve(cfg, args):
+    handler = type("Handler", (BoardRequestHandler,), {"cfg": cfg})
+    try:
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", args.port), handler)
+    except OSError as e:
+        die(f"❌ 无法监听 127.0.0.1:{args.port}（{e}）——换个 --port 试试")
+    url = f"http://127.0.0.1:{args.port}/"
+    print(f"eo-board 只读服务已启动：{url}（Ctrl+C 停止）")
+    if not args.no_open:
+        threading.Timer(0.3, safe_open, args=(url,)).start()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n已停止。")
+        server.shutdown()
+
+
+# ============================================================
+# CLI 入口
+# ============================================================
+
+def build_arg_parser():
+    parser = argparse.ArgumentParser(
+        prog="eo-board",
+        description="eo-skills 工作流的只读项目看板：从 .eo-project.json 出发，汇总多 worktree 的 change / backlog / roadmap。",
+        epilog=(
+            "示例：\n"
+            "  eo-board                 终端摘要\n"
+            "  eo-board --html          生成静态 HTML 快照（写到 tmp 并自动打开）\n"
+            "  eo-board --html -o a.html 生成到指定路径\n"
+            "  eo-board --serve         本地只读服务（仅 127.0.0.1，默认 7333 端口）\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        add_help=False,
+    )
+    parser.add_argument("-h", "--help", action="help", default=argparse.SUPPRESS, help="显示本帮助信息并退出")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--html", action="store_true", help="生成自包含静态 HTML 快照")
+    mode.add_argument("--serve", action="store_true", help="启动本地只读 HTTP 服务（仅绑 127.0.0.1）")
+    parser.add_argument("-o", "--output", metavar="PATH", help="--html 模式下指定输出文件路径（默认写到系统 tmp 目录）")
+    parser.add_argument("--port", type=int, default=7333, help="--serve 模式下监听端口（默认 7333）")
+    parser.add_argument("--no-open", action="store_true", help="生成/启动后不自动打开浏览器")
+    parser._optionals.title = "选项"
+    return parser
+
+
+def main():
+    parser = build_arg_parser()
+    args = parser.parse_args()
+    if args.output and not args.html:
+        parser.error("-o/--output 仅在 --html 模式下有效")
+
+    cfg_path = find_project_config(Path.cwd())
+    if cfg_path is None:
+        print("❌ 未找到 .eo-project.json", file=sys.stderr)
+        print("请先运行 /eo-project-init 初始化项目。", file=sys.stderr)
+        sys.exit(1)
+    cfg = load_project_config(cfg_path)
+
+    if args.serve:
+        cmd_serve(cfg, args)
+    elif args.html:
+        cmd_html(cfg, args)
+    else:
+        cmd_terminal(cfg)
+
+
+if __name__ == "__main__":
+    main()

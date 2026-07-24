@@ -16,6 +16,7 @@ usage() {
   - ~/.claude/skills          (Claude Code)
   - ~/.agents/skills          (Codex)
   - ~/.gemini/antigravity/skills  (Antigravity)
+  并把 cli/eo-board 链接为 eo-board 命令 (默认 ~/.local/bin，可用 EO_BIN_DIR 覆盖)
 EOF
 }
 
@@ -125,6 +126,13 @@ else
   fi
 fi
 
+# skill 目录可能是仓库根，也可能是仓库下的 skills/；cli/ 恒在仓库根
+if [ "$(basename -- "$skills_dir")" = "skills" ]; then
+  repo_root=$(dirname -- "$skills_dir")
+else
+  repo_root=$skills_dir
+fi
+
 link_skills() {
   target_dir=$1
   target_name=$2
@@ -153,6 +161,38 @@ link_skills() {
   fi
 }
 
+install_cli() {
+  cli_src="$repo_root/cli/eo-board"
+  bin_dir=${EO_BIN_DIR:-"$HOME/.local/bin"}
+
+  if [ ! -f "$cli_src" ]; then
+    echo "[CLI] 未找到 cli/eo-board，跳过命令安装（仓库版本过旧？）" >&2
+    return 0
+  fi
+
+  mkdir -p "$bin_dir"
+  target_path="$bin_dir/eo-board"
+
+  if [ -e "$target_path" ] || [ -L "$target_path" ]; then
+    if [ "$(readlink "$target_path" 2>/dev/null || true)" = "$cli_src" ]; then
+      echo "[CLI] eo-board 已链接: $target_path"
+    else
+      echo "[CLI] 跳过 eo-board，目标已存在且指向别处: $target_path"
+    fi
+  else
+    ln -s "$cli_src" "$target_path"
+    echo "[CLI] 已链接 eo-board -> $target_path"
+  fi
+
+  case ":$PATH:" in
+    *":$bin_dir:"*) ;;
+    *)
+      echo "提示: $bin_dir 不在 PATH 中，把下面这行加进 shell 配置（如 ~/.zshrc）后重开终端:"
+      echo "  export PATH=\"$bin_dir:\$PATH\""
+      ;;
+  esac
+}
+
 if [ "$install_claude" -eq 1 ]; then
   link_skills "$HOME/.claude/skills" "Claude"
 fi
@@ -165,5 +205,7 @@ if [ "$install_antigravity" -eq 1 ]; then
   link_skills "$HOME/.gemini/antigravity/skills" "Antigravity"
 fi
 
+install_cli
+
 echo "安装完成。"
-echo "提示: eo-flow 依赖 tmux + smux 提供的 tmux-bridge；如果只用单 agent 流，可以先不装。"
+echo "提示: 在任何有 .eo-project.json 的项目目录里运行 eo-board --serve 打开实时看板。"
