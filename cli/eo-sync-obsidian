@@ -122,6 +122,8 @@ def do_plan(req):
     changes = req.get("changes") or []
     book = req.get("bookkeeping") or {}
     project_name = context.get("project_name") or ""
+    # 快照完整（全量 run）时缺席才等于放弃；--change 过滤等部分快照下不得据缺席删除
+    snapshot_complete = req.get("snapshot_complete", True)
 
     actions = []
     seen = set()
@@ -129,15 +131,16 @@ def do_plan(req):
         seen.add(change["id"])
         actions.append(_plan_change(change, context, params, project_name, book))
 
-    # 孤儿清理：簿记记过、当前快照已无 → 放弃草稿，删 stub
-    for cid in book:
-        if cid in seen:
-            continue
-        path = stub_path(context, params, cid)
-        actions.append({
-            "op": "delete", "projection": "stub", "change_id": cid, "reason": "change 已放弃",
-            "payload": {"path": str(path)},
-        })
+    # 孤儿清理仅在快照完整时进行：簿记记过、全量快照仍无 → 放弃草稿，删 stub
+    if snapshot_complete:
+        for cid in book:
+            if cid in seen:
+                continue
+            path = stub_path(context, params, cid)
+            actions.append({
+                "op": "delete", "projection": "stub", "change_id": cid, "reason": "change 已放弃",
+                "payload": {"path": str(path)},
+            })
     _emit({"actions": actions, "drift": []})
 
 
@@ -152,25 +155,24 @@ def do_apply(req):
         try:
             if op == "skip":
                 if payload.get("content_hash"):
-                    book.setdefault(cid, {})
                     book[cid] = {"content_hash": payload["content_hash"], "synced_status": "stub", "synced_at": _today()}
-                results.append({"change_id": cid, "op": op, "ok": True})
+                results.append({"change_id": cid, "projection": "stub", "op": op, "ok": True})
             elif op in ("create", "update"):
                 path = Path(payload["path"])
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(payload["content"], encoding="utf-8")
                 book[cid] = {"content_hash": payload.get("content_hash"), "synced_status": "stub", "synced_at": _today()}
-                results.append({"change_id": cid, "op": op, "ok": True})
+                results.append({"change_id": cid, "projection": "stub", "op": op, "ok": True})
             elif op == "delete":
                 path = Path(payload["path"])
                 if path.is_file():
                     path.unlink()
                 book.pop(cid, None)
-                results.append({"change_id": cid, "op": op, "ok": True})
+                results.append({"change_id": cid, "projection": "stub", "op": op, "ok": True})
             else:
-                results.append({"change_id": cid, "op": op, "ok": False, "error": f"未知 op {op}"})
+                results.append({"change_id": cid, "projection": "stub", "op": op, "ok": False, "error": f"未知 op {op}"})
         except OSError as e:
-            results.append({"change_id": cid, "op": op, "ok": False, "error": str(e)})
+            results.append({"change_id": cid, "projection": "stub", "op": op, "ok": False, "error": str(e)})
     _emit({"results": results, "writeback": {}, "bookkeeping": book, "drift": []})
 
 

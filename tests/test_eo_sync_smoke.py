@@ -1,4 +1,4 @@
-"""eo-sync Batch 1 smoke：夹具适配器跑通 run / dry-run / 锁互斥 / 兼容映射。
+"""eo-sync smoke：夹具适配器跑通 run / dry-run / 锁互斥 / 兼容映射。
 
 隔离：EO_HOME 指向临时目录，绝不碰真实 ~/.eo；每个用例独立 temp git 仓库。
 """

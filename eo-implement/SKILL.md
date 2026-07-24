@@ -131,7 +131,7 @@ spawn 一个**新鲜上下文 subagent**（执行者自述不作数——修了 
    - 锁定测试全绿 + lint/typecheck 绿
    - **独立复核**：spawn 一个新鲜上下文 subagent，输入 = change.md + `test_lock_commit..HEAD` 完整 diff（含测试文件改动历史）+（UI 时）DESIGN.md，核对「AC 逐条被真实覆盖？锁定后测试是否被弱化/删除/篡改？有无过拟合 / 硬编码特判 / 绕过验证？diff 里有无 AC 之外的多余实现（镀金）？注释有无流程溯源标注 / 叙事辩护（conventions §2.6）？」——执行者自述不作数。结论一行写入 change.md 末尾（`独立复核：通过/不通过，<日期>，基线 <short-sha>`）；发现问题 → 修复后重跑完成门
    - manual 项（「人工:」）逐项请用户确认，**代勾必须附确认记录**（AC 行后「确认：<用户原话要点>，<日期>，基线 <short-sha>」，规范见 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)）；manual 项 >2 条是扩档信号
-5. **收口（完成门通过后立即执行，不得延迟）**：内嵌调用 `/eo-archive` 走**轻档门**（读其 SKILL.md 照做：留痕校验 → 结算 → 元数据冻结 → 显式 doc sync → GitHub 联动 → stub 终态；完成门刚跑过且其后无新提交的锁定测试绿灯可复用）——归档步骤以 eo-archive 为唯一信源，本 skill 不复述。值得留的决策按 eo-project-record 门槛落 decisions/。**不产 test.md / review.md**
+5. **收口（完成门通过后立即执行，不得延迟）**：内嵌调用 `/eo-archive` 走**轻档门**（读其 SKILL.md 照做：留痕校验 → 结算 → 元数据冻结 → 显式 doc sync → 投影同步（eo-sync run）；完成门刚跑过且其后无新提交的锁定测试绿灯可复用）——归档步骤以 eo-archive 为唯一信源，本 skill 不复述。值得留的决策按 eo-project-record 门槛落 decisions/。**不产 test.md / review.md**
 6. **扩档**（任一信号：影响面圈不住 / 两次以上跑偏 / AC 超 5 条装不下 / auto-heavy 出现 / manual 项 >2）：停手告知用户，转 /eo-change「扩档子流程」——tier 改 full、已完成工作映射为已勾 TODO、用户再确认（风险触发的建议跑全量 change-review）；然后回本 skill 模式一从首个未完成 Batch 续走。`test_lock_commit` 与已锁定测试保留，文件不挪、commit 前缀不变
 
 ### 偏差记录

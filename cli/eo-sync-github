@@ -42,6 +42,21 @@ def has_remote(repo_root):
     return out.returncode == 0 and bool(out.stdout.strip())
 
 
+def gh_ready(repo_root):
+    """契约预检：gh 未安装 / 无 remote / 未登录一律非阻塞跳过。返回 (ready, 原因)。"""
+    if not gh_available():
+        return False, "gh 未安装"
+    if not has_remote(repo_root):
+        return False, "无 remote"
+    try:
+        r = subprocess.run(["gh", "auth", "status"], cwd=repo_root, capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return False, "gh 状态检查失败"
+    if r.returncode != 0:
+        return False, "gh 未登录"
+    return True, ""
+
+
 # --------------------------------------------------------------------------- body 生成
 
 def _ac_lines(change):
@@ -118,6 +133,8 @@ def _plan_issue(change, params, book):
         return {"op": "create", "projection": "issue", "change_id": cid, "reason": "confirmed 起建 issue",
                 "payload": {"mode": "create", "title": title, "body": body, "body_hash": body_hash}}
     if status == "archived":
+        if (book.get(cid) or {}).get("issue_closed"):
+            return {"op": "skip", "projection": "issue", "change_id": cid, "reason": "issue 已兜底关闭（簿记）", "payload": {}}
         return {"op": "update", "projection": "issue", "change_id": cid, "reason": "archived 兜底关闭 issue",
                 "payload": {"mode": "close", "issue": issue, "comment": f"archived: {', '.join(change.get('commits') or []) or 'change 已归档'}"}}
     prev = (book.get(cid) or {}).get("issue_body_hash")
@@ -193,57 +210,69 @@ def do_apply(req):
     writeback = {}
     results = []
 
-    if not gh_available() or not has_remote(repo_root):
+    ready, reason = gh_ready(repo_root)
+    if not ready:
+        note = f"gh 不可用或无 remote，已跳过（不阻塞）：{reason}"
         for a in actions:
+            proj = a.get("projection")
             if a.get("op") == "skip":
-                results.append({"change_id": a.get("change_id"), "op": "skip", "ok": True})
+                results.append({"change_id": a.get("change_id"), "projection": proj, "op": "skip", "ok": True})
             else:
-                results.append({"change_id": a.get("change_id"), "op": a.get("op"), "ok": True,
-                                "skipped": True, "note": "gh 不可用或无 remote，已跳过（不阻塞）"})
+                results.append({"change_id": a.get("change_id"), "projection": proj, "op": a.get("op"),
+                                "ok": True, "skipped": True, "note": note})
         _emit({"results": results, "writeback": {}, "bookkeeping": book, "drift": []})
         return
 
     for a in actions:
         cid = a.get("change_id")
         op = a.get("op")
+        proj = a.get("projection")
         payload = a.get("payload") or {}
         mode = payload.get("mode")
         if op == "skip":
-            results.append({"change_id": cid, "op": op, "ok": True})
+            results.append({"change_id": cid, "projection": proj, "op": op, "ok": True})
             continue
         try:
-            if a.get("projection") == "issue" and mode == "create":
+            if proj == "issue" and mode == "create":
                 r = _gh(["issue", "create", "--title", payload["title"], "--body", payload["body"]], repo_root)
                 if r.returncode != 0:
-                    results.append({"change_id": cid, "op": op, "ok": False, "error": r.stderr.strip()[:200]})
+                    results.append({"change_id": cid, "projection": proj, "op": op, "ok": False, "error": r.stderr.strip()[:200]})
                     continue
                 num = _parse_issue_number(r.stdout)
                 if num is not None:
                     writeback.setdefault(cid, {})["issue"] = num
-                book.setdefault(cid, {})["issue_body_hash"] = payload.get("body_hash")
-                results.append({"change_id": cid, "op": op, "ok": True})
-            elif a.get("projection") == "issue" and mode == "edit_body":
+                book.setdefault(cid, {})["issue_body_hash"] = payload.get("body_hash")  # 仅成功后记
+                results.append({"change_id": cid, "projection": proj, "op": op, "ok": True})
+            elif proj == "issue" and mode == "edit_body":
                 r = _gh(["issue", "edit", str(payload["issue"]), "--body", payload["body"]], repo_root)
-                book.setdefault(cid, {})["issue_body_hash"] = payload.get("body_hash")
-                results.append({"change_id": cid, "op": op, "ok": r.returncode == 0,
-                                **({"error": r.stderr.strip()[:200]} if r.returncode else {})})
-            elif a.get("projection") == "issue" and mode == "close":
+                if r.returncode == 0:
+                    book.setdefault(cid, {})["issue_body_hash"] = payload.get("body_hash")  # 失败不写，下次仍会重试
+                    results.append({"change_id": cid, "projection": proj, "op": op, "ok": True})
+                else:
+                    results.append({"change_id": cid, "projection": proj, "op": op, "ok": False, "error": r.stderr.strip()[:200]})
+            elif proj == "issue" and mode == "close":
                 r = _gh(["issue", "close", str(payload["issue"]), "--comment", payload.get("comment", "archived")], repo_root)
-                results.append({"change_id": cid, "op": op, "ok": r.returncode == 0,
-                                **({"error": r.stderr.strip()[:200]} if r.returncode else {})})
-            elif a.get("projection") == "pr" and mode == "create":
+                if r.returncode == 0:
+                    book.setdefault(cid, {})["issue_closed"] = True  # 成功关闭 → 后续 run 幂等 skip
+                    results.append({"change_id": cid, "projection": proj, "op": op, "ok": True})
+                else:
+                    results.append({"change_id": cid, "projection": proj, "op": op, "ok": False, "error": r.stderr.strip()[:200]})
+            elif proj == "pr" and mode == "create":
+                args = ["pr", "create", "--title", payload["title"], "--body", payload["body"]]
                 if payload.get("branch"):
-                    _gh(["pr", "create", "--head", payload["branch"], "--title", payload["title"], "--body", payload["body"]], repo_root)
-                r = _gh(["pr", "create", "--title", payload["title"], "--body", payload["body"]], repo_root) \
-                    if not payload.get("branch") else _gh(["pr", "view", "--json", "url", "-q", ".url"], repo_root)
-                url = r.stdout.strip() if r.returncode == 0 else None
-                if url and url.startswith("http"):
+                    args += ["--head", payload["branch"]]
+                r = _gh(args, repo_root)
+                if r.returncode != 0:
+                    results.append({"change_id": cid, "projection": proj, "op": op, "ok": False, "error": r.stderr.strip()[:200]})
+                    continue
+                url = (r.stdout or "").strip().splitlines()[-1] if (r.stdout or "").strip() else ""
+                if url.startswith("http"):
                     writeback.setdefault(cid, {})["pr"] = url
-                results.append({"change_id": cid, "op": op, "ok": True})
+                results.append({"change_id": cid, "projection": proj, "op": op, "ok": True})
             else:
-                results.append({"change_id": cid, "op": op, "ok": False, "error": f"未知动作 {mode}"})
+                results.append({"change_id": cid, "projection": proj, "op": op, "ok": False, "error": f"未知动作 {mode}"})
         except (OSError, subprocess.SubprocessError) as e:
-            results.append({"change_id": cid, "op": op, "ok": False, "error": str(e)})
+            results.append({"change_id": cid, "projection": proj, "op": op, "ok": False, "error": str(e)})
 
     _emit({"results": results, "writeback": writeback, "bookkeeping": book, "drift": []})
 

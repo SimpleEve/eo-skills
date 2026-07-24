@@ -37,8 +37,7 @@ from eo_lib import (
     find_project_config,
     list_worktrees,
     load_project_config,
-    pick_change_winner,
-    resolve_writeback_path,
+    resolve_change,
     run_git,
     scan_changes_grouped,
     split_frontmatter,
@@ -127,9 +126,10 @@ def invoke_adapter(exe_path, verb, request, timeout):
 # --------------------------------------------------------------------------- 配置解析与启用
 
 def resolve_enabled(cfg):
-    """返回 {adapter_name: params}。sync 段存在则完全以其为准；否则由存量 board/github 段等价映射。"""
-    sync = cfg.get("sync") or {}
-    if sync:
+    """返回 {adapter_name: params}。sync 段**存在**（含显式空 `{}`）则完全以其为准、不回落；
+    仅当 sync 段缺席（None）才由存量 board/github 段等价映射。"""
+    sync = cfg.get("sync")
+    if sync is not None:
         enabled = {}
         for name, conf in sync.items():
             if isinstance(conf, dict) and conf.get("enabled"):
@@ -262,6 +262,16 @@ def compute_project_root(cfg, main_wt_path):
     return str(Path(main_wt_path) / ".eo-project")
 
 
+def _read_identities(rec):
+    """就地重解析 change.md frontmatter 取全部标量身份字段（含第三方 page_id 等），供适配器读回。
+    只在 eo-sync 快照层做，不污染 eo_lib 共享 rec 与 eo-board 输出。"""
+    try:
+        fm, _ = split_frontmatter(Path(rec["path"]).read_text(encoding="utf-8"))
+    except OSError:
+        fm = None
+    return dict(fm or {})
+
+
 def build_snapshot(rec, default_branch):
     ac_done, ac_total = count_ac(rec["ac"])
     todo_done, todo_total = count_todo(rec["todo"])
@@ -284,6 +294,8 @@ def build_snapshot(rec, default_branch):
         "base_commit": rec.get("base_commit"),
         "issue": rec.get("issue"),
         "pr": rec.get("pr"),
+        # 已落 SoT 的全部 frontmatter 标量：适配器据此读回自己声明的身份字段（含第三方 page_id 等）
+        "identities": _read_identities(rec),
         "intent": rec.get("intent") or "",
         "ac": rec.get("ac") or [],
         "todo": rec.get("todo") or [],
@@ -296,17 +308,25 @@ def build_snapshot(rec, default_branch):
     }
 
 
-def scan_snapshots(cfg, worktrees, change_filter, warnings):
-    """扫描并返回 (grouped {id:[rec]}, snapshots [snap...])，snapshots 按 change_filter 过滤、按 id 排序。"""
+def scan_snapshots(cfg, worktrees, change_filter, origin_wt, warnings):
+    """扫描并消歧，返回 (resolved {id: 权威 rec}, snapshots [snap...])。
+
+    权威 rec 由 resolve_change 一次选定，计划快照与身份回写落点共用同一份；同状态内容分叉的
+    change 计划与回写一并跳过（fail-closed 告警）。snapshots 按 change_filter 过滤、按 id 排序。
+    """
     grouped = scan_changes_grouped(cfg, worktrees, warnings)
     default_branch = worktrees[0].get("branch") if worktrees else None
-    snapshots = []
+    resolved, snapshots = {}, []
     for cid in sorted(grouped):
         if change_filter and cid != change_filter:
             continue
-        winner = pick_change_winner(grouped[cid])
-        snapshots.append(build_snapshot(winner, default_branch))
-    return grouped, snapshots
+        rec, cands = resolve_change(grouped[cid], origin_wt)
+        if rec is None:
+            warnings.append(f"change {cid} 同状态内容分叉，计划与回写均跳过：{', '.join(cands or [])}")
+            continue
+        resolved[cid] = rec
+        snapshots.append(build_snapshot(rec, default_branch))
+    return resolved, snapshots
 
 
 # --------------------------------------------------------------------------- 适配器排序与 capabilities
@@ -367,16 +387,17 @@ def _project_context(cfg, project_root):
     }
 
 
-def apply_writeback(writeback, identity_fields, grouped, origin_wt, warnings):
-    """核执行身份字段回写校验 + 保序落盘。返回实际写入的 {path: {field: value}}。"""
+def apply_writeback(writeback, identity_fields, resolved, warnings):
+    """核执行身份字段回写校验 + 保序落盘。落点 = resolved 里同一份权威 rec，不再重新推导。
+    返回实际写入的 {path: {field: value}}。"""
     fields_set = set(identity_fields)
     per_path = {}
     for cid, fields in (writeback or {}).items():
         if not isinstance(fields, dict):
             continue
-        recs = grouped.get(cid)
-        if not recs:
-            warnings.append(f"回写目标 change 不存在：{cid}，已跳过")
+        rec = resolved.get(cid)
+        if rec is None:
+            warnings.append(f"回写目标 change 不在本次范围或已 fail-closed：{cid}，已跳过")
             continue
         accepted = {}
         for field, value in fields.items():
@@ -391,10 +412,7 @@ def apply_writeback(writeback, identity_fields, grouped, origin_wt, warnings):
             accepted[field] = value
         if not accepted:
             continue
-        path, cands = resolve_writeback_path(recs, origin_wt)
-        if path is None:
-            warnings.append(f"回写落点消歧失败（change {cid} 同状态内容分叉），跳过：{', '.join(cands or [])}")
-            continue
+        path = rec["path"]
         try:
             existing_fm, _ = split_frontmatter(Path(path).read_text(encoding="utf-8"))
         except OSError as e:
@@ -422,22 +440,101 @@ def apply_writeback(writeback, identity_fields, grouped, origin_wt, warnings):
     return per_path
 
 
-def run_adapter_phase(name, info, context, snapshots, book_ns, params, dry_run, warnings):
-    """跑单个适配器的 plan（+ 非 dry-run 时 apply）。返回 (actions, writeback, new_ns, drift, ok)。"""
+VALID_OPS = {"create", "update", "delete", "skip"}
+
+
+def _validate_plan_response(resp):
+    actions = resp.get("actions", [])
+    if not isinstance(actions, list):
+        return "plan.actions 不是列表"
+    for a in actions:
+        if not isinstance(a, dict):
+            return "plan.actions 含非对象元素"
+        if a.get("op") not in VALID_OPS:
+            return f"plan.action.op 非法：{a.get('op')!r}"
+        if not isinstance(a.get("change_id"), str):
+            return "plan.action.change_id 不是字符串"
+        if not isinstance(a.get("projection"), str):
+            return "plan.action.projection 不是字符串"
+    drift = resp.get("drift")
+    if drift is not None and not isinstance(drift, list):
+        return "plan.drift 不是列表"
+    return None
+
+
+def _validate_apply_response(resp):
+    results = resp.get("results")
+    if results is not None and not isinstance(results, list):
+        return "apply.results 不是列表"
+    if isinstance(results, list):
+        for r in results:
+            if not isinstance(r, dict):
+                return "apply.results 含非对象元素"
+    wb = resp.get("writeback")
+    if wb is not None and not isinstance(wb, dict):
+        return "apply.writeback 不是对象"
+    if isinstance(wb, dict):
+        for cid, fields in wb.items():
+            if not isinstance(fields, dict):
+                return f"apply.writeback[{cid}] 不是对象"
+            for k, v in fields.items():
+                if isinstance(v, (dict, list)):
+                    return f"apply.writeback[{cid}][{k}] 不是标量"
+    bk = resp.get("bookkeeping")
+    if bk is not None and not isinstance(bk, dict):
+        return "apply.bookkeeping 不是对象"
+    drift = resp.get("drift")
+    if drift is not None and not isinstance(drift, list):
+        return "apply.drift 不是列表"
+    return None
+
+
+def _display_from_actions(actions):
+    return [{"change_id": a.get("change_id"), "projection": a.get("projection", "?"),
+             "op": a.get("op", "?"), "reason": a.get("reason", "")} for a in actions]
+
+
+def _display_from_results(results):
+    """run 模式以实际 apply 结果作显示：跳过/失败原因如实呈现，不复述计划意图。"""
+    items = []
+    for r in results:
+        op = r.get("op", "?")
+        if r.get("skipped"):
+            reason, op = r.get("note", "已跳过"), "skip"
+        elif r.get("error"):
+            reason = f"失败：{r.get('error')}"
+        else:
+            reason = r.get("note", "")
+        items.append({"change_id": r.get("change_id"), "projection": r.get("projection", "?"),
+                      "op": op, "reason": reason})
+    return items
+
+
+def run_adapter_phase(name, info, context, snapshots, book_ns, params, dry_run, snapshot_complete, warnings):
+    """跑单个适配器的 plan（+ 非 dry-run 时 apply）。返回 (display_items, writeback, new_ns, drift, ok)。
+
+    display_items：dry-run 取计划动作、run 取实际 apply 结果（含 skipped/error 原因）。
+    结构校验失败按该适配器失败隔离（ok=False），不中断其它目标。
+    """
     plan_req = {
         "context": context,
         "changes": snapshots,
         "bookkeeping": book_ns,
         "params": params,
+        "snapshot_complete": snapshot_complete,
     }
     plan, err = invoke_adapter(info["path"], "plan", plan_req, timeout=90)
     if err:
         warnings.append(f"适配器 {name} plan 失败，已跳过：{err}")
         return [], {}, book_ns, [], False
+    err = _validate_plan_response(plan)
+    if err:
+        warnings.append(f"适配器 {name} plan 响应结构非法，已跳过：{err}")
+        return [], {}, book_ns, [], False
     actions = plan.get("actions") or []
     drift = plan.get("drift") or []
     if dry_run:
-        return actions, {}, book_ns, drift, True
+        return _display_from_actions(actions), {}, book_ns, drift, True
 
     apply_req = {
         "context": context,
@@ -448,7 +545,11 @@ def run_adapter_phase(name, info, context, snapshots, book_ns, params, dry_run, 
     result, err = invoke_adapter(info["path"], "apply", apply_req, timeout=300)
     if err:
         warnings.append(f"适配器 {name} apply 失败，已跳过：{err}")
-        return actions, {}, book_ns, drift, False
+        return _display_from_actions(actions), {}, book_ns, drift, False
+    err = _validate_apply_response(result)
+    if err:
+        warnings.append(f"适配器 {name} apply 响应结构非法，已跳过：{err}")
+        return _display_from_actions(actions), {}, book_ns, drift, False
     writeback = result.get("writeback") or {}
     new_ns = result.get("bookkeeping")
     if not isinstance(new_ns, dict):
@@ -456,7 +557,7 @@ def run_adapter_phase(name, info, context, snapshots, book_ns, params, dry_run, 
     drift = (drift or []) + (result.get("drift") or [])
     results = result.get("results") or []
     ok = not any(isinstance(r, dict) and r.get("error") for r in results)
-    return actions, writeback, new_ns, drift, ok
+    return _display_from_results(results), writeback, new_ns, drift, ok
 
 
 def cmd_run(cfg, args):
@@ -514,11 +615,14 @@ def cmd_run(cfg, args):
             print(f"⏸ 另一个 eo-sync run 正持锁{hint}，本次干净退出。稍后重跑。", file=sys.stderr)
             return EXIT_LOCKED
 
-    try:
-        book = load_bookkeeping(bk_path) if not dry_run else load_bookkeeping(bk_path)
-        grouped, snapshots = scan_snapshots(cfg, worktrees, args.change, warnings)
+    # --change 过滤后快照不完整：适配器不得据「簿记有、快照无」推导 delete，否则会删掉范围外投影
+    snapshot_complete = args.change is None
 
-        all_actions = []  # (change_id, adapter, action)
+    try:
+        book = load_bookkeeping(bk_path)
+        resolved, snapshots = scan_snapshots(cfg, worktrees, args.change, origin_wt, warnings)
+
+        all_display = []  # (change_id, adapter, item)
         all_drift = []
 
         # 阶段一
@@ -527,37 +631,37 @@ def cmd_run(cfg, args):
             info = loaded[name]
             book_ns = book["adapters"].get(name, {})
             params = enabled[name]
-            actions, writeback, new_ns, drift, ok = run_adapter_phase(
-                name, info, context, snapshots, book_ns, params, dry_run, warnings
+            display, writeback, new_ns, drift, ok = run_adapter_phase(
+                name, info, context, snapshots, book_ns, params, dry_run, snapshot_complete, warnings
             )
             if not ok:
                 failure = True
-            for a in actions:
-                all_actions.append((a.get("change_id"), name, a))
+            for d in display:
+                all_display.append((d.get("change_id"), name, d))
             all_drift.extend(f"[{name}] {d}" for d in drift)
             if not dry_run:
                 book["adapters"][name] = new_ns
                 identity_fields = info["caps"].get("identity_fields") or []
-                written = apply_writeback(writeback, identity_fields, grouped, origin_wt, warnings)
+                written = apply_writeback(writeback, identity_fields, resolved, warnings)
                 if written:
                     wrote_back = True
 
         # 回写后刷新快照，令纯投影适配器读到新平台身份
         if wrote_back and not dry_run:
-            grouped, snapshots = scan_snapshots(cfg, worktrees, args.change, warnings)
+            resolved, snapshots = scan_snapshots(cfg, worktrees, args.change, origin_wt, warnings)
 
         # 阶段二
         for name in pure_after:
             info = loaded[name]
             book_ns = book["adapters"].get(name, {})
             params = enabled[name]
-            actions, writeback, new_ns, drift, ok = run_adapter_phase(
-                name, info, context, snapshots, book_ns, params, dry_run, warnings
+            display, writeback, new_ns, drift, ok = run_adapter_phase(
+                name, info, context, snapshots, book_ns, params, dry_run, snapshot_complete, warnings
             )
             if not ok:
                 failure = True
-            for a in actions:
-                all_actions.append((a.get("change_id"), name, a))
+            for d in display:
+                all_display.append((d.get("change_id"), name, d))
             all_drift.extend(f"[{name}] {d}" for d in drift)
             if not dry_run:
                 book["adapters"][name] = new_ns
@@ -570,21 +674,21 @@ def cmd_run(cfg, args):
         if lock_fd is not None:
             release_lock(lock_fd)
 
-    _emit_plan(all_actions, all_drift, active, dry_run)
+    _emit_plan(all_display, all_drift, active, dry_run)
     _emit_warnings(warnings)
     return EXIT_FAILURE if failure else EXIT_OK
 
 
-def _emit_plan(all_actions, all_drift, active, dry_run):
+def _emit_plan(all_display, all_drift, active, dry_run):
     header = "eo-sync run --dry-run（提示性计划，落地以持锁重算为准）" if dry_run else "eo-sync run 结果"
     print(header)
-    if not all_actions:
-        print(f"  （启用目标 {', '.join(active)}：无计划动作）")
+    if not all_display:
+        print(f"  （启用目标 {', '.join(active)}：无{'计划' if dry_run else '执行'}动作）")
     counts = {}
-    for cid, adapter, action in sorted(all_actions, key=lambda t: (str(t[0]), t[1], str(t[2].get("projection")))):
-        op = action.get("op", "?")
-        proj = action.get("projection", "?")
-        reason = action.get("reason", "")
+    for cid, adapter, item in sorted(all_display, key=lambda t: (str(t[0]), t[1], str(t[2].get("projection")))):
+        op = item.get("op", "?")
+        proj = item.get("projection", "?")
+        reason = item.get("reason", "")
         counts[op] = counts.get(op, 0) + 1
         tail = f"（{reason}）" if reason else ""
         print(f"  {cid} × {adapter}/{proj} → {op}{tail}")

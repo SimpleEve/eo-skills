@@ -65,9 +65,12 @@ eo-sync-<name> apply          < request.json   > response.json
   "context": { "project_name": "...", "project_root": "/abs/...", "doc_root": "eo-doc", "repo_root": "/abs/..." },
   "changes": [ { /* change 快照，见下 */ } ],
   "bookkeeping": { /* 本适配器的簿记命名空间，见「簿记」 */ },
-  "params": { /* 配置里该适配器的启用参数（已去掉 enabled 键） */ }
+  "params": { /* 配置里该适配器的启用参数（已去掉 enabled 键） */ },
+  "snapshot_complete": true
 }
 ```
+
+- **`snapshot_complete`**（布尔）：本次 `changes` 是否为全部 change 的完整集。`eo-sync run --change <id>` 等选择性同步会给出**部分快照**，此时为 `false`——适配器**禁止**从「簿记有、快照无」推导 `delete`（否则会误删范围外投影，是数据破坏）。仅当 `true`（全量 run）时，缺席才等于放弃、可计划孤儿删除。字段缺省时按 `true` 处理（向后兼容）。
 
 响应：
 
@@ -83,6 +86,7 @@ eo-sync-<name> apply          < request.json   > response.json
 
 - `op` ∈ `create`/`update`/`delete`/`skip`；`reason` 为人读原因（进 dry-run 输出）；`payload` 是适配器留给自己 apply 阶段的自定义载荷。
 - `drift` 是漂移**告警文本**列表（严格单向：只报不回写），可为空。
+- **结构校验**：核在进入编排前按动词逐层校验响应最小结构——`actions` 须为列表、每个 action 的 `op` ∈ 枚举且 `change_id`/`projection` 为字符串；`writeback` 须为 `{change_id: {字段: 标量}}`、`results`/`bookkeeping`/`drift` 类型须合法。结构合法但 schema 非法（如 `actions: "x"`、`writeback: []`、对象值当标量）→ 按**该适配器失败**隔离、继续其它目标、run 总退出码 1；未知字段仍按 v1 规则忽略。
 
 ### `apply`
 
@@ -126,6 +130,7 @@ eo-sync-<name> apply          < request.json   > response.json
 | `title` / `summary` / `status` / `tier` / `type` / `created` | change frontmatter 同名字段 |
 | `base_commit` | 首次实施登记的 HEAD |
 | `issue` / `pr` | 已回写的平台身份字段（可为 null；**同轮内**身份字段适配器回写后，核刷新快照，纯投影适配器随即读到新值） |
+| `identities` | change frontmatter **全部标量字段**的映射（含第三方身份字段如 `page_id`）。适配器据此把自己声明的身份字段**读回**——旁车簿记丢失/重建后仍能从 SoT 定位已创建对象，而非当作新对象重建。通用平台身份的读路径，不偏袒内置字段 |
 | `intent` | §1 意图正文（供 issue body 等） |
 | `ac` | §2 验收项列表 `[{code,done,text,manual,note}]` |
 | `todo` | §3 TODO 分批 `[{batch, items:[{code,done,text}]}]` |
@@ -172,7 +177,7 @@ eo-sync-<name> apply          < request.json   > response.json
 
 - **存放**：`"${EO_HOME:-$HOME/.eo}"/sync-state/<project_name>-<hash8>.json`（`hash8` = git common dir 绝对路径 SHA-256 前 8 位，全 worktree 共享同一份、天然「一仓库一份」；测试用 `EO_HOME` 重定向隔离）。**仓库外、单份共享**，不进 SoT。
 - **顶层结构**：`{"version": 1, "adapters": {"<name>": { /* 该适配器命名空间 */ }}}`。
-- **推荐的每-change 记账形状**（内置适配器约定，非强制）：`{"<change-id>": {"content_hash": "…", "synced_status": "…", "synced_at": "…"}}`——`content_hash` 用于内容去重（未变 → skip），命名空间键集用于删除检测（簿记有、快照无 → 目标被放弃 → delete）。
+- **推荐的每-change 记账形状**（内置适配器约定，非强制）：`{"<change-id>": {"content_hash": "…", "synced_status": "…", "synced_at": "…"}}`——`content_hash` 用于内容去重（未变 → skip），命名空间键集用于删除检测（**仅当 `snapshot_complete` 为真**：簿记有、全量快照无 → 目标被放弃 → delete；部分快照下缺席不得推导删除）。
 
 ## 并发与锁
 

@@ -1,4 +1,4 @@
-"""eo-sync 完整测试矩阵（复用 Batch 1 夹具 tests/fixtures/eo-sync-fixture）。
+"""eo-sync 完整测试矩阵（复用 tests/fixtures/eo-sync-fixture 夹具）。
 
 覆盖：协议往返、发现与启用制、兼容映射、dry-run 零写入、双进程锁竞态、身份回写校验
 （冲突/未知字段/非空不覆盖/保留键/非法键名）、保序插入、同状态分叉 fail-closed、部分失败总退出码、
@@ -271,8 +271,9 @@ class WritebackValidationTests(unittest.TestCase):
         self.assertIn("非法身份字段名", r.stderr)
 
     def test_non_empty_not_overwritten(self):
-        # change 已有 issue: 5，夹具回写 issue: 99 → 不覆盖、告警
-        r, change = self._run({"EO_FIXTURE_IDENTITY": "issue", "EO_FIXTURE_WB_FIELD": "issue", "EO_FIXTURE_WB_VALUE": "99"}, issue="5")
+        # change 已有 issue: 5，夹具强制回写 issue: 99 → 核不覆盖、告警
+        r, change = self._run({"EO_FIXTURE_IDENTITY": "issue", "EO_FIXTURE_WB_FIELD": "issue",
+                               "EO_FIXTURE_WB_VALUE": "99", "EO_FIXTURE_FORCE_WB": "1"}, issue="5")
         self.assertIn("issue: 5", change.read_text(encoding="utf-8"))
         self.assertNotIn("issue: 99", change.read_text(encoding="utf-8"))
         self.assertIn("已有不同非空值", r.stderr)
@@ -422,6 +423,212 @@ class BookkeepingIsolationTests(unittest.TestCase):
                     os.environ.pop("EO_HOME", None)
                 else:
                     os.environ["EO_HOME"] = os.environ_backup
+
+
+class SelectiveRunTests(unittest.TestCase):
+    """P0-1：--change 过滤不得把范围外投影当孤儿删除。"""
+
+    def _setup(self):
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        root = Path(d.name)
+        repo = init_repo(root, {"project_name": "p", "mode": "vault", "project_root": str(root / "pm"),
+                                "doc_root": "eo-doc", "sync": {"obsidian": {"enabled": True}}},
+                         changes=[{"cid": "c1", "seq": 1}, {"cid": "c2", "seq": 2}])
+        (root / "pm").mkdir(exist_ok=True)
+        return root, repo
+
+    def test_change_filter_does_not_delete_out_of_scope(self):
+        root, repo = self._setup()
+        self.assertEqual(run_sync(repo, root / "home", "run").returncode, 0)
+        board = root / "pm" / "board"
+        self.assertTrue((board / "c1.md").is_file() and (board / "c2.md").is_file())
+        r = run_sync(repo, root / "home", "run", "--change", "c1")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertTrue((board / "c2.md").is_file(), "范围外 c2 stub 被误删")
+        self.assertNotIn("delete", r.stdout)
+
+    def test_nonexistent_change_deletes_nothing(self):
+        root, repo = self._setup()
+        run_sync(repo, root / "home", "run")
+        board = root / "pm" / "board"
+        run_sync(repo, root / "home", "run", "--change", "nope")
+        self.assertTrue((board / "c1.md").is_file() and (board / "c2.md").is_file())
+
+    def test_full_run_still_deletes_orphan(self):
+        import shutil
+        root, repo = self._setup()
+        run_sync(repo, root / "home", "run")
+        board = root / "pm" / "board"
+        shutil.rmtree(repo / "eo-doc" / "changes" / "02-c2")
+        git(repo, "add", "-A")
+        git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "drop c2")
+        r = run_sync(repo, root / "home", "run")
+        self.assertEqual(r.returncode, 0)
+        self.assertFalse((board / "c2.md").is_file(), "全量 run 未清理孤儿 stub")
+        self.assertTrue((board / "c1.md").is_file())
+
+
+class IdentityReadPathTests(unittest.TestCase):
+    """P1-1：写回的身份字段下次扫描应交还适配器（旁车丢失后仍能定位原对象）。"""
+
+    def test_read_identity_after_sidecar_loss(self):
+        import shutil
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        root = Path(d.name)
+        repo = init_repo(root, {"project_name": "p", "mode": "local", "project_root": str(root / "pm"),
+                                "doc_root": "eo-doc", "sync": {"fixture": {"enabled": True}}},
+                         changes=[{"cid": "c1", "seq": 1}])
+        change = repo / "eo-doc" / "changes" / "01-c1" / "change.md"
+        env = {"EO_FIXTURE_IDENTITY": "page_id", "EO_FIXTURE_WB_FIELD": "page_id", "EO_FIXTURE_WB_VALUE": "pg-1"}
+        run_sync(repo, root / "home", "run", extra_env=env)
+        self.assertIn("page_id: pg-1", change.read_text(encoding="utf-8"))
+        shutil.rmtree(root / "home" / "sync-state")  # 旁车丢失
+        r = run_sync(repo, root / "home", "run", extra_env=env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("→ skip", r.stdout)
+        self.assertNotIn("→ create", r.stdout)  # 从 SoT 读回身份，不当作新对象重建
+
+
+class ResolveChangeUnifiedTests(unittest.TestCase):
+    """P1-2：计划来源与回写落点共用同一 resolve_change 结果。"""
+
+    def _rec(self, path, status, wt):
+        return {"id": "c1", "status": status, "path": str(path), "worktree": str(wt)}
+
+    def test_resolve_change_and_writeback_path_agree(self):
+        from eo_lib import resolve_change
+        with tempfile.TemporaryDirectory() as d:
+            a, b = Path(d) / "wa" / "c.md", Path(d) / "wb" / "c.md"
+            a.parent.mkdir(); b.parent.mkdir()
+            a.write_text("甲", encoding="utf-8")
+            b.write_text("乙", encoding="utf-8")
+            recs = [self._rec(a, "confirmed", a.parent), self._rec(b, "confirmed", b.parent)]
+            rec, cands = resolve_change(recs, str(b.parent))  # 发起处 = wb
+            self.assertEqual(rec["path"], str(b))
+            path, _ = resolve_writeback_path(recs, str(b.parent))
+            self.assertEqual(path, rec["path"])  # 同一份，不会 plan/writeback 错位
+
+    def test_fork_fail_closed(self):
+        from eo_lib import resolve_change
+        with tempfile.TemporaryDirectory() as d:
+            a, b = Path(d) / "wa" / "c.md", Path(d) / "wb" / "c.md"
+            a.parent.mkdir(); b.parent.mkdir()
+            a.write_text("甲", encoding="utf-8")
+            b.write_text("乙", encoding="utf-8")
+            recs = [self._rec(a, "confirmed", a.parent), self._rec(b, "confirmed", b.parent)]
+            rec, cands = resolve_change(recs, None)
+            self.assertIsNone(rec)
+            self.assertEqual(len(cands), 2)
+
+
+class ResponseSchemaTests(unittest.TestCase):
+    """P1-3：结构合法 JSON 但 schema 非法的响应仅隔离该适配器，不中断全局。"""
+
+    def _run(self, bad_shape):
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        root = Path(d.name)
+        repo = init_repo(root, {"project_name": "p", "mode": "vault", "project_root": str(root / "pm"),
+                                "doc_root": "eo-doc",
+                                "sync": {"fixture": {"enabled": True}, "obsidian": {"enabled": True}}},
+                         changes=[{"cid": "c1", "seq": 1}])
+        (root / "pm").mkdir(exist_ok=True)
+        return run_sync(repo, root / "home", "run", extra_env={"EO_FIXTURE_BAD_SHAPE": bad_shape}), root
+
+    def test_bad_plan_shape_isolated(self):
+        r, root = self._run("plan")
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("结构非法", r.stderr)
+        self.assertTrue((root / "pm" / "board" / "c1.md").is_file())  # obsidian 仍完成
+
+    def test_bad_apply_shape_isolated(self):
+        r, root = self._run("apply")
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("结构非法", r.stderr)
+
+
+class SyncSegmentSemanticsTests(unittest.TestCase):
+    """P1-4：显式空 sync 段关闭存量兼容映射；非法类型为配置错误。"""
+
+    def test_empty_sync_disables_compat(self):
+        self.assertEqual(eo_sync.resolve_enabled({"sync": {}, "board": {"enabled": True}}), {})
+
+    def test_absent_sync_uses_compat(self):
+        self.assertIn("obsidian", eo_sync.resolve_enabled({"board": {"enabled": True}}))
+
+    def test_invalid_sync_type_is_config_error(self):
+        from eo_lib import load_project_config, find_project_config, ConfigError
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            repo = root / "repo"
+            repo.mkdir()
+            (repo / ".eo-project.json").write_text(json.dumps(
+                {"project_name": "p", "mode": "local", "project_root": str(root / "pm"),
+                 "doc_root": "eo-doc", "sync": "foo"}), encoding="utf-8")
+            with self.assertRaises(ConfigError):
+                load_project_config(find_project_config(repo))
+
+    def test_empty_sync_run_exit_zero(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            repo = init_repo(root, {"project_name": "p", "mode": "local", "project_root": str(root / "pm"),
+                                    "doc_root": "eo-doc", "sync": {}, "board": {"enabled": True}},
+                             changes=[{"cid": "c1", "seq": 1}])
+            r = run_sync(repo, root / "home", "run")
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("未启用任何同步目标", r.stdout)
+
+
+class GithubFixTests(unittest.TestCase):
+    """P1-5/P1-6：gh 结果如实进簿记与输出；archived issue 关闭幂等。"""
+
+    def test_gh_unavailable_surfaced_and_bookkeeping_clean(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            repo = init_repo(root, {"project_name": "p", "mode": "local", "project_root": str(root / "pm"),
+                                    "doc_root": "eo-doc",
+                                    "sync": {"github": {"enabled": True, "issue": True, "pr": "never"}}},
+                             changes=[{"cid": "c1", "seq": 1, "status": "confirmed"}])
+            r = run_sync(repo, root / "home", "run")  # 临时仓库无 remote
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)  # 跳过不阻塞
+            self.assertIn("skip", r.stdout)
+            self.assertIn("gh 不可用或无 remote", r.stdout)  # 原因如实呈现，不显示计划的 create
+            state = json.loads(next((root / "home" / "sync-state").glob("*.json")).read_text(encoding="utf-8"))
+            self.assertNotIn("issue_body_hash", state["adapters"].get("github", {}).get("c1", {}))
+
+    def test_archived_issue_close_idempotent_via_bookkeeping(self):
+        gh = load_module("gh_plan_probe", CLI_DIR / "eo-sync-github")
+        change = {"id": "c", "status": "archived", "issue": 42, "title": "T", "summary": "S",
+                  "tier": "full", "ac": [], "todo": [], "commits": []}
+        a1 = gh._plan_issue(change, {"issue": True}, {})
+        self.assertEqual((a1["op"], a1["payload"]["mode"]), ("update", "close"))
+        a2 = gh._plan_issue(change, {"issue": True}, {"c": {"issue_closed": True}})
+        self.assertEqual(a2["op"], "skip")
+
+
+class RetirementDisciplineTests(unittest.TestCase):
+    """P1-7/P1-8：语义退役无残留 + 新代码注释无流程溯源。"""
+
+    def test_no_immediate_projection_in_skills(self):
+        eo_change = (REPO_ROOT / "eo-change" / "SKILL.md").read_text(encoding="utf-8")
+        eo_impl = (REPO_ROOT / "eo-implement" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertNotIn("再刷新一次投影", eo_change)
+        self.assertNotIn("GitHub 联动 → stub 终态", eo_impl)
+        self.assertNotIn("GitHub 联动 → stub", eo_impl)
+
+    def test_no_process_traceability_in_code_comments(self):
+        import re as _re
+        pat = _re.compile(r"§5\.|Batch\s*[0-9]|AC-[0-9]|TODO-[0-9]|P[01]-[0-9]")
+        offenders = []
+        for f in ["cli/eo-sync", "cli/eo-sync-obsidian", "cli/eo-sync-github",
+                  "tests/fixtures/eo-sync-fixture", "cli/eo_lib/changes.py",
+                  "cli/eo_lib/config.py", "cli/eo_lib/frontmatter.py"]:
+            for i, line in enumerate((REPO_ROOT / f).read_text(encoding="utf-8").splitlines(), 1):
+                if "#" in line and pat.search(line.split("#", 1)[1]):
+                    offenders.append(f"{f}:{i}")
+        self.assertEqual(offenders, [], f"注释含流程溯源标记：{offenders}")
 
 
 if __name__ == "__main__":

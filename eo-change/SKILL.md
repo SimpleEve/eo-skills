@@ -120,7 +120,7 @@ description: |
 3. **证据失效**：旧 TODO/AC 与新版逐条映射——语义不变的保留勾选注「回炉前完成」；完成判据或 AC 语义受影响的**取消勾选**注「回炉待复验」；manual 项按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)「失效与重置」重置；`test_lock_commit` 仅在全部被锁 AC 语义不变时保留，否则值旁注 `superseded`（待轻模式重锁）；`base_commit` 无条件保留
 4. **报告处置**：change-review.md / test.md / review.md（存在者）各追加一行 `> revision N 作废（<日期>）——后续见 revision N+1`，并把台账中仍为 `open`/`fixed` 的行状态批量改 `superseded`（随方案作废，archive 门不再计为阻塞）；**不压缩、不删除**旧轮次内容（报告可能未提交，git 兜不了底）
 5. **索引**：INDEX 行状态回 draft——投影由下次 eo-sync 重算
-6. **确认收口**：交用户重新确认 → `status: confirmed`，frontmatter `plan_revision` +1、`fix_rounds` 归零、`fix_consumed` 清空；再刷新一次投影。触发根因为「方案不合理 / AC 口径漂移」（且确实走了回炉——口径漂移多数走就地精化，见下）→ **必须**跑一次全量 /eo-change-review（新 revision 轮数从 1 起算、旧 wont-fix 失效）；用户显式豁免可跳，豁免记 §8。然后回 /eo-implement 模式一从首个未勾 Batch 续走
+6. **确认收口**：交用户重新确认 → `status: confirmed`，frontmatter `plan_revision` +1、`fix_rounds` 归零、`fix_consumed` 清空（流转期零投影，投影由下次 eo-sync 重算）。触发根因为「方案不合理 / AC 口径漂移」（且确实走了回炉——口径漂移多数走就地精化，见下）→ **必须**跑一次全量 /eo-change-review（新 revision 轮数从 1 起算、旧 wont-fix 失效）；用户显式豁免可跳，豁免记 §8。然后回 /eo-implement 模式一从首个未勾 Batch 续走
 
 **回炉与就地精化的边界**：措辞微调、意图不变的就地补 AC（implement 流程内确认后补写）不算回炉——不动 `plan_revision`、不清计数、不走本子流程。
 

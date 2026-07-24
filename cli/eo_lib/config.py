@@ -48,6 +48,9 @@ def _validate_merged(raw, path):
     doc_root = raw.get("doc_root")
     if isinstance(doc_root, str) and doc_root.strip() and Path(doc_root).is_absolute():
         problems.append(f"doc_root 必须是相对 repo root 的路径（当前 {doc_root!r}）")
+    sync = raw.get("sync")
+    if sync is not None and not isinstance(sync, dict):
+        problems.append(f"sync 段必须是对象（当前 {type(sync).__name__}）")
     if problems:
         raise ConfigError(
             f".eo-project.json 配置校验失败（含 local 覆盖的合并结果）：{path}（{'；'.join(problems)}）",
@@ -69,7 +72,8 @@ def load_project_config(path):
         "doc_root": raw["doc_root"],
         "board": raw.get("board") if isinstance(raw.get("board"), dict) else {},
         "github": raw.get("github") if isinstance(raw.get("github"), dict) else {},
-        "sync": raw.get("sync") if isinstance(raw.get("sync"), dict) else {},
+        # sync 段存在性保留：缺席 → None（走 board/github 兼容映射）；显式 {} → 空段（零目标，不回落）
+        "sync": raw.get("sync") if isinstance(raw.get("sync"), dict) else None,
         "config_path": path,
         "repo_root": path.parent,
     }

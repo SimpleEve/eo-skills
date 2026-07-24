@@ -4,7 +4,7 @@
 正常行为：投影 id=note，生命周期起点 draft；声明身份字段 fixture_ref，对尚无该字段的
 change 回写一个合成值；靠簿记 content_hash 去重（已同步内容 → skip）。
 
-失败注入（环境变量，供 AC-4 / 协议健壮性测试）：
+失败注入（环境变量，用于协议健壮性与失败隔离测试）：
   EO_FIXTURE_BAD_JSON=1        stdout 打印非法 JSON
   EO_FIXTURE_PROTOCOL=<n>      响应用错误的协议主版本
   EO_FIXTURE_EXIT=<code>       打印合法响应后以该退出码退出
@@ -12,6 +12,10 @@ change 回写一个合成值；靠簿记 content_hash 去重（已同步内容 �
   EO_FIXTURE_IDENTITY=<csv>    覆盖 identity_fields（空串 = 纯投影适配器）
   EO_FIXTURE_WB_FIELD=<name>   回写字段名（默认 fixture_ref；用于测核对未知/非法字段的拒绝）
   EO_FIXTURE_WB_VALUE=<val>    回写值（默认按 change id 合成）
+  EO_FIXTURE_FORCE_WB=1        绕过身份读路径，即便身份已在 SoT 也强制回写（测核的非空不覆盖守卫）
+
+读路径：正常情况下若回写字段已在快照 identities（SoT），则视为对象已存在、不重复 create。
+删除：仅在请求 snapshot_complete 为真（全量 run）时对簿记有而快照无的 change 计划 delete。
 """
 
 import hashlib
@@ -64,7 +68,13 @@ def do_capabilities():
 
 
 def do_plan(req):
+    if os.environ.get("EO_FIXTURE_BAD_SHAPE") == "plan":
+        _emit({"actions": "not-a-list", "drift": []})  # JSON 合法、结构非法
+        return
     changes = req.get("changes") or []
+    snapshot_complete = req.get("snapshot_complete", True)
+    wb_field = os.environ.get("EO_FIXTURE_WB_FIELD", "fixture_ref")
+    force_wb = os.environ.get("EO_FIXTURE_FORCE_WB") == "1"
     book = req.get("bookkeeping") or {}
     seen = set()
     actions = []
@@ -73,19 +83,29 @@ def do_plan(req):
         seen.add(cid)
         h = _content_hash(ch)
         prev = book.get(cid, {}).get("content_hash")
+        identity_seen = bool(wb_field and (ch.get("identities") or {}).get(wb_field)) and not force_wb
         if prev == h:
             actions.append({"op": "skip", "projection": "note", "change_id": cid, "reason": "内容未变", "payload": {}})
+        elif prev is None and identity_seen:
+            # 旁车丢失，但身份字段已在 SoT，从快照读回即知对象已存在 → 不重复 create
+            actions.append({"op": "skip", "projection": "note", "change_id": cid, "reason": "身份已在 SoT，视为已同步",
+                            "payload": {"hash": h, "reidentified": True}})
         elif prev is None:
             actions.append({"op": "create", "projection": "note", "change_id": cid, "reason": "首次投影", "payload": {"hash": h}})
         else:
             actions.append({"op": "update", "projection": "note", "change_id": cid, "reason": "内容变化", "payload": {"hash": h}})
-    for cid in book:
-        if cid not in seen:
-            actions.append({"op": "delete", "projection": "note", "change_id": cid, "reason": "change 已消失", "payload": {}})
+    # 孤儿删除仅在快照完整时进行（--change 等部分快照下缺席不等于放弃）
+    if snapshot_complete:
+        for cid in book:
+            if cid not in seen:
+                actions.append({"op": "delete", "projection": "note", "change_id": cid, "reason": "change 已消失", "payload": {}})
     _emit({"actions": actions, "drift": []})
 
 
 def do_apply(req):
+    if os.environ.get("EO_FIXTURE_BAD_SHAPE") == "apply":
+        _emit({"results": [], "writeback": [], "bookkeeping": {}})  # writeback 应为对象却给列表
+        return
     actions = req.get("actions") or []
     book = dict(req.get("bookkeeping") or {})
     wb_field = os.environ.get("EO_FIXTURE_WB_FIELD", "fixture_ref")
@@ -95,19 +115,22 @@ def do_apply(req):
     for a in actions:
         cid = a.get("change_id")
         op = a.get("op")
+        payload = a.get("payload") or {}
         if op == "delete":
             book.pop(cid, None)
-            results.append({"change_id": cid, "op": op, "ok": True})
+            results.append({"change_id": cid, "projection": "note", "op": op, "ok": True})
             continue
         if op == "skip":
-            results.append({"change_id": cid, "op": op, "ok": True})
+            # 从 SoT 重认对象时顺手重建旁车记录，令后续 run 走内容 hash 快速 skip
+            if payload.get("reidentified") and payload.get("hash"):
+                book[cid] = {"content_hash": payload["hash"], "synced_status": "note", "synced_at": "fixture"}
+            results.append({"change_id": cid, "projection": "note", "op": op, "ok": True})
             continue
-        h = (a.get("payload") or {}).get("hash", "")
-        book[cid] = {"content_hash": h, "synced_status": "note", "synced_at": "fixture"}
+        book[cid] = {"content_hash": payload.get("hash", ""), "synced_status": "note", "synced_at": "fixture"}
         if wb_field:
             value = wb_value_override if wb_value_override is not None else f"ref-{cid}"
             writeback[cid] = {wb_field: value}
-        results.append({"change_id": cid, "op": op, "ok": True})
+        results.append({"change_id": cid, "projection": "note", "op": op, "ok": True})
     _emit({"results": results, "writeback": writeback, "bookkeeping": book, "drift": []})
 
 

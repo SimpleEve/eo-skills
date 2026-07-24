@@ -252,18 +252,18 @@ def scan_all_changes(cfg, worktrees, warnings):
     return winners
 
 
-def resolve_writeback_path(recs, origin_worktree):
-    """回写落点消歧：返回 (目标 change.md 路径, None) 或 (None, [候选路径...]) 表示 fail-closed。
+def resolve_change(recs, origin_worktree):
+    """多 worktree 候选消歧的权威选择：返回 (权威 rec, None) 或 (None, [候选路径...]) 表示内容分叉 fail-closed。
 
-    规则（change §5.5）：先取状态最高的候选；仅一份直接用；同状态多份时优先发起 run 的
-    worktree 内那份；发起处无该 change 且各候选文件内容一致 → 任取（按路径稳定排序）；内容分叉 → fail-closed。
+    一次性应用：最高状态 → 发起 run 的 worktree 内那份 → 同内容任取（路径稳定排序）→ 内容分叉拒绝。
+    计划快照与身份回写落点共用同一结果，杜绝 plan 后重新推导落点导致的两套选择错位。
     """
     if not recs:
         return None, []
     top = max(status_rank(r) for r in recs)
     cands = [r for r in recs if status_rank(r) == top]
     if len(cands) == 1:
-        return cands[0]["path"], None
+        return cands[0], None
 
     pool = cands
     if origin_worktree:
@@ -272,7 +272,7 @@ def resolve_writeback_path(recs, origin_worktree):
         if origin_cands:
             pool = origin_cands
     if len(pool) == 1:
-        return pool[0]["path"], None
+        return pool[0], None
 
     hashes = {}
     for c in pool:
@@ -282,8 +282,14 @@ def resolve_writeback_path(recs, origin_worktree):
             digest = None
         hashes.setdefault(digest, []).append(c)
     if len(hashes) == 1 and None not in hashes:
-        return sorted(pool, key=lambda c: c["path"])[0]["path"], None
+        return sorted(pool, key=lambda c: c["path"])[0], None
     return None, sorted(c["path"] for c in cands)
+
+
+def resolve_writeback_path(recs, origin_worktree):
+    """resolve_change 的路径视图：返回 (目标 change.md 路径, None) 或 (None, [候选路径...])。"""
+    rec, cands = resolve_change(recs, origin_worktree)
+    return (rec["path"] if rec else None), cands
 
 
 def count_ac(ac_items):
