@@ -18,7 +18,7 @@ description: |
 
 ## 前置条件
 
-- **必须能找到 `.eo-project.json`**。找不到 → 报错退出，提示运行 `/eo-project-init`
+- **必须能找到 `.eo-project.json`**。同目录存在 `.eo-project.local.json` 时顶层字段覆盖合并（local 优先）。找不到 → 报错退出，提示运行 `/eo-project-init`
 - 目标 `eo-doc/changes/<change-id>/change.md` 存在且 `status: confirmed` 或 `implementing`（**修复循环例外**：存在阻塞反馈时允许 `reviewed` 进入模式二——它会先按回退边置回 `implementing`）
 - change 不存在 → 提示先执行 `/eo-change`；status: draft → 提示先在 /eo-change 完成确认
 - frontmatter `tier: light` → 走**轻模式**（见下）；缺省/`full` → 模式一
@@ -39,19 +39,21 @@ description: |
 
 3. **确认执行范围**
    - 列出各 Batch 及 TODO 数，默认从第一个未完成 Batch 开始；用户可指定只跑某批
+   - **同层并行批**（字母后缀，如 Batch 2a/2b）互不干扰，可乱序执行或只跑其一；本 skill 单会话内仍**串行**执行——跨 worker 并行派发归 /eo-loop（判据/隔离/合流见 [../eo-shared/granularity.md](../eo-shared/granularity.md) §6）
 
 4. **批内逐项实现**
    - 按依赖顺序编码；每完成一个 TODO **立即在 change.md 勾选**——带「完成判据」的先跑判据再勾；无判据的（一对一映射）以常规绿灯（编译/lint/相关单测）为勾选门，其对应 AC 留待批末 checkpoint 验证
    - 写码时**注释零溯源**：change/TODO/AC/finding 等流程标记不进注释，也不写「为何正确」的叙事注释（[../eo-shared/conventions.md](../eo-shared/conventions.md) §2.6）
-   - 遇到 change 未覆盖的技术细节：能从代码/handbook 自答的自答；真正的决策问用户（一次 1-2 问）
+   - 遇到 change 未覆盖的技术细节：能从代码/handbook 自答的自答；真正的决策问用户（一次 1-2 问）；发现要改的是前序 change 已引入并生效的对外契约/行为 → 按 [../eo-shared/questioning.md](../eo-shared/questioning.md) §4「破坏性变更类问题」强制问直接替换还是保留兼容，**不得自答代入**，结论回补 change.md §1
    - 发现 TODO/AC 写漏：告知用户，经确认后就地补进 change.md（意图不变的精化），再继续；补的是 manual 项且验收单已生成 → 同步补验收项（未勾）
 
 5. **批末 checkpoint（STOP and VALIDATE）**
-   - 验证该批对应的 **auto-light AC**：按 §2 的验证口径（「验证」栏，省略时按声明本身）逐条执行，通过则勾选
+   - 验证该批对应的 **auto-light AC**：按 §2 的验证口径（「验证」栏，省略时按声明本身）逐条执行，通过则勾选。**跑为主，写为例外**——优先以既有绿灯（编译 / lint / 已有测试）与一次性冒烟命令作勾选证据，仅当验证口径无法用一次性手段满足时才新写测试文件；回归资产的系统性沉淀归 /eo-test（审计 + 补缺，批末落下的测试它不重写）
    - **auto-heavy AC 不跑、不勾、不代验**（需起服务 / 多环境组合 / 点击流；判不准按 heavy）——重验证收敛到 /eo-test 一次跑完，**implement 不起环境**；汇报里列为「待 test」
    - **manual 类（「人工:」标记）不代勾**，留给完成时的人工验收门
    - 提交本批代码：commit message 带 `[<change-id>]` 前缀（见 [../eo-shared/conventions.md](../eo-shared/conventions.md)；推荐一次 change 一次 commit，分批时一批一 commit）
    - （可选自检）对本批 diff 的**新增注释行**扫溯源 token（`P[012]-\d`、`AC-\d`、`TODO-\d`、当前 change slug）——提示不门禁，命中列出人工判定，按 §2.6 清理
+   - **合流 checkpoint**（仅并行层）：本批是同层并行批（字母后缀）的最后一批时，加跑一次合流校验（[../eo-shared/granularity.md](../eo-shared/granularity.md) §6）——合并结果常规绿灯 + 该层各批对应 AC 复核；单会话串行执行时即该层 AC 验证的汇总，不重复起验证
    - 联动钩子：刷新看板 stub 进度（[../eo-shared/board-github.md](../eo-shared/board-github.md)，未开启跳过）
    - 汇报：本批完成的 TODO / 勾掉的 AC / **待 test 的 heavy AC** / 验证结果，询问「继续下一批 / 停」
 
@@ -130,12 +132,7 @@ spawn 一个**新鲜上下文 subagent**（执行者自述不作数——修了 
    - 锁定测试全绿 + lint/typecheck 绿
    - **独立复核**：spawn 一个新鲜上下文 subagent，输入 = change.md + `test_lock_commit..HEAD` 完整 diff（含测试文件改动历史）+（UI 时）DESIGN.md，核对「AC 逐条被真实覆盖？锁定后测试是否被弱化/删除/篡改？有无过拟合 / 硬编码特判 / 绕过验证？diff 里有无 AC 之外的多余实现（镀金）？注释有无流程溯源标注 / 叙事辩护（conventions §2.6）？」——执行者自述不作数。结论一行写入 change.md 末尾（`独立复核：通过/不通过，<日期>，基线 <short-sha>`）；发现问题 → 修复后重跑完成门
    - manual 项（「人工:」）逐项请用户确认，**代勾必须附确认记录**（AC 行后「确认：<用户原话要点>，<日期>，基线 <short-sha>」，规范见 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)）；manual 项 >2 条是扩档信号
-5. **收口（finalizer，顺序执行，不得减免）**：
-   ① **结算**：确认全部实施变更已提交（`[<change-id>]` 前缀），工作区无本 change 残留
-   ② **元数据**：自检 AC 勾选终态（每个 manual 勾有确认记录、独立复核记录存在，缺任一 → 不得归档）→ frontmatter 写 `commits`（`[<change-id>]` 前缀提交区间）、`status → archived` → INDEX 行终态（档列 light）+ seq 查重自愈 → 以上文档变更作一个收尾 meta commit
-   ③ **显式触发 `/eo-doc-manager sync`**（cursor sync 无自动触发，不能指望兜底）；本 change 的 diff 不触碰代码路径时可跳过并说明
-   ④ GitHub 联动开启时：按 [../eo-shared/board-github.md](../eo-shared/board-github.md) 执行 push/PR 与 issue body 终态刷新；**关 issue 放最后**
-   ⑤ stub 终态 upsert；值得留的决策按 eo-project-record 门槛落 decisions/。**不产 test.md / review.md**
+5. **收口（完成门通过后立即执行，不得延迟）**：内嵌调用 `/eo-archive` 走**轻档门**（读其 SKILL.md 照做：留痕校验 → 结算 → 元数据冻结 → 显式 doc sync → GitHub 联动 → stub 终态；完成门刚跑过且其后无新提交的锁定测试绿灯可复用）——归档步骤以 eo-archive 为唯一信源，本 skill 不复述。值得留的决策按 eo-project-record 门槛落 decisions/。**不产 test.md / review.md**
 6. **扩档**（任一信号：影响面圈不住 / 两次以上跑偏 / AC 超 5 条装不下 / auto-heavy 出现 / manual 项 >2）：停手告知用户，转 /eo-change「扩档子流程」——tier 改 full、已完成工作映射为已勾 TODO、用户再确认（风险触发的建议跑全量 change-review）；然后回本 skill 模式一从首个未完成 Batch 续走。`test_lock_commit` 与已锁定测试保留，文件不挪、commit 前缀不变
 
 ### 偏差记录
@@ -145,14 +142,16 @@ spawn 一个**新鲜上下文 subagent**（执行者自述不作数——修了 
 ## 关键约束
 
 - **不跳过 TODO**、不跳过批末 AC 验证
+- **并行批纪律**：同层批（字母后缀）的跨 worker 并行只发生在 eo-loop 派发的隔离 worktree 里，本 skill 内串行执行；层末合流 checkpoint 必跑（granularity §6）
 - **重验证不在 implement 跑**：auto-heavy AC（起服务 / 多环境组合 / 点击流）归 /eo-test——implement 不起环境、不跑环境矩阵、不代勾 heavy 项；判不准 light/heavy 按 heavy 处理
+- **批末跑为主，写为例外**：全档批末验证优先用既有绿灯与一次性冒烟作证据，不为过批末门系统性编写测试——回归资产的沉淀归 /eo-test（轻模式的测试锁定不受此限，它是轻档唯一证据门）
 - **修复循环双向取证**：先复现失败再修，且复现取最低成本层——起环境是最后手段，不是默认
 - **勾选即时**：TODO/AC 完成立即在 change.md 勾选，不攒批
 - **commit 前缀**：所有实施提交带 `[<change-id>]`（archive 靠它归集区间）
 - **注释纪律**：一切流程溯源标注（change 编号/slug、TODO/AC、finding P0-x/P1-x、FAIL-x、批次号）**严禁**进代码注释（溯源走 commit 前缀）；注释只写代码表达不了的约束、一两行为限，不写「为何正确」的辩护，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §2.6
 - **熔断纪律**：`fix_rounds`/`fix_consumed` 由模式二第 0 步维护——触发集空不计数、到限必停三选一、回炉确认后归零；台账回写只置 `fixed`（verified 归复审方）
 - **轻/全档计数边界**：轻档不用 `fix_rounds`/报告台账——其熔断 = 两次以上跑偏即扩档（granularity §5 扩档信号）；显式 light review/test 的 tmp 报告不触发计数；扩档转 full 确认后模式二计数从 0 起
-- **status 自动流转**：confirmed→implementing 由本 skill 写入；reviewed 由 review 通过后写入；轻档 archived 由轻模式收口写入
+- **status 自动流转**：confirmed→implementing 由本 skill 写入；reviewed 由 review 通过后写入；轻档 archived 由收口内嵌调用的 eo-archive（轻档门）写入
 - **轻模式纪律**：TODO 不写入 change.md、禁改测试文件、完成门必过独立复核；扩档信号出现即停手报告
 - **修复循环不升格**：test/review 反馈的缺陷不以任何形式开新 change
 - **不偏离 change**：方案问题上报用户；就地补 AC/TODO 仅限意图不变的精化

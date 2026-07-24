@@ -18,7 +18,7 @@ description: "项目记忆的统一写入口：经验教训（lessons/）与关�
 
 ## 前置
 
-必须能找到 `.eo-project.json`。找不到 → 报错退出，提示运行 `/eo-project-init`。从中读取 `project_root` / `project_name`。
+必须能找到 `.eo-project.json`。同目录存在 `.eo-project.local.json` 时顶层字段覆盖合并（local 优先）。找不到 → 报错退出，提示运行 `/eo-project-init`。从中读取 `project_root` / `project_name`。
 
 ## 执行步骤
 

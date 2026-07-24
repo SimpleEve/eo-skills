@@ -13,7 +13,7 @@ backlog 卡片化管理：**每条一个文件**，落在 `<project_root>/backlo
 
 ## 前置
 
-**必须**能找到 `.eo-project.json`（cwd 或父目录）。找不到时报错退出，提示运行 `/eo-project-init`。`backlog/` 与 `backlog/archive/` 目录 lazy 创建。
+**必须**能找到 `.eo-project.json`（cwd 或父目录）。同目录存在 `.eo-project.local.json` 时顶层字段覆盖合并（local 优先）。找不到时报错退出，提示运行 `/eo-project-init`。`backlog/` 与 `backlog/archive/` 目录 lazy 创建。
 
 ## 卡片格式
 

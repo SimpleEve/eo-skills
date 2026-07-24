@@ -9,7 +9,7 @@ description: 管理 eo-doc/ 代码侧文档体系（init / sync / re-sync / modi
 
 ## 前置
 
-除 `init` 外的所有命令必须能找到 `.eo-project.json`（cwd 或父目录）。找不到 → 报错退出，提示运行 `/eo-project-init`。
+除 `init` 外的所有命令必须能找到 `.eo-project.json`（cwd 或父目录）。同目录存在 `.eo-project.local.json` 时顶层字段覆盖合并（local 优先）。找不到 → 报错退出，提示运行 `/eo-project-init`。
 
 `init` 通常由 `/eo-project-init` 内部调用；用户直接调用 `/eo-doc-manager init` 时，若 `.eo-project.json` 不存在会提示先走 `/eo-project-init`。
 

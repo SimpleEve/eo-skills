@@ -1,8 +1,8 @@
 ---
 name: eo-archive
 description: |
-  归档已审查通过的 change：结算工作区为 commit、冻结 change 目录、触发文档同步（doc-manager sync）。触发：归档 change / archive / /eo-archive。
-  NOT FOR: 未通过 review 的 change（先走 /eo-review）；文档同步本身的细节（归 /eo-doc-manager）。
+  归档 change：结算工作区为 commit、冻结 change 目录、触发文档同步（doc-manager sync）。按档分流准入：全档需 review 通过，轻档凭完成门留痕。触发：归档 change / archive / /eo-archive。
+  NOT FOR: 未过准入门的 change（全档先走 /eo-review；轻档先过 eo-implement 轻模式完成门）；文档同步本身的细节（归 /eo-doc-manager）。
 ---
 
 # eo-archive — 变更归档
@@ -18,13 +18,15 @@ description: |
 
 ## 前置条件
 
-- **必须能找到 `.eo-project.json`**。找不到 → 报错退出，提示运行 `/eo-project-init`
-- 目标 `eo-doc/changes/<change-id>/change.md` 存在且 `status: reviewed`（存量 `done` 视同 reviewed，顺手改写）
-- `tier: light` 的 change 不经本 skill——轻档由 eo-implement 轻模式收口序列归档；对轻档执行本 skill → 告知其归档机制并退出，不做任何写入
+- **必须能找到 `.eo-project.json`**。同目录存在 `.eo-project.local.json` 时顶层字段覆盖合并（local 优先）。找不到 → 报错退出，提示运行 `/eo-project-init`
+- 目标 `eo-doc/changes/<change-id>/change.md` 存在且 `status: reviewed`（存量 `done` 视同 reviewed，顺手改写；`tier: light` 为 `implementing`，见下条）
+- **归档两档同源于本 skill**：`tier: light` 走第一层的**轻档门**（无 review/test 台账，门槛改为完成门留痕校验）；eo-implement 轻模式收口即内嵌调用本 skill——主控 / implement / 用户任一上下文触发皆可，门槛校验不因入口而减免
 
 ## 工作流程（五层）
 
-### 第一层：前置校验
+### 第一层：前置校验（按档分流）
+
+**全档（tier 缺省/full）**：
 
 1. `status: reviewed`（不是 → 指出当前所处环节：draft/confirmed 回 /eo-change 或 /eo-implement；implementing 回 /eo-implement；已 archived 直接告知）
 2. **报告当前结论门**（读末尾速报 + 台账，不通读正文——正文是历史快照）：
@@ -39,6 +41,16 @@ description: |
    - **归档前把已勾项汇总一句请用户一键确认**（封闭选择，跨会话最终复核）；尚有未勾项 → 主动提议「带我验收」逐项走查；核对通过后同步勾 manual AC
    - 存在不通过/待验/未勾项 → 按封闭选择协议（[../eo-shared/questioning.md](../eo-shared/questioning.md) §4）三选一：**补齐**（推荐——回 /eo-implement 修复，或回 /eo-test 补验重验证项；「不通过」= 修复循环输入，status 置回 implementing）/ 显式豁免（§8 + 验收单同项标豁免，双记录同 AC 编号）/ 终止归档
 
+**轻档（tier: light）**——无 review/test 台账，门槛改为**完成门留痕校验**（证据只认工件留痕与重跑，执行者自述不作数）：
+
+1. `status: implementing`（draft/confirmed → 回 /eo-implement 轻模式；已 archived 直接告知）
+2. **工作区无本 change 的未提交实施改动**（有 → 先结算成 `[<change-id>]` commit；结算后独立复核基线必然过期，由下一条拦回——不得跳过下条放行）
+3. **独立复核留痕新鲜**：change.md 末尾存在「独立复核：通过」行，且其基线 short-sha == 本 change 最后一个 `[<change-id>]` 实施提交（缺失 / 不通过 / 基线过期 → 回 /eo-implement 重跑完成门）
+4. **锁定测试绿**：frontmatter 有 `test_lock_commit` → 重跑锁定测试确认全绿（implement 收口内嵌调用时，完成门刚跑过且其后无新提交 → 可复用该绿灯不重跑）；无锁定轻档（change.md 已注明）→ 跳过本条
+5. **AC 全勾 + manual 确认留痕**：manual 项（「人工:」）代勾必须带 AC 行确认记录（「确认：原话要点 + 日期 + 基线 sha」，规范见 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)）；存在未勾/缺记录项 → 三选一：补齐（回 /eo-implement）/ 显式豁免（AC 行标豁免 + 原话 + 日期）/ 终止归档
+
+以下第二~五层两档共用，差异点在层内标注。
+
 ### 第二层：工作区结算
 
 cursor 基于 commit，sync 只能看见已提交内容，因此先结算：
@@ -52,7 +64,7 @@ cursor 基于 commit，sync 只能看见已提交内容，因此先结算：
 
 1. 从 `base_commit..HEAD` 按 `[<change-id>]` 前缀归集本 change 的提交；单 commit 直取，多 commit 列出请用户确认；存在无前缀夹杂提交时请用户圈定
 2. 写入 frontmatter：`commits: [<区间>]`（仅审计用）、`status: archived`（不可逆）
-3. 更新 `eo-doc/changes/INDEX.md` 对应行，顺手对 seq 列查重（重号 → created 晚者让号，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §2）
+3. 更新 `eo-doc/changes/INDEX.md` 对应行（轻档档列写 light），顺手对 seq 列查重（重号 → created 晚者让号，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §2）
 4. 以上文档改动提交入库——可与第二层合为同一个 commit（推荐一次 change 一次 commit）；implement 已按批提交时，这就是一个小的收尾 meta commit
 
 ### 第四层：文档同步（内嵌调用）
@@ -62,6 +74,7 @@ cursor 基于 commit，sync 只能看见已提交内容，因此先结算：
 - 把 change.md 路径作为业务语境提示带入（帮助 sync 理解「为什么改」）；**信源永远是代码**，不按 change 说的写、按代码是的写
 - 同步范围覆盖第二/三层的提交与期间累积的直改提交，一并吸收
 - 若 sync 中途失败：change 已冻结、cursor 未推进——直接手动重跑 `/eo-doc-manager sync` 续上，不需要回滚归档
+- 例外：本 change 的 diff 不触碰代码路径（纯文档/流程工件）→ 可跳过本层并说明，cursor 不动（期间累积的直改增量留待下次任意 sync 收割）
 
 ### 第五层：收尾
 
@@ -86,3 +99,4 @@ cursor 基于 commit，sync 只能看见已提交内容，因此先结算：
 | 归档不可逆 | archived 后不回退 status；后续问题走 /eo-fix 或新 change |
 | 区间 ≠ 范围 | commit 区间只写 frontmatter 审计；同步范围永远是 cursor..HEAD |
 | 一次一个 | 一次归档一个 change；多个待归档时逐个走完五层 |
+| 两档同源 | 轻档只换第一层准入门（完成门留痕），第二~五层与全档共用；implement 轻模式收口 = 内嵌调用本 skill，门槛不因入口减免 |

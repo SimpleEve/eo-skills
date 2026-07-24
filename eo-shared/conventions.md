@@ -11,7 +11,8 @@ tmp/eo/
 ├── handoff/<topic>.md          # 会话交接快照（eo-handoff）
 ├── fix/<date>-<slug>.md        # 深挖模式调查记录（eo-fix）
 ├── design/<date>-<topic>/      # 设计变体与预览 HTML（eo-design）
-└── explain/<date>-<topic>.html # 一次性解释页（eo-recall）
+├── explain/<date>-<topic>.html # 一次性解释页（eo-recall）
+└── loop/<slug>/journal.md      # 总控进度报告留痕（eo-loop）
 ```
 
 纪律：
@@ -43,7 +44,7 @@ skill 写入 vault（board stub、brainstorm 记录、lessons/decisions、backlo
 
 **`seq`（frontmatter 整数，显示作 `#14`）是显示序号**，真相只存在于 change.md frontmatter 一处；目录前缀、INDEX 的 # 列、看板 stub 的 seq 字段都是它的投影。分配 = 项目内现有最大号 +1（含 v1/v2 存量数字前缀）。**seq 允许撞号**——多 worktree 并行分配是常态，撞号只造成同号目录与外观歧义，不破坏任何机制：
 
-- **自愈**（撞号只在多分支合并、两卡同树时才显形）：任何更新 INDEX 的动作（eo-change 第八步、eo-archive、eo-implement 轻模式收口）顺手对 seq 查重；发现重号 → `created` 晚者让号（同日无法判晚者 → slug 字典序大者让号，稳定可判），一套机械动作：① 改 frontmatter `seq` → ② `git mv <旧NN>-<slug> <新NN>-<slug>`（目录含未跟踪产物则 `mv` 后 `git add`）→ ③ 改 INDEX 行（# 列 + 链接路径）→ ④ upsert stub（整文件重写，seq 与正文路径随之刷新）→ ⑤ 一句话报告。**commit 前缀 `[slug]`、issue 标题/号绝不动**——这正是比 v1 便宜的根因：v1 把号钉进 commit，让号即断链；v2 只动可改名投影
+- **自愈**（撞号只在多分支合并、两卡同树时才显形）：任何更新 INDEX 的动作（eo-change 第八步、eo-archive——轻模式收口经其轻档门，同属后者）顺手对 seq 查重；发现重号 → `created` 晚者让号（同日无法判晚者 → slug 字典序大者让号，稳定可判），一套机械动作：① 改 frontmatter `seq` → ② `git mv <旧NN>-<slug> <新NN>-<slug>`（目录含未跟踪产物则 `mv` 后 `git add`）→ ③ 改 INDEX 行（# 列 + 链接路径）→ ④ upsert stub（整文件重写，seq 与正文路径随之刷新）→ ⑤ 一句话报告。**commit 前缀 `[slug]`、issue 标题/号绝不动**——这正是比 v1 便宜的根因：v1 把号钉进 commit，让号即断链；v2 只动可改名投影
 - **口头引用**：用户说「14 那个」→ 查 INDEX 解析成 slug；重号未修时列出候选问一句
 - **seq 绝不进** commit message、issue 标题、stub 文件名——这些改不了或没人会回去改
 
@@ -97,7 +98,7 @@ implementing ──(eo-change 回炉子流程：方案需实质修订)──▶ 
 | `fix_rounds` | 整数，缺省视为 0 | eo-implement 模式二第 0 步 | 当前 revision 内的修复轮次；≥3 触发熔断三选一；回炉确认时归零 |
 | `fix_consumed` | 列表，缺省 `[]` | eo-implement 模式二第 0 步 | 已消费的失败反馈标识（`review#N` / `test#N` / `acceptance#<AC编号>@<验收基线sha>`）——幂等计数依据，触发集为空 = 续修不计数；回炉确认时清空 |
 
-**change 分轻/全两档**（frontmatter `tier: light | full`，**缺省视为 full**，存量 change 零迁移）。轻档共用上表状态机但**跳过 reviewed**：draft →（探针对齐）confirmed →（测试锁定 + 实施）implementing →（完成门通过，eo-implement 轻模式直接写入）archived——轻档不经 eo-archive，归档由轻模式**收口序列（finalizer）**执行：结算 → 元数据收尾 commit → **显式触发 doc-manager sync** → push/PR → 关 issue/stub（cursor sync 只是范围游标、没有自动触发，不能当兜底）。判档规则见 [granularity.md](granularity.md) §5。
+**change 分轻/全两档**（frontmatter `tier: light | full`，**缺省视为 full**，存量 change 零迁移）。轻档共用上表状态机但**跳过 reviewed**：draft →（探针对齐）confirmed →（测试锁定 + 实施）implementing →（完成门通过，收口立即内嵌调用 eo-archive）archived——**归档两档同源于 eo-archive**，按档分流准入：全档验 review 基线新鲜度，轻档走轻档门（验完成门留痕：独立复核基线新鲜 + 锁定测试绿 + manual 确认记录）。轻模式收口负责在完成门通过后立即触发；其他上下文（主控 / 用户）持完成门留痕直接调 /eo-archive 亦可，门槛不因入口减免。判档规则见 [granularity.md](granularity.md) §5。
 
 用户的确认动作发生在对话里（回复确认，或按 [questioning.md](questioning.md) §4 封闭选择协议选择），skill 负责落盘。
 

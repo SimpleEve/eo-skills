@@ -19,7 +19,7 @@ description: |
 
 ## 前置条件
 
-- **必须能找到 `.eo-project.json`**（cwd 或父目录）。找不到 → 报错退出，提示运行 `/eo-project-init`。`eo-doc/` 路径由 `doc_root` 解析
+- **必须能找到 `.eo-project.json`**（cwd 或父目录）。同目录存在 `.eo-project.local.json` 时顶层字段覆盖合并（local 优先）。找不到 → 报错退出，提示运行 `/eo-project-init`。`eo-doc/` 路径由 `doc_root` 解析
 - `eo-doc/changes/` 不存在时 lazy 创建（含 INDEX.md 骨架）
 
 ## 工作流程
@@ -54,19 +54,20 @@ description: |
 
 ### 第五步：TODO 拆解与分批
 
-- 每条 TODO 三要素（描述/文件/对应 AC），逐条映射 AC；文件栏带**操作类型前缀**「新增:/修改:/删除:」（缺省视为修改——change-review 维度 7 按类型核验前提）；完成判据仅在多条 TODO 对同一 AC 时逐条补写（granularity.md §4），**禁止占位符**
+- 每条 TODO 三要素（描述/文件/对应 AC），逐条映射 AC；文件栏带**操作类型前缀**「新增:/修改:/删除:」（缺省视为修改——change-review 维度 7 按类型核验前提）；操作类型「修改」且触碰对外契约/已生效行为（此前某个 change 引入）→ 按 [../eo-shared/questioning.md](../eo-shared/questioning.md) §4「破坏性变更类问题」强制问清直接替换还是保留兼容，结论钉入 §1 再继续拆；完成判据仅在多条 TODO 对同一 AC 时逐条补写（granularity.md §4），**禁止占位符**
 - 按 Batch 分组，**Batch 1 = MVP**：跑完即可独立验证其对应的 AC（批间 STOP and VALIDATE 由 eo-implement 执行）
+- **并行组**：拆批时显式判「哪些工作互不干扰」（文件集不相交 + 无逻辑依赖，判据见 [../eo-shared/granularity.md](../eo-shared/granularity.md) §6）——互不干扰的拆成同层并行批，字母后缀标注（`Batch 2a` / `Batch 2b`）；判不准不标，串行是安全缺省。地基类工作（修测试 / 补 CI / 删死代码）天然互不干扰，优先拆成可并行批
 - 不写具体函数体；接口签名/数据结构可以描述
 
 ### 第六步：粒度自检（自动校验）
 
-对照 [../eo-shared/granularity.md](../eo-shared/granularity.md) §1：数 TODO、`wc -l` 全文。超软标（>7 条 / >500 行）→ 建议按 AC 分组拆成 change 序列（第一个 = MVP，其余排队或进 backlog）；超硬标（>10 条 / >700 行）→ **拒绝进入确认**，必须拆。
+对照 [../eo-shared/granularity.md](../eo-shared/granularity.md) §1：数 TODO、`wc -l` 全文。超软标（>7 条 / >500 行）→ 建议按 AC 分组拆成 change 序列（第一个 = MVP，其余排队或进 backlog）；超硬标（>10 条 / >700 行）→ **拒绝进入确认**，必须拆。拆序列时顺手判后续 change 之间可否并行（granularity.md §6：意图独立 + 预计文件面不相交）——可并行的在 INDEX 摘要列附注「可与 #N 并行」，供 eo-loop 圈并行收敛组。
 
 ### 第七步：写入 change.md 并确认
 
 1. **确定 change-id（slug 即身份，规则见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §2）**：用户给语义名 → kebab-case slug 即 id（拒绝 `fix-` 前缀）。查重：扫 `eo-doc/changes/` 目录与 INDEX.md，有 remote 时 `git ls-tree origin/<默认分支> -- eo-doc/changes/` 兜底（防多 worktree 并行撞名）；撞名 → 换更具体的 slug。另分配显示序号 `seq`：现有 change（含存量数字前缀 id）最大号 +1，补零作目录前缀 `<NN>-<slug>/`（供 `ls` 排序、一眼找进行中的）——seq 允许 worktree 并行撞号（自愈见第八步）
-2. 按 [references/change-template.md](references/change-template.md) 写入 `eo-doc/changes/<NN>-<slug>/change.md`（目录名 = seq 补零前缀 + slug；`status: draft`，frontmatter 含 `seq` 与一句话 `summary`）；已钉决策落 §1，条件节按触发条件取舍。**写入即新建看板 stub**（[../eo-shared/board-github.md](../eo-shared/board-github.md)，board 未开启则跳过）——draft 从这一刻起就在看板上
-3. 交付用户确认，按反馈修订
+2. 按 [references/change-template.md](references/change-template.md) 写入 `eo-doc/changes/<NN>-<slug>/change.md`（目录名 = seq 补零前缀 + slug；`status: draft`，frontmatter 含 `seq` 与一句话 `summary`）；速览按模板视角纪律写（用户可见的行为差异，不复述 AC），已钉决策落 §1，条件节按触发条件取舍。**写入即新建看板 stub**（[../eo-shared/board-github.md](../eo-shared/board-github.md)，board 未开启则跳过）——draft 从这一刻起就在看板上
+3. **交付确认：对话里亮出速览 + §2 AC**（与轻档探针对齐同构，不甩文件路径让用户通读全文；用户要细节再展开），按反馈修订——正文修订后速览同步刷新
 4. **用户在对话中确认后，skill 自动置 `status: confirmed`**——不要求用户手改 frontmatter；来源是 backlog 卡的，按 [../eo-backlog/SKILL.md](../eo-backlog/SKILL.md) 的 archive 动作归档该卡（adopted + 关联本 change-id）
 5. 联动钩子：更新 stub（status 同步为 confirmed）、创建 GitHub issue（issue 只在此刻建，draft 阶段不建；对应开关未开启则跳过），见 [../eo-shared/board-github.md](../eo-shared/board-github.md)。修订循环中（场景 B）任何改动落盘也顺手 upsert stub
 
@@ -106,7 +107,7 @@ description: |
 
 ### 扩档子流程（light → full，由 eo-implement 轻模式停手转入）
 
-1. frontmatter `tier` 改 `full`，就地补齐全档模板节：§1 意图（轻档意图行扩写 + 已钉决策）、§2 保留、§3 TODO——**已完成的工作映射为已勾 TODO 并注「扩档前完成」**，剩余工作按 Batch 划分；条件节按触发条件取舍；补全档 frontmatter 字段 `plan_revision: 1`/`fix_rounds: 0`/`fix_consumed: []`（语义见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §3）
+1. frontmatter `tier` 改 `full`，就地补齐全档模板节：速览、§1 意图（轻档意图行扩写 + 已钉决策）、§2 保留、§3 TODO——**已完成的工作映射为已勾 TODO 并注「扩档前完成」**，剩余工作按 Batch 划分；条件节按触发条件取舍；补全档 frontmatter 字段 `plan_revision: 1`/`fix_rounds: 0`/`fix_consumed: []`（语义见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §3）
 2. 交用户再确认（对话确认）；**因影响面/风险信号触发的扩档，建议跑一次全量 /eo-change-review**
 3. 刷新 INDEX 行（档列 light→full）、stub 与 issue body 投影（[../eo-shared/board-github.md](../eo-shared/board-github.md)，未开启跳过）
 4. 回 /eo-implement 模式一，从首个未完成 Batch 续走——`base_commit`/`test_lock_commit`/已锁定测试全部保留
@@ -116,7 +117,7 @@ description: |
 回炉 ≠ 修 bug——是「方案本身要改」。前提：status 为 `implementing`（reviewed 的先按回退边置回，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §3）。
 
 1. **边界检查**：先过 [../eo-shared/granularity.md](../eo-shared/granularity.md) §3 更新 vs 新开决策表——意图本质变化 / 与原范围重叠 <50% / 原 change 可独立收尾 → **新开 change**，不回炉（原 change 走正常收尾或归档豁免）；不允许借回炉绕过这条边界
-2. **status → `draft`**，修订 §1/§2/§3（含已钉决策的重钉）
+2. **status → `draft`**，修订速览与 §1/§2/§3（含已钉决策的重钉）
 3. **证据失效**：旧 TODO/AC 与新版逐条映射——语义不变的保留勾选注「回炉前完成」；完成判据或 AC 语义受影响的**取消勾选**注「回炉待复验」；manual 项按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)「失效与重置」重置；`test_lock_commit` 仅在全部被锁 AC 语义不变时保留，否则值旁注 `superseded`（待轻模式重锁）；`base_commit` 无条件保留
 4. **报告处置**：change-review.md / test.md / review.md（存在者）各追加一行 `> revision N 作废（<日期>）——后续见 revision N+1`，并把台账中仍为 `open`/`fixed` 的行状态批量改 `superseded`（随方案作废，archive 门不再计为阻塞）；**不压缩、不删除**旧轮次内容（报告可能未提交，git 兜不了底）
 5. **投影**：INDEX 行状态回 draft、stub upsert、issue body 刷新（联动开启时）
@@ -137,6 +138,8 @@ description: |
 ## 关键约束
 
 - **AC 先于 TODO**；每条 TODO 必须映射到 AC
+- **速览是全档必填人读投影**：视角是用户可见行为差异，不复述 AC；正文修订/回炉时同步刷新；轻档无速览（探针对齐即人读投影）
+- **并行组只标互不干扰**（判据/校验/合流见 granularity.md §6）：判不准不标，串行是安全缺省；标注写错只阻塞并行不阻塞实施
 - **粒度硬上限拒绝确认**（数值见 granularity.md §1）；轻/全判档以 granularity.md §5 为准
 - **轻档不写 TODO、不进 change-review**；扩档只由 eo-implement 轻模式触发
 - **回炉只走回炉子流程**：先过更新 vs 新开边界；证据失效逐条处理；`plan_revision`/计数只在用户重新确认时动——就地精化不算回炉

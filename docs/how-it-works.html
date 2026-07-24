@@ -239,7 +239,7 @@
         <div class="tree" id="tree"></div>
         <div class="statusline"><span class="lbl">STATUS</span>
           <span class="badge b-draft">draft</span><span class="badge b-confirmed">confirmed</span>
-          <span class="badge b-impl">implementing</span><span class="badge b-done">done</span><span class="badge b-arch">archived</span>
+          <span class="badge b-impl">implementing</span><span class="badge b-done">reviewed</span><span class="badge b-arch">archived</span>
         </div>
       </div>
     </div>
@@ -327,7 +327,7 @@ const ROUTES=[
  {chain:[["直接改代码",1],["验证",0],["commit（ui: 前缀）",0]],
   note:"满足 trivial 判据（不改行为语义、不动接口和数据、无需方案权衡、单会话搞定）就不开 change——文件数不设限，改 50 个文件的多语言也算。文档侧由 doc-manager 的 cursor sync 兜底吸收。其实连 /eo-change 都会替你判断：够小它会主动说「不值得开 change，直接改」。"},
  {chain:[["/eo-change",1],["AC 验收清单",0],["TODO 分批",0],["/eo-implement",1],["/eo-test",0],["/eo-review",1],["/eo-archive",1]],
-  note:"标准路。起草时有提问预算（不会被问到累）、验收清单先于代码产出、TODO 3-7 条超了强制拆；实施按批走、批末验 AC；review 通过自动置 done；归档冻结工件并触发文档同步。全程你不碰任何 frontmatter。",
+  note:"标准路。起草时有提问预算（不会被问到累）、速览 + 验收清单先于代码产出、TODO 3-7 条超了强制拆，互不干扰的批可标并行组（2a/2b）由 /eo-loop 并行推进；实施按批走、批末验 AC；review 通过自动置 reviewed；归档冻结工件并触发文档同步。全程你不碰任何 frontmatter。",
   opt:[4]},
  {chain:[["/eo-brainstorming",1],["钉决策",0],["拆 change 序列",0],["/eo-change ×N",1],["……主链",0]],
   note:"方向没定就先风暴：三层追问、每轮 1-2 问、决策池防止已钉结论被翻案。出口直接拆成 change 序列（第一个是 MVP），已钉决策整体移交——下游一个都不会重问。"}];
@@ -360,13 +360,15 @@ const STEPS=[
 <span class="dim">vault/lessons/INDEX.md → 命中 1 条 trigger ✓</span>`,
   st:null},
  {n:"STEP 1",t:"起草",title:"验收先于代码",who:"/eo-change",
-  talk:[["a","AC 定了 4 条（含一条失败路径：「超过 500 条时提示分批」）；TODO 拆成 2 批，Batch 1 是 MVP。粒度自检：5 条 TODO / 210 行，合规 ✓"],
+  talk:[["a","速览：<b>改什么</b>·选中记录打包 zip 导出 / <b>行为差异</b>·之前只能逐条下载 → 之后可批量 / <b>怎么验</b>·AC 4 条（含一条失败路径：「超过 500 条时提示分批」）。TODO 拆成 2 批，Batch 1 是 MVP。粒度自检：5 条 TODO / 210 行，合规 ✓"],
         ["u","可以，就这么干"],
-        ["a","已确认。<span class=\"mono\">status: draft → confirmed</span>（我改的，你永远不用碰 frontmatter）。看板卡片和 GitHub issue #42 已建"]],
+        ["a","已确认。<span class=\"mono\">status: draft → confirmed</span>（我改的，你永远不用碰 frontmatter）。看板卡片和 GitHub issue #42 已建"],
+        ["s","确认时亮的是速览 + AC——30 秒读懂，不用通读文件"]],
   tree:`eo-doc/changes/
 ├─ INDEX.md          <span class="chg">+1 行</span>
 └─ <span class="new">014-batch-export/</span>
    └─ <span class="new">change.md</span>
+      <span class="dim">速览（改什么/为什么/行为差异/怎么验）</span>
       <span class="dim">§1 意图 + 已钉决策（含 lesson 来源）</span>
       <span class="dim">§2 AC ×4 ☐☐☐☐   §3 TODO ×5（2 批）</span>
       <span class="dim">issue: 42</span>
@@ -387,7 +389,7 @@ git log:
 <span class="new">[014] 导出核心链路（Batch 1）</span>`,
   st:"impl"},
  {n:"STEP 3",t:"验证",title:"测试和审查都拿 AC 说话",who:"/eo-test → /eo-review",
-  talk:[["a","test：AC 逐条推导 11 个用例，全绿。review：AC 覆盖 4/4，代码质量 P0=0 P1=0 P2=1（命名建议）。<span class=\"mono\">status → done</span>"],
+  talk:[["a","test：AC 逐条推导 11 个用例，全绿。review：AC 覆盖 4/4，代码质量 P0=0 P1=0 P2=1（命名建议）。<span class=\"mono\">status → reviewed</span>"],
         ["s","速报是硬性要求——不打开报告文件就能知道结果"]],
   talkExtra:null,
   tree:`eo-doc/changes/014-batch-export/
@@ -449,7 +451,7 @@ const CAT=[
   ["eo-change","发起变更","复杂度定级（够小主动短路成直改）→ 事实自查（含 lessons）→ 预算内澄清 → <b>AC 先于 TODO</b> → 粒度硬校验（TODO&gt;10 或 700 行拒绝确认）。","产出 changes/<id>/change.md · 状态 draft→confirmed"],
   ["eo-implement","按批实施","按 Batch 执行，批末 checkpoint：验该批 AC、勾进度、[change-id] 前缀提交、问你继续还是停。","勾 change.md 的 ☑ · 状态 →implementing"],
   ["eo-test","以 AC 为锚测试","AC 逐条推导用例，严禁改业务代码；结束必出对话速报。","产出 test.md"],
-  ["eo-review","代码审查","AC 覆盖逐条核对 + 质量分级 P0/P1/P2 + DESIGN.md 一致性（条件）；通过自动置 done。","产出 review.md · 状态 →done"],
+  ["eo-review","代码审查","AC 覆盖逐条核对 + 质量分级 P0/P1/P2 + DESIGN.md 一致性（条件）；通过自动置 reviewed。","产出 review.md · 状态 →reviewed"],
   ["eo-archive","归档","五层：AC 门禁 → 工作区结算 → 冻结 → <b>内嵌调用 doc sync</b>（零自有逻辑）→ issue/PR/看板收尾。","冻结 change · 更新活文档 · 状态 →archived"]]],
  ["入口 · 事情从这里进来",[
   ["eo-brainstorming","想法发散与钉决策","三层追问、每轮 1-2 问、决策池（已钉不翻案）；捕获出口直接拆 change 序列并移交决策。","产出 brainstorm 记录 + change 草案"],
@@ -463,7 +465,7 @@ const CAT=[
  ["增强 · 需要时才出现",[
   ["eo-design","设计系统","init 建 DESIGN.md（SAFE/RISK 提案 + HTML 预览）；variants 反趋同多方案对比；apply 生产级落地；audit 一致性审计。","DESIGN.md + CLAUDE.md 约束注入"],
   ["eo-change-review","方案审查（可选）","AC 质量、TODO↔AC 映射、粒度合规、占位符检测——implement 之前把牢方向。","产出 change-review.md"],
-  ["eo-flow","甩给 codex","把单个步骤（implement/test/review）handoff 给 tmux 另一 pane 的 codex，回包后决策。","跨 agent 协作"],
+  ["eo-loop","总控调度","圈状态机线段（入口 → 出口 → 收敛标准），派发到可插拔基底（子 agent / codex / orca）循环推进至收敛；<b>互不干扰的并行组</b>（Batch 2a/2b、可并行 change）多 worker 并行——worktree 隔离 + 文件集机械校验 + 合流 checkpoint；每 ≤30 分钟主动观测出进度报告。","跨节点循环 · journal 进 tmp/eo/loop/"],
   ["eo-handoff","会话交接","/clear 前把「状态 + 口径 + 下一步」写成开机指令，新会话 5 分钟接上。","tmp/eo/handoff/<topic>.md"]]],
  ["项目管理 · 落在 vault",[
   ["eo-backlog","待办池","一句话灵感 / 以后再说的事，追加进 backlog.md；被采纳时升级成 change。","backlog.md"],

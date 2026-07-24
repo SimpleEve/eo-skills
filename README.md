@@ -88,6 +88,8 @@ install.bat --antigravity-only
 
 它会生成 `.eo-project.json`（项目级配置）+ 双侧最小骨架（代码侧 `eo-doc/` + 项目管理侧）。**所有其它 eo-* skill 都依赖它**，没跑过会直接报错。
 
+协作场景：`.eo-project.json` 提交进仓库承载团队共享字段；机器相关字段（`project_root` / `mode` 等）放进不提交的 `.eo-project.local.json` 做顶层字段覆盖（协作者 clone 后重跑 `/eo-project-init` 自动引导生成）。
+
 ---
 
 ## 流程一图流
@@ -123,7 +125,9 @@ flowchart TD
 
 > `/eo-handoff` 横切整个流程：clear 前在**任意节点**都可触发，把当前状态写到 `tmp/eo/handoff/<topic>.md` 供下个会话载入。图中仅以 implement 阶段示意。
 >
-> 样式微调、多语言这类 trivial 改动走**直改模式**（不开 change，判据见 [eo-shared/granularity.md](eo-shared/granularity.md)），随下次 doc sync 顺带收割。轻档 change（`tier: light`）由 implement 轻模式收口归档（含显式 doc sync），不经 test/review/archive——详见 [docs/tier-design.md](docs/tier-design.md)。
+> 样式微调、多语言这类 trivial 改动走**直改模式**（不开 change，判据见 [eo-shared/granularity.md](eo-shared/granularity.md)），随下次 doc sync 顺带收割。轻档 change（`tier: light`）跳过 test/review，完成门通过后由收口内嵌调用 `/eo-archive` 轻档门归档（含显式 doc sync）——详见 [docs/tier-design.md](docs/tier-design.md)。
+>
+> **互不干扰的工作可并行**：全档 Batch 可标同层并行组（`Batch 2a`/`2b`），超标拆出的 change 序列可标「可与 #N 并行」——由 `/eo-loop` 派发到隔离 worktree 并行推进（判据、机械校验与合流 checkpoint 见 [eo-shared/granularity.md](eo-shared/granularity.md) §6）。
 
 ---
 
@@ -133,18 +137,19 @@ flowchart TD
 |------|---|------|
 | 第一次在项目里用 eo-skills | `/eo-project-init` | **必跑** |
 | 想法还不成形 / 新项目从零起步 | `/eo-brainstorming` | 发散 + 钉决策，出口直接拆首批 change |
-| 发起变更（新功能 / 增强 / 重构） | `/eo-change` | 产出 `change.md`（轻档 = 意图 + AC；全档 = AC + TODO 分批）；trivial 短路直改 |
+| 发起变更（新功能 / 增强 / 重构） | `/eo-change` | 产出 `change.md`（轻档 = 意图 + AC；全档 = 速览 + AC + TODO 分批）；trivial 短路直改 |
 | 按 change 写代码 | `/eo-implement` | 按 Batch 执行，含 bug 修复循环 |
 | 发现 bug（口喷即可） | `/eo-fix` | 定位 + 直接修复；难缠 bug 自动升级深挖模式；需求变更转 change |
-| 跑测试 / 写测试报告 | `/eo-test` | 以 AC 为锚 + 读码取输入；重验证唯一执行者 |
+| 跑测试 / 写测试报告 | `/eo-test` | 以 AC 为锚 + 读码取输入；重验证唯一执行者；单测审计 + 补缺不重写 |
 | 实施后代码审查 | `/eo-review` | 全档必跑；轻档由 implement 完成门独立复核替代 |
-| 审查通过后归档 | `/eo-archive` | 更新 state/handbook + 冻结 change；轻档不经此（收口即归档） |
+| 审查/完成门通过后归档 | `/eo-archive` | 更新 state/handbook + 冻结 change；轻档走轻档门（收口自动触发，亦可单独调用） |
 | 忘了当初怎么设计的 / 想看某段逻辑的实现 | `/eo-recall` | 只读问答，分层作答带出处；复杂逻辑可出图/解释页 |
 | 定设计系统 / 出视觉方案 / 高保真页面 | `/eo-design <mode>` | init / variants / apply / audit，真相源 `DESIGN.md` |
 | 即将 `/clear` 但要保留进度 | `/eo-handoff` | 写到 `tmp/eo/handoff/<topic>.md`，下个会话载入即续 |
 | 维护 `eo-doc/` 文档体系 | `/eo-doc-manager` | sync / re-sync |
 | 记录决策 / 经验教训 | `/eo-project-record` | lessons/ + decisions/，带 INDEX 供自动消费 |
 | 加一条 backlog 待办 / 灵感 | `/eo-backlog` | 仅追加到 `backlog.md` |
+| 把若干节点串起来循环推进到收敛 | `/eo-loop` | 总控调度：圈状态机线段 → 派发到可插拔基底（子 agent / codex / orca）→ 每 ≤30min 主动观测并出进度报告；互不干扰的并行组（同层批 / 可并行 change）多 worker 并行推进 |
 
 不在表里的 skill（`eo-change-review`）是可选增强，详见 [GUIDE](docs/GUIDE.md)。
 

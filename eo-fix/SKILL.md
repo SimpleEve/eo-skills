@@ -19,7 +19,7 @@ description: |
 
 ## 前置
 
-**必须能找到 `.eo-project.json`**。找不到 → 报错退出，提示运行 `/eo-project-init`。
+**必须能找到 `.eo-project.json`**。同目录存在 `.eo-project.local.json` 时顶层字段覆盖合并（local 优先）。找不到 → 报错退出，提示运行 `/eo-project-init`。
 
 ## 工作流程
 

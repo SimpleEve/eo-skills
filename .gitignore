@@ -3,3 +3,12 @@
 
 # eo 临时工件不入库
 tmp/
+
+# eo-project vault link
+eo-doc/vault
+
+# eo-project 个人/机器覆盖配置不提交
+.eo-project.local.json
+
+# 会话级任务草稿不提交
+tasks/

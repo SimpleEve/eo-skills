@@ -32,7 +32,8 @@
 配置约定：
 
 - **用户级**：`~/.eo/config.json`（`vault_root` / `projects_subdir` 等；同时承载 eo-platform 等生态侧状态）
-- **项目级**：`.eo-project.json`（每项目一份，所有 skill 读它）
+- **项目级**：`.eo-project.json`（每项目一份，提交进仓库，所有 skill 读它）
+- **项目级个人覆盖**：`.eo-project.local.json`（可选，不提交；顶层字段覆盖 `.eo-project.json`，协作时放 `project_root` / `mode` 等机器相关字段）
 - 旧路径 `~/.eo-skills.json` 由 `/eo-project-init` 首次运行时自动迁移到 `~/.eo/config.json`。
 
 完整字段见 [eo-project-init/references/config.md](../eo-project-init/references/config.md)。
@@ -79,6 +80,7 @@ eo-doc/
 3. **三档渐进式严谨** — 文档重量与变更粒度挂钩：trivial 直改零工件；轻档 change（tier: light）只有意图 + AC，测试锁定验收、收口即归档；全档必填仅 3 节、其余条件化。判档表见 eo-shared/granularity.md §5
 4. **量化粒度** — TODO 3-7 理想 / 10 硬上限，超标拆 change 序列
 5. **fix 直接修复** — bug 口喷给 `/eo-fix`，定位后直接修；难缠 bug 自动升级深挖模式；实为需求变更才转 change
+6. **并行友好拆解** — 并行判据是「互不干扰」（文件集不相交 + 无逻辑依赖）而非依赖图：全档 Batch 标同层并行组（`2a`/`2b`），超标拆出的 change 序列标「可与 #N 并行」；派发（worktree 隔离）与合流 checkpoint 归 eo-loop。单一来源 eo-shared/granularity.md §6
 
 ### 产物目录（代码侧）
 
@@ -86,7 +88,7 @@ eo-doc/
 eo-doc/changes/
 ├── INDEX.md                ← 项目级 change 时间线
 └── <change-id>/            ← kebab-case slug 即 id（frontmatter 另有 seq 显示别名 #N）
-    ├── change.md           ← 意图 + AC + TODO（+ 条件节）
+    ├── change.md           ← 速览 + 意图 + AC + TODO（+ 条件节）
     ├── change-review.md    ← 方案审查（可选）
     ├── test.md             ← 测试报告
     ├── review.md           ← 代码审查结论
@@ -100,15 +102,16 @@ eo-doc/changes/
 |-------|---------|------|------|
 | `/eo-project-init` | 项目首次使用 eo-skills | `.eo-project.json` + 双侧骨架 | **所有 skill 的前置** |
 | `/eo-brainstorming` | 想法不成形 / 新项目从零起步 | 已钉决策 + 首批 change 草案（捕获出口；视觉/UI 结论可移交 /eo-design） | 可选前置 |
-| `/eo-change` | 发起变更（bootstrap / feature / enhance / refactor） | `changes/<NN>-<slug>/change.md`（轻档 = 意图 + AC；全档 = AC 前置 + TODO 分批） | trivial 短路直改；轻/全判档见 granularity §5 |
+| `/eo-change` | 发起变更（bootstrap / feature / enhance / refactor） | `changes/<NN>-<slug>/change.md`（轻档 = 意图 + AC；全档 = 速览 + AC 前置 + TODO 分批，可并行批标 `2a`/`2b`） | trivial 短路直改；轻/全判档见 granularity §5；确认时对话亮速览 + AC |
 | `/eo-change-review` | change draft 完成后、implement 前的方案审查 | `change-review.md` | ✅ 可选 |
-| `/eo-implement` | 全档按 Batch 分批实施；轻档走轻模式（含 bug 修复循环） | 代码 + 勾选 TODO/AC + 人工验收单（有人工项时）；轻档收口即归档 | 批末 checkpoint（**只跑轻验证**） |
+| `/eo-implement` | 全档按 Batch 分批实施；轻档走轻模式（含 bug 修复循环） | 代码 + 勾选 TODO/AC + 人工验收单（有人工项时）；轻档收口即归档 | 批末 checkpoint（**只跑轻验证**，跑为主写为例外） |
 | `/eo-fix` | 发现 bug（口喷即可） | 快路**直接修复** + 落点记账；语义分歧才取证；难缠 bug 自动深挖 | 需求变更转 change |
-| `/eo-test` | 运行测试 / 场景验证 | `test.md`（以 AC 为锚 + 读码取输入） | **重验证唯一执行者**；失败 → 回 implement |
+| `/eo-test` | 运行测试 / 场景验证 | `test.md`（以 AC 为锚 + 读码取输入） | **重验证唯一执行者**；单测**审计 + 补缺，不重写**；失败 → 回 implement |
 | `/eo-review` | 实施后的**代码**审查 | `review.md` | 全档强制；轻档由 implement 完成门独立复核替代 |
-| `/eo-archive` | 代码审查通过后归档 | 触发 doc sync 更新 state/handbook + 冻结 change | 人工验收唯一硬门；不反写 spec；轻档不经此（轻模式收口归档） |
+| `/eo-archive` | 代码审查/完成门通过后归档 | 触发 doc sync 更新 state/handbook + 冻结 change | 人工验收唯一硬门；不反写 spec；轻档走轻档门验完成门留痕（收口自动触发） |
 | `/eo-design` | 设计系统 / 视觉方案 / 高保真 / 设计审计 | `DESIGN.md`（真相源）+ HTML 工件 + CLAUDE.md 约束注入 | init / variants / apply / audit 四模式 |
 | `/eo-recall` | 「当时怎么设计的 / 逻辑怎么实现的 / 为什么这么定」 | 只读问答：分层作答带出处；可出 mermaid / HTML 解释页 | 活文档的消费入口；吸收原 doc-manager query |
+| `/eo-loop` | 把多个节点串起来循环推进到收敛（如 implement→test→review 至 P0/P1 清零） | 总控调度 + `tmp/eo/loop/<slug>/journal.md` 进度报告留痕 | ✅ 可选；无状态总控，基底可插拔（子 agent / codex / orca），worker 零回报义务（总控主动观测），调度偏好自动沉淀；并行收敛组（互不干扰的同层批 / change）多 worker 并行，worktree 隔离 + 合流校验 |
 
 ### 典型流程图
 
@@ -118,7 +121,8 @@ eo-doc/changes/
 （可选）：  /eo-brainstorming     →  已钉决策 + 首批 change 草案（新项目 = 多个 bootstrap change）
             ▼
 发起变更：  /eo-change            →  changes/<NN>-<slug>/change.md
-            │                         AC 前置 + TODO 分批 + 粒度校验
+            │                         速览（人读 30 秒入口）+ AC 前置 + TODO 分批 + 粒度校验
+            │                         互不干扰的批标同层并行组（Batch 2a/2b，granularity §6）
             │                         （trivial → 主动短路成直改，不产生工件）
             │                         （轻档 tier: light → 探针对齐后走 implement 轻模式：
             │                           测试锁定 → 实施 → 完成门 → finalizer 收口即归档，不经下方各环节）
@@ -126,7 +130,7 @@ eo-doc/changes/
 方案审查：  /eo-change-review     →  change-review.md（可选）
             │                         P0 → 回 eo-change 修（复审默认增量核销，≤3 轮；P1 移交起草方裁决）
             ▼
-确认：      （对话确认，skill 自动置 status: confirmed）
+确认：      （对话亮速览 + AC 确认，skill 自动置 status: confirmed）
             ▼
 实施：      /eo-implement         →  按 Batch 写代码 + 勾 TODO/AC（**只跑轻验证**），批末 checkpoint
             │                         重验证项（起服务 / 多环境组合 / 点击流）不跑，留给 eo-test
@@ -140,7 +144,7 @@ eo-doc/changes/
                  逻辑密集、边界多（算法 / 数据处理 / 协议解析），主要风险是「想没想到」
                  → review 读码为主、不起环境，便宜且早暴露；P0 早修，test 只跑终版不白跑
             │
-            │    /eo-test   → test.md（**重验证唯一执行者**，环境矩阵一次跑完；失败 → 回 implement）
+            │    /eo-test   → test.md（**重验证唯一执行者**，环境矩阵一次跑完；单测审计 + 补缺；失败 → 回 implement）
             │    /eo-review → review.md（AC 覆盖 + 代码质量；P0/P1 → 回 implement 修）
             ▼
 归档：      /eo-archive           →  AC 全勾 + 人工验收硬门 → commit 区间 → doc sync
@@ -160,8 +164,9 @@ eo-doc/changes/
 | trivial 直改 | 满足硬判据（不改行为/接口/数据、无方案权衡、单会话）→ 不开 change，直改 + commit |
 | 归档不反写 | archive 只更新活文档 + 冻结 change；spec 概念已移除 |
 | 人工验收门 | manual 类 AC（「人工:」标记）只有用户能勾；implement 完成时生成人工验收单 `acceptance.md`（软门不阻塞），archive 是唯一硬门；全 auto 的 change 不生成不打扰（规范见 `eo-shared/acceptance.md`） |
-| 三级验证归属 | AC 按**「谁在哪个阶段勾」**分流：`auto-light`（implement 批末）/ `auto-heavy`（**eo-test** 一次跑完；起服务·多环境组合·点击流）/ `manual`（用户在验收单勾）。light/heavy **不在起草期标注**——由 agent 读「验证」栏当场判，判不准按 heavy。三方勾选权不重叠 = 同一件事不会被两个阶段各跑一遍（规范见 `eo-shared/ac-spec.md`） |
+| 三级验证归属 | AC 按**「谁在哪个阶段勾」**分流：`auto-light`（implement 批末）/ `auto-heavy`（**eo-test** 一次跑完；起服务·多环境组合·点击流）/ `manual`（用户在验收单勾）。light/heavy **不在起草期标注**——由 agent 读「验证」栏当场判，判不准按 heavy。三方勾选权不重叠 = 同一件事不会被两个阶段各跑一遍；**测试编写同理单一归属**——implement 批末跑为主写为例外，回归资产沉淀归 eo-test（审计 + 补缺、按风险分层，不重写）（规范见 `eo-shared/ac-spec.md`） |
 | 环境不归 agent 所有 | 重验证的环境**假定已就绪**：探测复用、用完不停，只在换环境组合时重启；起停命令与代价是**项目特异知识**，记成项目 lesson 由 implement/test/fix 的 lessons 消费步骤自动送达，不写进通用 skill |
+| 并行纪律 | 并行只发生在**互不干扰**处（文件集不相交 + 无逻辑依赖，granularity §6）：同层批派发前文件集机械校验、一 worker 一独立 worktree、层末合流 checkpoint；多 change 并行圈收敛组归 eo-loop；判不准不并行，串行是安全缺省 |
 
 ### 为什么修 bug 要喊 /eo-fix，而不是直接改？
 

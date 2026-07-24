@@ -87,8 +87,8 @@ PR body 自动生成：意图摘要 + AC 清单（勾选状态照抄）+ **条�
 
 ## 四、首次配置（问一次，永不再问）
 
-任一 skill 走到触发点时发现 `.eo-project.json` **缺失对应段**（区别于显式 `false`/`never`——那是用户已选择关闭）：
+任一 skill 走到触发点时发现配置合并结果（`.eo-project.json` + 可选 `.eo-project.local.json` 覆盖）**缺失对应段**（区别于显式 `false`/`never`——那是用户已选择关闭）：
 
 1. 按 [questioning.md](questioning.md) §4 的封闭选择协议问一次（board：开/关；github：issue 开/关 + pr 三选，推荐 `auto`）
-2. 答案写回 `.eo-project.json`
+2. 答案写回：该顶层段已存在于 `.eo-project.local.json` → 写 local（写共享文件会被覆盖屏蔽）；否则写 `.eo-project.json`
 3. 此后所有 skill 按配置静默执行，不再询问

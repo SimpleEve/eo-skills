@@ -24,14 +24,15 @@ mv ~/.eo-skills.json "$EO_HOME/config.json"
 
 迁移后在终端打印一行提示，之后不再检查旧路径。已完成迁移的机器或新机器，只读 `$EO_HOME/config.json`。
 
-## 两个配置文件
+## 三个配置文件
 
 | 文件 | 作用域 | 谁维护 | 何时读 |
 |------|--------|--------|--------|
 | `~/.eo/config.json` | 用户级 | 用户手工 / `eo-project-init` 首次运行时引导生成 | **仅 `eo-project-init` 读**（作为新项目的默认值）。eo-platform 等平台级进程可选只读消费（不写）。 |
-| `<repo>/.eo-project.json` | 项目级 | `eo-project-init` 生成，后续 skill 只读 | **所有 eo-* skill 启动时必读** |
+| `<repo>/.eo-project.json` | 项目级·团队共享 | `eo-project-init` 生成，后续 skill 只读 | **所有 eo-* skill 启动时必读** |
+| `<repo>/.eo-project.local.json` | 项目级·个人/机器覆盖（可选，**不提交**） | 协作者手工 / `eo-project-init` 协作者接入分支生成 | 与 `.eo-project.json` 同时读，顶层字段覆盖合并（local 优先） |
 
-`.eo-project.json` 是**自包含**的——写入所有需要的绝对路径，其它 skill 不需要再去读用户级文件。
+**合并结果**（`.eo-project.json` + 可选 local 覆盖）是**自包含**的——含所有需要的绝对路径，其它 skill 不需要再去读用户级文件。
 
 ## `~/.eo/config.json` schema（用户级，可选）
 
@@ -83,7 +84,19 @@ mv ~/.eo-skills.json "$EO_HOME/config.json"
 
 **设计约束**：
 - `project_root` 永远是绝对路径。vault 模式不依赖软链——软链只是给用户查看方便，skill 一律走 `project_root`。
-- `.eo-project.json` 本身**提交到仓库**（团队共享配置）。
+- `.eo-project.json` 本身**提交到仓库**（团队共享配置）；`.eo-project.local.json` **不提交**（`eo-project-init` 默认写入 `.gitignore`）。
+- 必填校验以**合并结果**为准——单个文件不要求自包含。
+
+## `<repo>/.eo-project.local.json`（项目级个人覆盖，可选）
+
+**动机**：`.eo-project.json` 提交进仓库，但 `project_root`（绝对路径）、`mode`、`board` 因人/机器而异——协作者 clone 后拿到的是别人的 vault 路径。local 文件承载这些机器相关字段，共享文件只留团队口径。
+
+**规则**：
+
+- 与 `.eo-project.json` **同目录**；schema 相同，**所有字段可选**。
+- **顶层浅合并**，local 优先：local 出现的顶层字段整段覆盖共享文件的同名字段（`board` / `github` 是对象也**整段覆盖**，不做深合并）。
+- 团队仓库的 `.eo-project.json` 可只保留共享字段（`project_name` / `doc_root` / `github`），机器相关字段（`project_root` / `mode` / `board`）由每人的 local 文件提供。
+- **字段写回**（如 board/github 后开补齐，见 `eo-shared/board-github.md`）：该顶层字段已存在于 local 文件 → 写 local（写共享文件会被覆盖屏蔽）；否则写 `.eo-project.json`。
 
 ## 运行模式对比
 
@@ -104,7 +117,8 @@ mv ~/.eo-skills.json "$EO_HOME/config.json"
    ❌ 未找到 .eo-project.json
    请先运行 /eo-project-init 初始化项目。
    ```
-3. 找到 → 解析其内容，后续一律用其中的路径（**不读 `~/.eo/config.json`**）
+3. 找到 → 解析其内容；**同目录存在 `.eo-project.local.json` 时先做顶层字段覆盖合并（local 优先）**，后续一律用合并结果中的路径（**不读 `~/.eo/config.json`**）
+4. 合并结果缺必填字段（`project_root` / `mode` 等）→ 报错并提示运行 `/eo-project-init`（协作者 clone 场景见其「协作者接入」分支）
 
 **`eo-project-init` 的启动行为更特殊**：
 1. **迁移检查**：若 `~/.eo-skills.json` 存在且用户级配置不存在 → 自动迁移到 `"${EO_HOME:-$HOME/.eo}"/config.json`，打印一行提示。

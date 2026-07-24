@@ -2,6 +2,7 @@
 
 > status: **adopted · 已实施（2026-07-18）**。三个开放项按推荐落地：eo-implement 轻模式 / 完成门一次性 subagent 复核 / backlog 先判档（经 eo-change 第一步判档自然生效）。实施直接落 SKILL.md（本仓库即 skills 本体，不走 eo-* 流程）。落点：granularity.md §5（判档表）、conventions.md §3（轻档流转）、change-template.md（轻档模板）、eo-change（轻档流程）、eo-implement（轻模式）、ac-spec / eo-change-review / eo-review / eo-test（兼容行）。
 > 修复轮（2026-07-18）：对抗性审查（P0×6/P1×10/P2×3，报告 tmp/eo/review-tier/findings.md）后修正——收口改为五步 finalizer（含显式 doc sync，cursor sync 无自动触发的误设已纠正）、manual 确认留痕、`test_lock_commit` 比对基线、扩档子流程（回 eo-change）、判档轴收紧（描述成本降为安全前提下的 tie-breaker、多方轴排除独立复核者）、轻档显式 review/test 只读化、eo-flow 移除。
+> 归档同源化（2026-07-22）：轻档归档从 implement 收口内联五步改为 **eo-archive 轻档门**——准入验完成门留痕（独立复核基线新鲜 + 锁定测试绿 + manual 确认记录），第二~五层与全档共用；implement 收口瘦身为内嵌调用。动机：归档步骤单一信源防两份漂移，且完成门证据本就全在工件里（`test_lock_commit`、复核行基线 sha、AC 确认记录），主控 / implement / 用户任一上下文均可校验后归档，消除「主控被拒 → 回抛 implement」的往返。
 > 依据：本轮竞品与实践调研（[research/INDEX.md](../research/INDEX.md)）。skill 落地时**不携带**任何出处说明（精简 token）；有据可循的职责由本稿与 research/ 承担。
 
 ## 1. 问题与结论
@@ -26,7 +27,7 @@
 | TODO | 无 | **不预写**——agent 自拆，不落盘 | 三要素 + Batch |
 | 验收 | 常规 commit | 测试锁定 + 独立复核 + manual 过目 | 全流程（implement/test/review） |
 | 方案审查 | 无 | 无——**探针对齐**替代（落盘即请用户否一次） | change-review（可选，条件触发） |
-| 归档 | 随下次 doc sync 收割 | finalizer 收口即归档；无 test.md/review.md | eo-archive 全流程 |
+| 归档 | 随下次 doc sync 收割 | 收口内嵌调用 eo-archive 轻档门；无 test.md/review.md | eo-archive 全档门 |
 
 ## 3. 判档决策表
 
@@ -91,7 +92,7 @@ created: 2026-07-18
 3. **派发实施**：eo-implement 轻模式。agent 自拆 TODO，工作记录留在对话与 commit，不回写工件
 4. **实施纪律**：**禁改测试文件**。确需改（AC 本身写错）→ 停手上报，用户确认后改 AC、重锁测试再继续
 5. **完成门**：测试绿 + lint/typecheck + **新鲜上下文独立复核**（见 §4.3）+ manual 项用户过目
-6. **收口（finalizer 五步，顺序执行）**：① 结算（实施变更全部提交）→ ② 元数据（manual 确认记录与复核记录自检 → commits/status→archived/INDEX 终态，收尾 meta commit）→ ③ **显式触发 doc-manager sync** → ④ push/PR（联动开启时）→ ⑤ 关 issue / stub 终态。不产 test.md / review.md；决策按 eo-project-record 门槛落 decisions/
+6. **收口**：完成门通过后立即内嵌调用 **eo-archive 轻档门**（留痕校验 → 结算 → 元数据冻结 → 显式 doc sync → push/PR → 关 issue / stub 终态）——归档步骤单一信源在 eo-archive。不产 test.md / review.md；决策按 eo-project-record 门槛落 decisions/
 
 ### 4.3 轻档的测试与审查（不是省略，是吸收与压缩）
 
@@ -108,8 +109,8 @@ created: 2026-07-18
 
 ### 4.5 归档与文档同步
 
-- **finalizer 收口即归档**：五步顺序执行后 change.md 不再编辑，工件本身就是审计记录，无冻结仪式；INDEX 行与看板 stub 随收口更新（与全档共用钩子）
-- **文档同步显式触发**（修复轮修正：原设计误把 cursor sync 当自动兜底——它只是范围游标，仅有「用户手动 sync」与「archive 内嵌」两个触发点，且按代码路径扫描、不认 commit 前缀）：轻档在 finalizer ③ 显式调用 doc-manager sync；trivial 直改仍随下次任意 sync 顺带收割（行为语义不变、文档影响小，延迟可接受）
+- **收口即归档，逻辑同源于 eo-archive**（归档同源化修正：原五步 finalizer 与 eo-archive 二~五层重复，改为收口内嵌调用其轻档门）：准入验完成门留痕——独立复核行基线 sha == 最后实施提交、锁定测试绿（收口场景可复用刚跑过的绿灯）、manual 确认记录齐全；证据全在工件里，主控 / 用户上下文亦可直接调 /eo-archive 归档。放行后 change.md 不再编辑，工件本身就是审计记录；INDEX 行与看板 stub 随归档更新（与全档共用钩子）
+- **文档同步显式触发**（修复轮修正：原设计误把 cursor sync 当自动兜底——它只是范围游标，仅有「用户手动 sync」与「archive 内嵌」两个触发点，且按代码路径扫描、不认 commit 前缀）：轻档归档经 eo-archive 第四层显式调用 doc-manager sync（与全档同一路径）；trivial 直改仍随下次任意 sync 顺带收割（行为语义不变、文档影响小，延迟可接受）
 - **防蒸发卫生规则**（借 issue 直派模式「44% 关闭 PR 系超期无人处理静默蒸发」教训）：eo-change 第八步维护 INDEX 时，顺手报告非 archived 且 30 天未动的轻档条目
 
 ## 5. change 档与直改档的微调

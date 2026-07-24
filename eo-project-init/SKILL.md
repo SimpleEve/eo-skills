@@ -52,10 +52,11 @@ description: "eo-skills 在当前仓库的总入口：生成 .eo-project.json、
 对已有 `.eo-project.json` 的项目，重跑是**幂等的补齐动作**，逐项执行、已达标项静默跳过：
 
 0. **v1 痕迹检测**：发现 `eo-doc/dev/` 存在、`kanban_path` 非 null 等信号 → 先按 [references/migrate-v1.md](references/migrate-v1.md) 执行迁移子流程（冻结 spec、建项目级 changes、kanban 退役、roadmap 补 frontmatter、backlog 打散成卡等，幂等），完成后继续下列步骤
-1. **配置校验**：读现有 `.eo-project.json`，对照 [references/config.md](references/config.md) 的 schema——基础字段（project_name/mode/project_root/doc_root）缺失按默认补写；存量配置的 `kanban_path` 字段忽略不改（旧看板体系已退役），已有字段一律不改；**`board` / `github` 段缺失时不在本步补写**（补了默认关闭值会吞掉第 5 步的询问），只记录缺段，留给第 5 步问答后落盘
+0.5. **协作者接入（local 覆盖）**：按 config.md 规则合并同目录 `.eo-project.local.json`（如有）后，检查合并结果的 `project_root` 在本机是否存在可写。不可用（典型：clone 了别人提交的配置，`project_root` 指向他人 vault）或必填字段缺失 → 按「2. 询问运行模式」问 mode，算出本机 `project_root`，把机器相关字段（`mode` / `project_root`，及 vault 模式的 `board` 问答结果）写入 `.eo-project.local.json`——**不改动提交的 `.eo-project.json`**。后续步骤一律以合并结果为准
+1. **配置校验**：读现有 `.eo-project.json`（合并 local 覆盖），对照 [references/config.md](references/config.md) 的 schema——基础字段（project_name/mode/project_root/doc_root）缺失按默认补写；存量配置的 `kanban_path` 字段忽略不改（旧看板体系已退役），已有字段一律不改；**`board` / `github` 段缺失时不在本步补写**（补了默认关闭值会吞掉第 5 步的询问），只记录缺段，留给第 5 步问答后落盘
 2. **骨架补齐**：项目管理侧必建 roadmap.md 与代码侧 `eo-doc/` 骨架缺什么补什么；**不触碰任何已有文件的内容**
 3. **注入段刷新**：按标记对整段替换 agent 配置文件中的 `eo-project` / `eo-doc` 注入段；仓库根存在 `DESIGN.md` 时核对 `eo-design` 注入段
-4. **.gitignore 与软链核对**：`tmp/eo/`、（local 模式）`.eo-project/`、（vault 模式）`<doc_root>/vault` 缺项补写；若历史遗留把 `<doc_root>/.sync-cursor` 写进了 `.gitignore`，删掉该行并 `git add -f` 补入库（它须随文档一起共享，见 [../eo-doc-manager/references/git-sync.md](../eo-doc-manager/references/git-sync.md)）；vault 模式且 `create_symlink: true` 时核对 `<doc_root>/vault` **软链本体**存在且指向 `project_root`，缺失/指错按「9. 建立软链」重建
+4. **.gitignore 与软链核对**：`tmp/eo/`、`.eo-project.local.json`、（local 模式）`.eo-project/`、（vault 模式）`<doc_root>/vault` 缺项补写；若历史遗留把 `<doc_root>/.sync-cursor` 写进了 `.gitignore`，删掉该行并 `git add -f` 补入库（它须随文档一起共享，见 [../eo-doc-manager/references/git-sync.md](../eo-doc-manager/references/git-sync.md)）；vault 模式且 `create_symlink: true` 时核对 `<doc_root>/vault` **软链本体**存在且指向 `project_root`，缺失/指错按「9. 建立软链」重建
 5. **联动两问**（仅对应段缺失时，规则见「8. 生成 .eo-project.json」的 board/github 小节）：开启 board → 立即做 stub 历史同步
 6. **输出摘要**：列出本次补齐/刷新/跳过了什么，然后结束——不执行首次创建流程的其余步骤
 
@@ -139,6 +140,7 @@ eo-doc/
 额外：
 - 初始化 `eo-doc/.sync-cursor`（当前 HEAD 作为首次基线）——**随 `eo-doc/` 入库，不写进 `.gitignore`**（理由见 [../eo-doc-manager/references/git-sync.md](../eo-doc-manager/references/git-sync.md)）
 - 将 `tmp/eo/` 追加到 `.gitignore`（tmp/eo/ 是各 skill 的临时工件命名空间，见 [../eo-shared/conventions.md](../eo-shared/conventions.md)）
+- 将 `.eo-project.local.json` 追加到 `.gitignore`（个人/机器覆盖文件不提交，见 [references/config.md](references/config.md)）
 - CLAUDE.md 注入（详见 [../eo-doc-manager/references/claude-injection.md](../eo-doc-manager/references/claude-injection.md)）
 
 **注意**：如果用户本次只想要项目管理侧（例如纯规划项目，没代码），可用 `--skip-code-side` 跳过本节。此时 `doc_root` 字段仍写入配置，留待将来补建。
@@ -158,6 +160,8 @@ eo-doc/
 ```
 
 `kanban_path`：**已废弃**（旧手工看板体系退役，项目级总览由 Bases 聚合各项目 roadmap.md 的 frontmatter 承担）。新配置一律写 `null`；存量配置该字段被所有 skill 忽略。
+
+**协作/多机场景**：机器相关字段（`project_root` / `mode` / `board`）可拆到不提交的 `.eo-project.local.json`（顶层字段覆盖合并，规则见 [references/config.md](references/config.md)）。首次 init 默认全部写入 `.eo-project.json` 即可；协作者 clone 后重跑本 skill 走「1.5 更新/修复分支」的协作者接入步骤生成 local 覆盖。
 
 **board / github 段**（联动开关，规范见 [../eo-shared/board-github.md](../eo-shared/board-github.md)）：按封闭选择协议各问一次——
 - `board.enabled`（仅 vault 模式提供此问；推荐开启）：开启则写 `{"enabled": true}` 并——① **立即做历史同步**（扫描 `eo-doc/changes/` 全部 change，按 board-github.md 的 stub 写法批量 upsert 到 `<project_root>/board/`，幂等可重跑）；② `<vault_root>/eo-project-board.base` 不存在时按 [references/board-setup.md](references/board-setup.md) 模板创建（存在则不碰）；③ 提示：主视图需 Kanban Bases View 插件（未装可在 UI 换官方 cards 视图，见 board-setup.md）
@@ -210,23 +214,23 @@ local 模式**不建软链**。
 <!-- eo-project:start -->
 ## EO-Project
 
-本项目通过 `.eo-project.json` 关联到项目管理侧：`{{project_root}}`
+本项目已接入 eo-skills。项目管理侧（roadmap / backlog 卡片 / decisions / lessons 等）位置从 `.eo-project.json` 的 `project_root` 字段解析（同目录存在 `.eo-project.local.json` 时顶层字段覆盖，local 优先），下文记作 `<project_root>`。
 
-- 模式：`{{mode}}`
-- 项目管理侧（roadmap / backlog 卡片 / decisions / lessons 等）：`{{project_root}}`
 - 代码侧文档：`{{doc_root}}/`
 
 ### 项目记录入口
 
 仅当**用户明确表达**要记录时响应（不做关键词嗅探，避免误触发）：
 
-- 用户明确说「加个待办 / 记到 backlog / 以后做」→ 调用 `/eo-backlog` 写卡到 `{{project_root}}/backlog/`
-- 用户明确说「把这个决策记下来」→ 调用 `/eo-project-record` 写入 `{{project_root}}/decisions/`
-- 用户明确说「记一条经验 / 踩坑记录一下」→ 调用 `/eo-project-record` 写入 `{{project_root}}/lessons/`
+- 用户明确说「加个待办 / 记到 backlog / 以后做」→ 调用 `/eo-backlog` 写卡到 `<project_root>/backlog/`
+- 用户明确说「把这个决策记下来」→ 调用 `/eo-project-record` 写入 `<project_root>/decisions/`
+- 用户明确说「记一条经验 / 踩坑记录一下」→ 调用 `/eo-project-record` 写入 `<project_root>/lessons/`
 
 对话中出现疑似待办/决策/教训但用户未明说时，**至多在当前话题收尾处轻提一句**「要不要记入 backlog/decisions/lessons？」，不打断进行中的工作。
 <!-- eo-project:end -->
 ```
+
+**模板纪律**：注入段**不内联** `project_root` 绝对路径与 `mode`——它们因人/机器而异且 agent 配置文件提交进仓库，内联会把个人路径泄进 git 并在协作者机器上失真。运行时一律从配置合并结果解析。
 
 **DESIGN.md 检查**：若仓库根存在 `DESIGN.md` 但 agent 配置文件中无 `<!-- eo-design:start -->` 标记段，执行 `/eo-design` 的约束注入子步骤补上（注入模板见 [../eo-design/references/design-md-template.md](../eo-design/references/design-md-template.md)）。
 
@@ -252,4 +256,5 @@ local 模式**不建软链**。
 - 原始 PRD/MVP 若提供，存到 `<project_root>/docs/`（lazy 建）
 - 软链仅 vault 模式 + `create_symlink: true` 才建
 - `.eo-project/` 默认进 `.gitignore`；用户可当场覆盖
+- `.eo-project.local.json` **始终**进 `.gitignore`（个人/机器覆盖，不提交）；协作者接入只写 local，不改共享的 `.eo-project.json`
 - agent 配置注入使用 `<!-- eo-project:start/end -->` 标记，幂等可重复执行
