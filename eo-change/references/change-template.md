@@ -11,7 +11,7 @@ eo-change 按下方模板写入 `eo-doc/changes/<NN>-<slug>/change.md`（目录 
 id: batch-export     # slug 即身份（commit 前缀/stub 文件名用它），首个 commit 后不可改名
 seq: 14              # 显示序号（#14），补零作目录前缀 14-<slug>/；撞号自愈见 conventions.md §2
 title: 批量导出
-summary: <一句话意图，≤50 字，纯文本>   # INDEX 摘要列与看板 stub 卡面的单一来源
+summary: <一句话意图，≤50 字，纯文本>   # INDEX 摘要列与看板卡面的单一来源
 status: draft        # draft | confirmed | implementing | reviewed | archived（skill 自动流转，用户不手改）
 tier: full           # light | full；缺省视为 full（存量 change 零迁移）
 type: feature        # bootstrap | feature | enhance | refactor
@@ -20,8 +20,8 @@ plan_revision: 1     # 方案版本；仅 eo-change 回炉子流程（用户重�
 fix_rounds: 0        # 当前 revision 修复轮次；eo-implement 模式二第 0 步维护，≥3 熔断；缺省视为 0
 fix_consumed: []     # 已消费失败反馈标识（review#N / test#N / acceptance#<AC>@<基线sha>）；回炉确认时清空
 commits: []          # eo-archive 归档时写入（仅审计用，不决定同步范围）
-issue: ~             # GitHub 联动开启时，confirmed 后回写 issue 号
-pr: ~                # PR 创建后回写 URL
+issue: ~             # eo-sync 同步时由 github 适配器回写号（confirmed 起）
+pr: ~                # eo-sync 归档同步回写 URL
 created: 2026-07-07
 ---
 
@@ -107,7 +107,7 @@ created: 2026-07-07
 
 ## 轻档模板（tier: light）
 
-存放、目录名、seq、INDEX、看板 stub、GitHub 联动与全档同一套。只有意图 + 验收清单两节，**无速览（探针对齐即人读投影）、无 TODO / 涉及文件 / 条件节**；AC 上限 5 条——装不下即扩档信号：
+存放、目录名、seq、INDEX、eo-sync 投影（看板/GitHub）与全档同一套。只有意图 + 验收清单两节，**无速览（探针对齐即人读投影）、无 TODO / 涉及文件 / 条件节**；AC 上限 5 条——装不下即扩档信号：
 
 ```markdown
 ---
@@ -121,7 +121,7 @@ type: enhance
 base_commit: ~
 test_lock_commit: ~  # eo-implement 轻模式测试锁定 commit（独立复核的比对基线）
 commits: []          # 收口时写入（[id] 前缀提交区间，审计用）
-issue: ~             # 联动创建或外部来源的 GitHub issue 号（外部输入时落盘即回写，联动钩子靠它去重；跨仓来源记 owner/repo#N 或 URL）
+issue: ~             # eo-sync github 适配器建号或外部来源的 issue 号（外部输入落盘即回写，eo-sync 靠它去重；跨仓来源记 owner/repo#N 或 URL）
 created: 2026-07-18
 ---
 

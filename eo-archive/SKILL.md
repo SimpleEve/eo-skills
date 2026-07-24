@@ -78,7 +78,8 @@ cursor 基于 commit，sync 只能看见已提交内容，因此先结算：
 
 ### 第五层：收尾
 
-1. 联动钩子：按 [../eo-shared/board-github.md](../eo-shared/board-github.md) 执行——stub 最终 upsert（仅置 `status: archived`，**tags 与文件位置不动**：`eo-change` tag 是看板过滤锚点）、issue 兜底关闭、PR 创建（按 `github.pr` 策略；对应开关未开启则跳过）
+1. **投影同步**：调用 `eo-sync run` 一次（内置 obsidian/github 适配器按启用配置执行——stub 投影 `status: archived`（**tags 与文件位置不动**：`eo-change` tag 是看板过滤锚点）、issue 兜底关闭、PR 按 `github.pr` 策略仅对 archived 生成；未启用目标跳过，机制见 [../eo-shared/board-github.md](../eo-shared/board-github.md)）。本次 run 产生身份字段回写（典型：PR URL、迟到的 issue 号）时，**立即追加第二个收尾 commit** `[<change-id>] sync 身份回写`（无回写则零额外 commit）——归档完成时工作区无未提交 SoT。本次 run 创建/更新了 PR → 回写 commit 后追加 `git push` 同一分支一次（追加推送自动进入 PR，合并后 SoT 含幂等键）；push 失败告警不阻塞归档（幂等键已在本地 SoT，随后续任意 push 传播）。sync 本身失败降级为告警不阻塞归档（投影可随时手动 `eo-sync run` 补上）
+   - **冻结语义**：归档后 change 目录冻结，**唯一允许的后续写入 = eo-sync 身份字段回写**（PR URL 只可能在 archived 后产生，是决策「平台身份回写 change frontmatter」的推论）；此后手动 run 若补写身份字段，作为工作区常规变更随下次提交走，不自动提交
 2. 对话速报（不写额外文件）：
 
 ```

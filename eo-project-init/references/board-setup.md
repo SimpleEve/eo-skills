@@ -1,6 +1,6 @@
 # Obsidian 看板配置（starter 自动生成 + 数据层备忘）
 
-> 数据层（`<project_root>/board/` 的 stub 卡片）由各流程 skill 自动维护；呈现层的 **starter 看板由 skill 自动创建**（本文件含模板）。
+> 数据层（`<project_root>/board/` 的 stub 卡片）由 `eo-sync-obsidian` 适配器投影维护（archive 收口自动 + 手动 `eo-sync run`）；呈现层的 **starter 看板由 eo-project-init 一次性创建**（本文件含模板）。
 
 ## starter 看板（skill 自动创建）
 
@@ -55,4 +55,4 @@ views:
 
 ## 数据层备忘
 
-stub 卡片是 change frontmatter 的投影（`id / seq / title / summary / branch / project / status / type / todo_done / todo_total / issue / pr / updated / tags: [eo-change, …]`），可随时全量重建，**不要手工编辑**（会被覆盖）；正文只有 change 路径纯文本（vault 外路径不可链接，复制到 IDE 打开）。**tags 全生命周期恒定**（`eo-change` 是过滤锚点，归档也不换名不移文件，只置 `status: archived`）；kanban 主视图靠视图级过滤 `status != "archived"` 只显示活跃管线，盘点 table 保留全史。看板数据丢失/错乱 → 重跑 `/eo-project-init`（更新分支）触发历史同步重建。
+stub 卡片是 change frontmatter 的投影（`id / seq / title / summary / branch / project / status / type / todo_done / todo_total / issue / pr / updated / tags: [eo-change, …]`），可随时全量重建，**不要手工编辑**（会被覆盖）；正文只有 change 路径纯文本（vault 外路径不可链接，复制到 IDE 打开）。**tags 全生命周期恒定**（`eo-change` 是过滤锚点，归档也不换名不移文件，只置 `status: archived`）；kanban 主视图靠视图级过滤 `status != "archived"` 只显示活跃管线，盘点 table 保留全史。看板数据丢失/错乱 → 跑 `eo-sync run` 重建（幂等可重跑；或重跑 `/eo-project-init` 更新分支触发同步）。

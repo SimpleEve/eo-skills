@@ -26,7 +26,7 @@ description: |
 
 ### 第一步：意图理解与复杂度定级
 
-1. 读用户的变更描述。**若来自 /eo-brainstorming 捕获出口**：直接继承其已钉决策与 change 草案，跳过已钉项的一切重复提问，从第四步续起。**若来源是某张 backlog 卡**（用户说「把这条 backlog 做了」）：继承卡片的 title/说明/标签作为意图输入，记下卡片路径待第七步归档。**若来源是外部 GitHub issue**：继承其正文作意图输入（规范 issue 常自带 AC），记下 issue 号待落盘回写 `issue:`（联动钩子靠回写号去重，不重复建）
+1. 读用户的变更描述。**若来自 /eo-brainstorming 捕获出口**：直接继承其已钉决策与 change 草案，跳过已钉项的一切重复提问，从第四步续起。**若来源是某张 backlog 卡**（用户说「把这条 backlog 做了」）：继承卡片的 title/说明/标签作为意图输入，记下卡片路径待第七步归档。**若来源是外部 GitHub issue**：继承其正文作意图输入（规范 issue 常自带 AC），记下 issue 号待落盘回写 `issue:`（eo-sync 靠回写号去重，不重复建）
 2. 按 [../eo-shared/questioning.md](../eo-shared/questioning.md) §2 定级：trivial / simple / complex / critical
 3. **trivial → 主动短路**：告知用户「这不值得开 change，直接改」，按 [../eo-shared/granularity.md](../eo-shared/granularity.md) §2 的直改模式执行（改 → 验证 → `fix:`/`ui:` 前缀 commit；注释零溯源，提交前对新增注释自检一眼，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §2.6），本流程终止。判据任何一条不满足则回到 change 模式
 4. **critical → 建议升级**：「这个方向本身还没定，建议先 /eo-brainstorming 把决策钉了再回来」；用户坚持则继续，但澄清预算放宽到 5+
@@ -66,14 +66,13 @@ description: |
 ### 第七步：写入 change.md 并确认
 
 1. **确定 change-id（slug 即身份，规则见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §2）**：用户给语义名 → kebab-case slug 即 id（拒绝 `fix-` 前缀）。查重：扫 `eo-doc/changes/` 目录与 INDEX.md，有 remote 时 `git ls-tree origin/<默认分支> -- eo-doc/changes/` 兜底（防多 worktree 并行撞名）；撞名 → 换更具体的 slug。另分配显示序号 `seq`：现有 change（含存量数字前缀 id）最大号 +1，补零作目录前缀 `<NN>-<slug>/`（供 `ls` 排序、一眼找进行中的）——seq 允许 worktree 并行撞号（自愈见第八步）
-2. 按 [references/change-template.md](references/change-template.md) 写入 `eo-doc/changes/<NN>-<slug>/change.md`（目录名 = seq 补零前缀 + slug；`status: draft`，frontmatter 含 `seq` 与一句话 `summary`）；速览按模板视角纪律写（用户可见的行为差异，不复述 AC），已钉决策落 §1，条件节按触发条件取舍。**写入即新建看板 stub**（[../eo-shared/board-github.md](../eo-shared/board-github.md)，board 未开启则跳过）——draft 从这一刻起就在看板上
+2. 按 [references/change-template.md](references/change-template.md) 写入 `eo-doc/changes/<NN>-<slug>/change.md`（目录名 = seq 补零前缀 + slug；`status: draft`，frontmatter 含 `seq` 与一句话 `summary`）；速览按模板视角纪律写（用户可见的行为差异，不复述 AC），已钉决策落 §1，条件节按触发条件取舍。流转期零投影动作——看板 draft 卡在首次 `eo-sync run` 时出现，不在写盘即建
 3. **交付确认：对话里亮出速览 + §2 AC**（与轻档探针对齐同构，不甩文件路径让用户通读全文；用户要细节再展开），按反馈修订——正文修订后速览同步刷新
-4. **用户在对话中确认后，skill 自动置 `status: confirmed`**——不要求用户手改 frontmatter；来源是 backlog 卡的，按 [../eo-backlog/SKILL.md](../eo-backlog/SKILL.md) 的 archive 动作归档该卡（adopted + 关联本 change-id）
-5. 联动钩子：更新 stub（status 同步为 confirmed）、创建 GitHub issue（issue 只在此刻建，draft 阶段不建；对应开关未开启则跳过），见 [../eo-shared/board-github.md](../eo-shared/board-github.md)。修订循环中（场景 B）任何改动落盘也顺手 upsert stub
+4. **用户在对话中确认后，skill 自动置 `status: confirmed`**——不要求用户手改 frontmatter；来源是 backlog 卡的，按 [../eo-backlog/SKILL.md](../eo-backlog/SKILL.md) 的 archive 动作归档该卡（adopted + 关联本 change-id）。流转期不产出投影（issue / stub 均不写）——投影收敛到 archive 收口自动 `eo-sync run` 一次 + 任意时刻手动（见 [../eo-shared/board-github.md](../eo-shared/board-github.md)）
 
 ### 第八步：更新索引 + 提示后续
 
-更新 `eo-doc/changes/INDEX.md`，顺手对 seq 列查重：发现重号（多 worktree 并行分配所致）→ `created` 晚者让号——改 frontmatter `seq` + `git mv` 目录（`<旧NN>`→`<新NN>`）+ 改 INDEX 行（含链接路径）+ upsert stub，一句话报告（**commit 前缀/issue 全程不动**，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §2）。顺手**防蒸发**：非 archived 且 30 天未动的轻档条目列一行提醒。然后按场景提示：
+更新 `eo-doc/changes/INDEX.md`，顺手对 seq 列查重：发现重号（多 worktree 并行分配所致）→ `created` 晚者让号——改 frontmatter `seq` + `git mv` 目录（`<旧NN>`→`<新NN>`）+ 改 INDEX 行（含链接路径），一句话报告（投影由下次 eo-sync 重算自带新 seq；**commit 前缀/issue 全程不动**，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §2）。顺手**防蒸发**：非 archived 且 30 天未动的轻档条目列一行提醒。然后按场景提示：
 
 **场景 A — 首次产出**（目录下无含未决 P0 的 change-review.md）：
 
@@ -97,8 +96,8 @@ description: |
 
 1. **快速自查**：读 `eo-doc/state/` 相关篇目、lessons INDEX 命中项（按 [../eo-shared/lessons.md](../eo-shared/lessons.md) §1 匹配 trigger/tags，≤2 条）、`changes/INDEX.md` 最近 3 条（防重复/冲突）；涉及 UI 且仓库根有 `DESIGN.md` → 读入；涉及外部世界 → 按 [../eo-shared/research.md](../eo-shared/research.md) 消费规则查 `research/`。能自答的不问用户
 2. **澄清**：预算 1-2 问（协议同 questioning.md），问完即写——AC 定不下来说明澄清不到位，或该转全档
-3. **落盘（draft）**：按 [references/change-template.md](references/change-template.md) 轻档模板写入 `changes/<NN>-<slug>/change.md`（id/seq/查重/让号规则与全档同一套）；AC ≤5 条、覆盖异常路径、manual 标「人工:」；外部 GitHub issue 来源 → 号回写 `issue:`。写入即建看板 stub（未开启跳过）
-4. **探针对齐（→ confirmed）**：把意图 + AC 亮给用户否一次——探针的成功标准是**尽快暴露分歧**，不是通过评审。用户点头 → `status: confirmed` + 联动钩子（stub 刷新；GitHub issue 联动开启且 frontmatter 无 issue 号才建）。用户否 → 就地改再亮一次；方案分歧大 → 转全档从第二步续起
+3. **落盘（draft）**：按 [references/change-template.md](references/change-template.md) 轻档模板写入 `changes/<NN>-<slug>/change.md`（id/seq/查重/让号规则与全档同一套）；AC ≤5 条、覆盖异常路径、manual 标「人工:」；外部 GitHub issue 来源 → 号回写 `issue:`。流转期零投影动作（看板卡首次 `eo-sync run` 时出现）
+4. **探针对齐（→ confirmed）**：把意图 + AC 亮给用户否一次——探针的成功标准是**尽快暴露分歧**，不是通过评审。用户点头 → `status: confirmed`（流转期零投影，同全档）。用户否 → 就地改再亮一次；方案分歧大 → 转全档从第二步续起
 5. **更新 INDEX + 提示后续**：INDEX 行「档」列标 `light`；seq 查重自愈与防蒸发报告同第八步。后续提示：
 
    > 轻档已就绪（confirmed）。下一步：`/eo-implement <change-path>`——轻模式：测试锁定 → 实施 → 完成门，收口即归档。
@@ -109,7 +108,7 @@ description: |
 
 1. frontmatter `tier` 改 `full`，就地补齐全档模板节：速览、§1 意图（轻档意图行扩写 + 已钉决策）、§2 保留、§3 TODO——**已完成的工作映射为已勾 TODO 并注「扩档前完成」**，剩余工作按 Batch 划分；条件节按触发条件取舍；补全档 frontmatter 字段 `plan_revision: 1`/`fix_rounds: 0`/`fix_consumed: []`（语义见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §3）
 2. 交用户再确认（对话确认）；**因影响面/风险信号触发的扩档，建议跑一次全量 /eo-change-review**
-3. 刷新 INDEX 行（档列 light→full）、stub 与 issue body 投影（[../eo-shared/board-github.md](../eo-shared/board-github.md)，未开启跳过）
+3. 刷新 INDEX 行（档列 light→full）——投影由下次 eo-sync 重算
 4. 回 /eo-implement 模式一，从首个未完成 Batch 续走——`base_commit`/`test_lock_commit`/已锁定测试全部保留
 
 ### 回炉子流程（方案实质修订，由 eo-implement 模式二熔断/卡点检查或用户显式要求转入）
@@ -120,7 +119,7 @@ description: |
 2. **status → `draft`**，修订速览与 §1/§2/§3（含已钉决策的重钉）
 3. **证据失效**：旧 TODO/AC 与新版逐条映射——语义不变的保留勾选注「回炉前完成」；完成判据或 AC 语义受影响的**取消勾选**注「回炉待复验」；manual 项按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)「失效与重置」重置；`test_lock_commit` 仅在全部被锁 AC 语义不变时保留，否则值旁注 `superseded`（待轻模式重锁）；`base_commit` 无条件保留
 4. **报告处置**：change-review.md / test.md / review.md（存在者）各追加一行 `> revision N 作废（<日期>）——后续见 revision N+1`，并把台账中仍为 `open`/`fixed` 的行状态批量改 `superseded`（随方案作废，archive 门不再计为阻塞）；**不压缩、不删除**旧轮次内容（报告可能未提交，git 兜不了底）
-5. **投影**：INDEX 行状态回 draft、stub upsert、issue body 刷新（联动开启时）
+5. **索引**：INDEX 行状态回 draft——投影由下次 eo-sync 重算
 6. **确认收口**：交用户重新确认 → `status: confirmed`，frontmatter `plan_revision` +1、`fix_rounds` 归零、`fix_consumed` 清空；再刷新一次投影。触发根因为「方案不合理 / AC 口径漂移」（且确实走了回炉——口径漂移多数走就地精化，见下）→ **必须**跑一次全量 /eo-change-review（新 revision 轮数从 1 起算、旧 wont-fix 失效）；用户显式豁免可跳，豁免记 §8。然后回 /eo-implement 模式一从首个未勾 Batch 续走
 
 **回炉与就地精化的边界**：措辞微调、意图不变的就地补 AC（implement 流程内确认后补写）不算回炉——不动 `plan_revision`、不清计数、不走本子流程。

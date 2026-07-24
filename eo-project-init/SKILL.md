@@ -163,8 +163,8 @@ eo-doc/
 
 **协作/多机场景**：机器相关字段（`project_root` / `mode` / `board`）可拆到不提交的 `.eo-project.local.json`（顶层字段覆盖合并，规则见 [references/config.md](references/config.md)）。首次 init 默认全部写入 `.eo-project.json` 即可；协作者 clone 后重跑本 skill 走「1.5 更新/修复分支」的协作者接入步骤生成 local 覆盖。
 
-**board / github 段**（联动开关，规范见 [../eo-shared/board-github.md](../eo-shared/board-github.md)）：按封闭选择协议各问一次——
-- `board.enabled`（仅 vault 模式提供此问；推荐开启）：开启则写 `{"enabled": true}` 并——① **立即做历史同步**（扫描 `eo-doc/changes/` 全部 change，按 board-github.md 的 stub 写法批量 upsert 到 `<project_root>/board/`，幂等可重跑）；② `<vault_root>/eo-project-board.base` 不存在时按 [references/board-setup.md](references/board-setup.md) 模板创建（存在则不碰）；③ 提示：主视图需 Kanban Bases View 插件（未装可在 UI 换官方 cards 视图，见 board-setup.md）
+**board / github 段**（投影开关，由 `eo-sync` 兼容映射消费——机制见 [../eo-shared/board-github.md](../eo-shared/board-github.md)，`sync` 段 schema 见 [references/config.md](references/config.md)；OQ-1 前 init 仍写这两段，等价映射护住存量）：按封闭选择协议各问一次——
+- `board.enabled`（仅 vault 模式提供此问；推荐开启）：开启则写 `{"enabled": true}` 并——① **立即做历史同步**：调 `eo-sync run` 一次（内置 obsidian 适配器把 `eo-doc/changes/` 全部 change 投影到 `<project_root>/board/`，幂等可重跑）；② `<vault_root>/eo-project-board.base` 不存在时按 [references/board-setup.md](references/board-setup.md) 模板创建（存在则不碰）——**starter `.base` 创建是一次性 setup 动作，不迁入适配器**；③ 提示：主视图需 Kanban Bases View 插件（未装可在 UI 换官方 cards 视图，见 board-setup.md）
 - `github.issue` + `github.pr`（检测到 git remote 指向 GitHub 时才问；pr 推荐 `auto`）
 
 用户跳过 → 写显式关闭值（`false` / `"never"`），后续 skill 不再询问。**后开场景**：对已初始化项目重跑本 skill 走「1.5 更新/修复分支」，其第 5 步提供这两问，开启 board 即触发历史同步。

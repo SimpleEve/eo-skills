@@ -75,12 +75,34 @@ mv ~/.eo-skills.json "$EO_HOME/config.json"
 | `project_root` | string（绝对路径） | ✅ | **项目管理侧根**。vault 模式=vault 项目目录；local 模式=`<repo>/.eo-project` |
 | `doc_root` | string（相对 repo root） | ✅ | **代码侧根**，默认 `"eo-doc"` |
 | `kanban_path` | null | ❌ | **已废弃**（旧手工看板体系退役）。新配置一律 `null`；存量值被所有 skill 忽略。项目级总览 = Bases 聚合各项目 roadmap.md frontmatter |
-| `board.enabled` | bool | ❌（默认 `false`） | change 看板 stub 联动开关（vault 模式才有意义）。开启后状态流转时向 `<project_root>/board/` upsert stub 卡片，见 `eo-shared/board-github.md` |
+| `board.enabled` | bool | ❌（默认 `false`） | change 看板投影开关（vault 模式才有意义）。开启后 `eo-sync`（obsidian 适配器）把 stub 卡片投影到 `<project_root>/board/`，见 `eo-shared/board-github.md` 与上文 `sync` 段 |
 | `board.stub_dir` | string | ❌（默认 `"board"`） | stub 目录名（相对 `project_root`） |
 | `github.issue` | bool | ❌（默认 `false`） | change ↔ GitHub issue 联动开关 |
 | `github.pr` | `"auto"` \| `"always"` \| `"never"` | ❌（默认 `"never"`） | archive 时的 PR 策略：`auto` = 在非默认分支且有 remote 时自动建 PR |
+| `sync` | object | ❌ | `eo-sync` 适配器启用制（缺省由 `board`/`github` 兼容映射派生）；schema 见下 |
 
 缺省 `board` / `github` 字段 = 全部关闭（向后兼容 v1 生成的配置）。
+
+### `sync` 段（eo-sync 适配器启用制）
+
+`eo-sync` 的投影目标由 `sync` 段显式启用——**发现 ≠ 执行**：PATH 上的 `eo-sync-*` 可执行文件负责「有哪些」，`sync` 段负责「启用哪些 + 参数」（这也是第三方可执行文件的信任边界）。
+
+```json
+{
+  "sync": {
+    "obsidian": { "enabled": true, "stub_dir": "board" },
+    "github":   { "enabled": true, "issue": true, "pr": "auto" },
+    "notion":   { "enabled": false, "database_id": "..." }
+  }
+}
+```
+
+| 键 | 说明 |
+|----|------|
+| `sync.<name>.enabled` | bool，仅 `true` 的适配器会被 `eo-sync run` 执行 |
+| `sync.<name>.<其它>` | 该适配器的自定义参数，`enabled` 之外的键原样透传给适配器 |
+
+**兼容映射**：合并配置**无** `sync` 段时由存量 `board` / `github` 段等价派生启用集（`board.enabled`→`obsidian`、`github.issue`/`pr`→`github`）；`sync` 段存在则完全以其为准，不与 `board`/`github` 深合并。存量项目无需改配置即按等价映射生效。正式收编（init 停写旧段 + 存量迁移）时机见 change `sync-plugin-layer` 的 OQ-1。协议契约见 [../../docs/sync-adapter-protocol.md](../../docs/sync-adapter-protocol.md)。
 
 **设计约束**：
 - `project_root` 永远是绝对路径。vault 模式不依赖软链——软链只是给用户查看方便，skill 一律走 `project_root`。
@@ -154,7 +176,7 @@ eo-doc/
 ├── decisions/     # 按需，首次记录决策时建
 ├── lessons/       # 按需，首次记录经验时建（**项目级**，替代全局 _lessons/）
 ├── brainstorm/    # 按需，eo-brainstorming 首次产出时建
-├── board/         # 按需，change 看板 stub（board.enabled 时由各流程 skill 维护）
+├── board/         # 按需，change 看板 stub（board.enabled/sync.obsidian 时由 eo-sync 投影维护）
 ├── research/      # 按需，调研沉淀（带 INDEX + frontmatter；eo-recall / eo-change 事实自查消费）
 └── docs/          # 按需，原始 PRD / 设计 / 规划
 ```

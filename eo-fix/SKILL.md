@@ -80,7 +80,7 @@ description: |
 
 ### 第六步：落点记账（任何路都不豁免，~30 秒）
 
-- 有相关**活跃 change** → 勾选涉及的 TODO/AC（**auto-heavy 不代勾**，勾选权归 /eo-test；被本次改动弄脏的已勾项按 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)「勾变脏即取消」处理），commit 带 `[<change-id>]` 前缀；联动钩子刷新 stub（[../eo-shared/board-github.md](../eo-shared/board-github.md)，未开启跳过）；改动影响其 acceptance.md 人工项的入口/行为 → 按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)「失效与重置」取消该项勾选并注明原因
+- 有相关**活跃 change** → 勾选涉及的 TODO/AC（**auto-heavy 不代勾**，勾选权归 /eo-test；被本次改动弄脏的已勾项按 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)「勾变脏即取消」处理），commit 带 `[<change-id>]` 前缀；改动影响其 acceptance.md 人工项的入口/行为 → 按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)「失效与重置」取消该项勾选并注明原因
 - 无 → 直改落地：commit 带 `fix:` 前缀（见 [../eo-shared/conventions.md](../eo-shared/conventions.md)），由下次 doc sync 兜底归档；cursor 落后超过 10 个 commit 时建议顺手跑 `/eo-doc-manager sync`
 
 ### 第七步：收尾速报

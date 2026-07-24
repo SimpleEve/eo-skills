@@ -57,7 +57,7 @@ description: |
    - **首轮**（文件不存在）：全量写入，失败项同步建入 FAIL 台账（FAIL-x 编号跨轮稳定；根因区分 `implementation` / `test-harness`——测试代码错误由本 skill 修正后直接核销，不留给修复循环）
    - **复审轮**：**不重写报告**——先核销台账（`fixed` 项复测：过 → `verified`，仍失败 → 回 `open` 一句话说明；`verified` 后再失败 = reopen，刷新最近轮）；新失败建条（编号沿用同一序列）；在「速报」前追加 `## 第 N 轮记录（revision R · 日期）` 节，原地更新末尾速报。遇**无台账的旧格式报告** → 按当前内容一次性补建台账再继续
    - 台账写入权见模板 writer matrix：本 skill 建条与核销；`fixed` + 修复 commit 归 eo-implement 回写；用户当场裁决不修的项 → 状态置 `waived`（附原话要点，不阻塞归档）；历史轮次节不改；轮次编号全文件单调递增，跨 revision 不清零
-2. **status 回退**：结论不通过且当前 status 为 `reviewed`（review 先过、test 后翻车）→ **当场置回 `implementing`** 并联动刷新 stub（回退边，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §3）
+2. **status 回退**：结论不通过且当前 status 为 `reviewed`（review 先过、test 后翻车）→ **当场置回 `implementing`**（回退边，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §3）
 3. **对话速报（硬性——缺速报 = 流程未完成）**，报告写盘后在对话最后输出：
 
 ```

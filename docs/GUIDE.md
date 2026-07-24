@@ -235,12 +235,12 @@ eo-doc/changes/
 
 ---
 
-## 看板与 GitHub 联动（opt-in）
+## 投影同步（eo-sync，opt-in）
 
-两套联动全部通过 `.eo-project.json` 的 `board` / `github` 段逐项目开启，缺省关闭，机制正文见 `eo-shared/board-github.md`：
+投影目标（Obsidian 看板卡 / GitHub issue/PR）由 `eo-sync` 单命令统一同步——**逐流转投影已退役**，触发收敛为 archive 收口自动 `eo-sync run` 一次 + 任意时刻手动 `eo-sync run`（`--dry-run` 看计划）。目标经 `.eo-project.json` 的 `sync` 段（或 `board` / `github` 段经兼容映射）逐项目 opt-in，缺省关闭；投影内容见 `eo-shared/board-github.md`（内置适配器实现说明），协议契约见 `docs/sync-adapter-protocol.md`。第三方在 PATH 放一个 `eo-sync-<name>` 可执行并在配置启用即可接入新目标。
 
-- **Obsidian 看板**（vault 模式）：各流程 skill 在 change 状态流转时向 `<project_root>/board/` upsert stub 卡片（change frontmatter 的投影，零双写）；呈现层在 Obsidian 用 Bases + Kanban Bases View 配置一次（指南：`eo-project-init/references/board-setup.md`），支持多项目聚合与泳道。后开开关时由 `/eo-project-init` 历史同步全量重建 stub。
-- **GitHub**：change 层一对一 issue（confirmed 建、编号回写去重、archive 兜底关）；PR 按 `github.pr` 策略（`auto` = 非默认分支自动建，body 含 AC 勾选清单与条件性 `Closes`——AC 全勾才关 issue）。**本地文件是唯一真相源**，严格单向推送，唯一逆向通道是漂移检测告警。
+- **Obsidian 看板**（vault 模式）：`eo-sync-obsidian` 把 change frontmatter 投影为 `<project_root>/board/` 的卡片（整文件重写、幂等）；呈现层在 Obsidian 用 Bases + Kanban Bases View 配置一次（指南：`eo-project-init/references/board-setup.md`），支持多项目聚合与泳道。开启开关时由 `/eo-project-init` 调 `eo-sync run` 做历史同步。
+- **GitHub**：`eo-sync-github` 投影 change 层一对一 issue（confirmed 起建、编号回写去重、archive 兜底关）；PR 按 `github.pr` 策略（`auto` = 非默认分支自动建，body 含 AC 勾选清单与条件性 `Closes`——AC 全勾才关 issue）。**本地文件是唯一真相源**，严格单向推送，唯一逆向通道是漂移检测告警。
 
 ---
 

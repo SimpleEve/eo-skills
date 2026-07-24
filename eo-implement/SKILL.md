@@ -35,7 +35,7 @@ description: |
 
 2. **首次启动登记**
    - frontmatter 写入 `base_commit: <当前 HEAD>`（已有则不动）
-   - `status: confirmed → implementing`（skill 自动改，不要求用户操作）；联动钩子刷新 stub（[../eo-shared/board-github.md](../eo-shared/board-github.md)，未开启跳过）
+   - `status: confirmed → implementing`（skill 自动改，不要求用户操作）——流转期零投影动作，看板由 archive 收口的 `eo-sync run` 或手动同步刷新
 
 3. **确认执行范围**
    - 列出各 Batch 及 TODO 数，默认从第一个未完成 Batch 开始；用户可指定只跑某批
@@ -54,7 +54,6 @@ description: |
    - 提交本批代码：commit message 带 `[<change-id>]` 前缀（见 [../eo-shared/conventions.md](../eo-shared/conventions.md)；推荐一次 change 一次 commit，分批时一批一 commit）
    - （可选自检）对本批 diff 的**新增注释行**扫溯源 token（`P[012]-\d`、`AC-\d`、`TODO-\d`、当前 change slug）——提示不门禁，命中列出人工判定，按 §2.6 清理
    - **合流 checkpoint**（仅并行层）：本批是同层并行批（字母后缀）的最后一批时，加跑一次合流校验（[../eo-shared/granularity.md](../eo-shared/granularity.md) §6）——合并结果常规绿灯 + 该层各批对应 AC 复核；单会话串行执行时即该层 AC 验证的汇总，不重复起验证
-   - 联动钩子：刷新看板 stub 进度（[../eo-shared/board-github.md](../eo-shared/board-github.md)，未开启跳过）
    - 汇报：本批完成的 TODO / 勾掉的 AC / **待 test 的 heavy AC** / 验证结果，询问「继续下一批 / 停」
 
 6. **全部完成 → 生成人工验收单（软门，不阻塞）**
@@ -75,7 +74,7 @@ description: |
 
 ### 模式二：修复循环（test/review/acceptance 反馈）
 
-**适用**：`test.md` 有 ❌ FAIL，`review.md` 有 P0/P1，或 `acceptance.md` 有「不通过」项。status 为 `reviewed` 时（产出阻塞结果的 skill 正常已按回退边置回；没置则此刻补）→ 先置回 `implementing` 并联动 stub。**轻档反馈**（显式 light test/review 的 tmp 报告、用户口头打回、独立复核不通过）也走本模式——只执行第 2-4、6 步（无台账无计数，跳过 0/1/5/7）。
+**适用**：`test.md` 有 ❌ FAIL，`review.md` 有 P0/P1，或 `acceptance.md` 有「不通过」项。status 为 `reviewed` 时（产出阻塞结果的 skill 正常已按回退边置回；没置则此刻补）→ 先置回 `implementing`。**轻档反馈**（显式 light test/review 的 tmp 报告、用户口头打回、独立复核不通过）也走本模式——只执行第 2-4、6 步（无台账无计数，跳过 0/1/5/7）。
 
 0. **触发集判定与熔断检查**（修复动手前，全档专属）
    - 触发集 = 各失败反馈的稳定标识（`review#<轮次>` / `test#<轮次>` / `acceptance#<AC编号>@<验收基线sha>`）中**未出现在 frontmatter `fix_consumed`** 的部分；报告所属 revision < 当前 `plan_revision` 的反馈（回炉已作废）**不构成触发集**
@@ -118,7 +117,7 @@ spawn 一个**新鲜上下文 subagent**（执行者自述不作数——修了 
 
 替代模式一的 Batch 结构；test/review 反馈的修复仍走模式二。
 
-1. **上下文与登记**：读 change.md（意图 + AC）、handbook INDEX 命中篇目、lessons 命中项（[../eo-shared/lessons.md](../eo-shared/lessons.md) §1）；涉及 UI 且仓库根有 `DESIGN.md` → 读入并遵守。写 `base_commit`、`status → implementing`、刷新 stub
+1. **上下文与登记**：读 change.md（意图 + AC）、handbook INDEX 命中篇目、lessons 命中项（[../eo-shared/lessons.md](../eo-shared/lessons.md) §1）；涉及 UI 且仓库根有 `DESIGN.md` → 读入并遵守。写 `base_commit`、`status → implementing`（流转期零投影）
 2. **测试锁定**（按 AC 性质分流）：
    - 新增/变更行为的 auto AC → 落成失败测试，确认**因断言失败**（而非报错/导入错误）
    - 「行为不变」类（characterization）→ 基线即绿合法，**不强制先红**，但须注明覆盖了哪些现有行为
