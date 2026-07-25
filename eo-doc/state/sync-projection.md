@@ -13,6 +13,7 @@ summary: >
 conclusions:
   - 六个流程 skill 不再逐流转写 stub/建 issue——写路径零投影负担
   - eo-sync run 幂等可反复跑；--dry-run 完全只读；并发跑有文件锁保护
+  - watch 同作用域单实例：重复启动同域 watch 即报错退出（提示持有者 pid/启动时间）；--all 与单项目重叠仅启动告警不禁止
   - 配置：首选 sync 段（init 新配置只写它；重跑 init 对旧段项目代写等价迁移，旧段保留）；存量 board/github 段经兼容映射仍生效，无需改 .eo-project.json
 ---
 

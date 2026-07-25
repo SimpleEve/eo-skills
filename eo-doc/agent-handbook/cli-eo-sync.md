@@ -29,7 +29,7 @@ conclusions:
 | 锁 | `acquire_lock` / `_lock_is_stale` | flock + pid/时间戳；陈锁（>10min 且 pid 死）自清重试一次；后到者非零退出 |
 | 回写 | `validate_identity_ownership` + apply 后统一回写 | 字段 ∈ 声明的 `identity_fields`、键名校验、保留键黑名单、同名冲突 fail-closed、非空不覆盖、保序插入（eo_lib `upsert_frontmatter_fields`） |
 
-子命令：`run [--dry-run] [--change <id>] [--target <name>]`、`adapters`、`watch [--interval N(默认10)] [--all|--project <path>]`（freshness+配置指纹双维基线、K_post≠K_pre 不记基线防吞流转、四态结果矩阵、告警按项目×错误指纹抑制、--all 每轮重读注册表、SIGTERM 干净退出）。退出码 0/1/2（全成/部分失败/锁占用）。`--change` 过滤时快照标记不完整，孤儿删除自动跳过。
+子命令：`run [--dry-run] [--change <id>] [--target <name>]`、`adapters`、`watch [--interval N(默认10)] [--all|--project <path>]`（freshness+配置指纹双维基线、K_post≠K_pre 不记基线防吞流转、四态结果矩阵、告警按项目×错误指纹抑制、--all 每轮重读注册表、SIGTERM 干净退出、作用域单实例锁——`_watch_lock_path`/`_lock_held_by`/`_warn_scope_overlap`：`${EO_HOME:-~/.eo}/sync-state/watch-all.lock` 或 `watch-<name>-<hash8>.lock`（hash8 与簿记同源），同域后到者退出码 2 并提示持有者，跨域重叠 flock 探测仅告警，try/finally 释放，复用 `acquire_lock` 陈锁自清）。退出码 0/1/2（全成/部分失败/锁占用）。`--change` 过滤时快照标记不完整，孤儿删除自动跳过。
 
 ## 内置适配器
 
@@ -38,7 +38,7 @@ conclusions:
 
 ## 测试
 
-`tests/test_eo_sync.py`（801 行，unittest 标准库）：协议往返/发现启用/兼容映射/dry-run 零写入/锁互斥与陈锁/簿记幂等/快照完整性 fail-safe/回写校验矩阵。`EO_HOME` 一律临时目录隔离。
+`tests/test_eo_sync.py`（801 行，unittest 标准库）：协议往返/发现启用/兼容映射/dry-run 零写入/锁互斥与陈锁/簿记幂等/快照完整性 fail-safe/回写校验矩阵。`tests/test_eo_sync_watch_lock.py`（真实进程级）：watch 作用域锁五断言（同域互斥/跨域告警/陈锁接管/信号释放/异仓不互斥）。`EO_HOME` 一律临时目录隔离。
 
 ## 来源
 
