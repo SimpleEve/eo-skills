@@ -124,7 +124,7 @@ class TestAC4DocsCaliber(unittest.TestCase):
     def test_guide_prefers_sync(self):
         self.assertIn("sync.obsidian", line_containing(GUIDE, "├── board/"))
         self.assertNotIn("board.enabled 时自动维护", GUIDE)
-        self.assertIn("legacy", section(GUIDE, "## 看板与 GitHub 联动", "## 多项目总览"))
+        self.assertIn("legacy", section(GUIDE, "## 投影同步", "## 多项目总览"))
 
     def test_no_init_still_writes_legacy_residue(self):
         for name, text in (("SKILL", SKILL), ("CONFIG", CONFIG), ("BG", BG), ("GUIDE", GUIDE)):
