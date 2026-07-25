@@ -80,7 +80,7 @@ install.bat --antigravity-only
 
 ## 第一次使用
 
-> 心智模型一句话：**对话里干活（skill），终端里看板（CLI）**。skill 在 Claude Code / Codex 会话里喊；CLI（`eo-board` / `eo-sync`）在任意终端敲，`install.sh` 已链接进 `~/.local/bin`（POSIX-only，Windows 用 WSL）。
+> 心智模型一句话：**对话里干活（skill），终端里看板（CLI）**。skill 在 Claude Code / Codex 会话里喊；终端侧日常只需记一条命令——`eo-helper`（数字菜单直达看板与同步各入口），`install.sh` 已链接进 `~/.local/bin`（POSIX-only，Windows 用 WSL）。
 
 进入任意项目目录，在 Claude Code 里跑：
 
@@ -90,7 +90,7 @@ install.bat --antigravity-only
 
 它会生成 `.eo-project.json`（项目级配置）+ 双侧最小骨架（代码侧 `eo-doc/` + 项目管理侧）。**所有其它 eo-* skill 都依赖它**，没跑过会直接报错。
 
-init 会问一个关键问题——项目管理侧（roadmap / backlog / 决策 / 教训）放哪：**local 模式**（缺省推荐，放仓库内 `.eo-project/` 且随仓库提交，协作者 clone 即得完整项目记忆）或 **vault 模式**（放 Obsidian vault，跨项目统一浏览）。init 成功还会顺手把项目登记进 `~/.eo/projects.json`（多项目看板靠它；失败不阻塞，稍后 `eo-board --register` 补上）。
+init 会问一个关键问题——项目管理侧（roadmap / backlog / 决策 / 教训）放哪：**local 模式**（缺省推荐，放仓库内 `.eo-project/` 且随仓库提交，协作者 clone 即得完整项目记忆）或 **vault 模式**（放 Obsidian vault，跨项目统一浏览）。init 成功还会顺手把项目登记进 `~/.eo/projects.json`（多项目看板靠它；失败不阻塞，稍后用 `eo-helper` 菜单「注册本项目」补上）。
 
 协作场景：`.eo-project.json` 提交进仓库承载团队共享字段；机器相关字段（`project_root` / `mode` 等）放进不提交的 `.eo-project.local.json` 做顶层字段覆盖（协作者 clone 后重跑 `/eo-project-init` 自动引导生成）。local 模式的管理侧（`.eo-project/`：roadmap / backlog / decisions / lessons）缺省随仓库提交——协作者 clone 即得完整项目记忆。
 
@@ -159,54 +159,36 @@ flowchart TD
 
 ---
 
-## 看板与投影：两个 CLI
+## 看板与同步
 
-### eo-board —— 只读看板（绝不写项目文件）
-
-```bash
-# 单项目（项目目录里）
-eo-board            # 终端摘要：change 各状态分列 + backlog + 警告
-eo-board --html     # 自包含 HTML 快照，自动开浏览器
-eo-board --serve    # 本地实时看板 http://127.0.0.1:7333（3 秒热刷新，带缓存）
-
-# 多项目（任意目录）
-eo-board --all                    # 每个注册项目一行：状态计数 + backlog 数 + 数据新鲜度
-eo-board --project <路径|注册名>   # 下钻单项目视图，不用 cd
-eo-board --all --scan ~/projects  # 未注册的项目临时扫进来看（不写注册表）
-
-# 注册表维护（~/.eo/projects.json；init 会自动登记）
-eo-board --register / --unregister
-```
-
-### eo-sync —— 投影同步（看板卡片 / GitHub issue·PR）
-
-change 状态要「投影」出去才看得见（Obsidian 看板卡、GitHub issue/PR），投影统一由 `eo-sync` 执行：
+日常只需记一条命令：
 
 ```bash
-eo-sync adapters        # 看有哪些投影目标、哪些已启用
-eo-sync run --dry-run   # 只看计划，不写任何东西
-eo-sync run             # 执行投影（幂等，跑几遍都无副作用）
-eo-sync watch --all     # 常驻：所有注册项目状态一变 10 秒内自动追平（推荐挂一个终端）
+eo-helper
 ```
 
-基本不用手动跑：`/eo-archive` 归档自动跑一次；平时挂 `watch --all` 全自动（无变化时零成本静默，同一作用域只开一个）。配置在 `.eo-project.json` 的 `sync` 段（init 问答写好；老项目的 `board`/`github` 旧段自动等价映射，无需改）：
+数字菜单覆盖全部高频动作——本项目实时看板、所有项目一页看板、注册项目、同步看板卡片、看板自动跟手、终端速览。每次选数字会**先回显将执行的底层命令再执行**，用熟了自然过渡到原生命令。
 
-```json
-"sync": {
-  "obsidian": { "enabled": true, "stub_dir": "board" },
-  "github":   { "enabled": true, "issue": true, "pr": "auto" }
-}
+最常用的几条原生命令速查：
+
+```bash
+eo-board --serve        # 本项目实时看板 http://127.0.0.1:7333（3 秒热刷新）
+eo-board --all --serve  # 所有注册项目一页看板（浏览器一页看全部状态）
+eo-sync run             # 同步看板卡片 / GitHub issue·PR（幂等，跑几遍都无副作用）
+eo-sync watch --all     # 常驻：所有注册项目状态一变自动追平（推荐挂一个终端）
 ```
 
-想接 Notion/飞书？投影是插件化的：PATH 上放一个 `eo-sync-<name>` 可执行 + 配置启用即可，协议见 [docs/sync-adapter-protocol.md](docs/sync-adapter-protocol.md)。
+全量参数（静态快照、注册表维护、扫描兜底、轮询间隔等深层旗标）见 [docs/cli-reference.md](docs/cli-reference.md)。同步基本不用手动跑：`/eo-archive` 归档自动跑一次；平时挂「看板自动跟手」全自动（无变化时零成本静默）。同步目标在 `.eo-project.json` 的 `sync` 段配置（init 问答写好；老项目旧段自动等价映射，无需改）。
+
+想接 Notion/飞书？同步是插件化的：PATH 上放一个 `eo-sync-<name>` 可执行 + 配置启用即可，协议见 [docs/sync-adapter-protocol.md](docs/sync-adapter-protocol.md)。
 
 ### 常见问题
 
-- **看板卡片怎么不动了？** 状态流转期间不再实时写卡（设计如此：写路径不为呈现层付费）。挂 `eo-sync watch --all` 即秒级跟手；或随时 `eo-sync run`；归档时总会自动同步。
-- **投影删错了？** 投影是派生数据，`eo-sync run` 随时全量重建；孤儿清理只在快照可证完整时执行，扫描异常一律保守跳过。
+- **看板卡片怎么不动了？** 状态流转期间不再实时写卡（设计如此：写路径不为呈现层付费）。挂「看板自动跟手」（`eo-helper` 菜单 5）即秒级跟手；或随时同步一次（菜单 4）；归档时总会自动同步。
+- **看板卡片删错了？** 卡片是派生数据，`eo-sync run` 随时全量重建；孤儿清理只在快照可证完整时执行，扫描异常一律保守跳过。
 - **协作时配置里全是别人的路径？** 重跑 `/eo-project-init`，机器相关字段会写进你自己的 `.eo-project.local.json`（不提交）。
 - **老项目的 `project_root` 写成了相对路径？** v1 配置常写软链相对路径（如 `eo-doc/vault`）——现在会自动按 repo root 解析并解软链，照常可用，只是每次多一行告警；重跑 `/eo-project-init` 即回写绝对路径消除告警。解析不到目录时仍会报错（不猜路径）。
-- **删了工具会丢数据吗？** 不会。一切真相都在 markdown 文件里，CLI 只写投影/注册表（`~/.eo/` 下）。
+- **删了工具会丢数据吗？** 不会。一切真相都在 markdown 文件里，CLI 只写派生卡片/注册表（`~/.eo/` 下）。
 
 ---
 

@@ -49,7 +49,7 @@ created: 2026-07-25
 - [x] AC-5 转发不复制逻辑：底层命令的输出与报错原样透传；短命令（同步一次/终端速览等）结束后回到菜单，失败时非零退出状态明确回显（非零状态可见，不静默）；长驻命令（serve/watch）接管前台且 Ctrl+C 行为与直接运行一致
 - [x] AC-6 异常路径：stdin 非 TTY 时 `eo-helper` 打印菜单↔命令对照表后直接退出（不挂起等输入）；输入非法编号提示重选；菜单态按 Ctrl+D（EOF）/Ctrl+C 与 `q` 同款干净退出（无 traceback）；在无 `.eo-project.json` 的目录选项目级条目时原样转发、用户看到的是底层 CLI 自己的报错与 init 指引（helper 不自检配置），全局选项（多项目看板/看板自动跟手）照常可用（验证：`echo | eo-helper` 看对照表退出；在 $HOME 下逐项试）
 - [x] AC-7 `sh install.sh` 后 `eo-helper` 在 PATH 可用，安装完成提示以 eo-helper 为主推入口（验证：临时前缀安装后 `command -v eo-helper`）
-- [ ] AC-8 README 用 `eo-helper` 一条命令讲完看板与同步入口，原全量 CLI 旗标细节移入 `docs/cli-reference.md` 且 README 给出链接；cli-reference 覆盖 eo-board/eo-sync/eo-helper 三命令全部参数（验证：README 正文 grep 不到 `--scan`/`--interval` 等深层旗标，也 grep 不到「投影」表述——该术语只留在协议与内部文档；对照 `--help` 核 cli-reference 完整性）
+- [x] AC-8 README 用 `eo-helper` 一条命令讲完看板与同步入口，原全量 CLI 旗标细节移入 `docs/cli-reference.md` 且 README 给出链接；cli-reference 覆盖 eo-board/eo-sync/eo-helper 三命令全部参数（验证：README 正文 grep 不到 `--scan`/`--interval` 等深层旗标，也 grep 不到「投影」表述——该术语只留在协议与内部文档；对照 `--help` 核 cli-reference 完整性）
 - [ ] AC-9 README 重构后新用户视角通读顺畅——只需记 `eo-helper` 一条命令即可跑通「初始化后看板+同步」日常（人工:通读 README 安装→第一次使用→看板一节 → 过目认可）
 
 ## 3. TODO
@@ -67,8 +67,8 @@ created: 2026-07-25
 
 ### Batch 3（命令面收纳）
 
-- [ ] TODO-6 新增 `docs/cli-reference.md`：eo-board / eo-sync / eo-helper 三命令全量参数与示例下沉于此（含 `--scan`、`--interval`、`--port`、注册表维护等深层旗标），并链接既有协议/迁移文档（文件：新增: docs/cli-reference.md；对应 AC-8；完成判据：cli-reference 旗标集合与三命令 `--help` 输出机械核对一致、无缺漏）
-- [ ] TODO-7 README 收纳重构：原「看板与投影：两个 CLI」一节改为「看板与同步」——eo-helper 主推 + 极简速查（几条最常用原生命令）+ 链接 cli-reference；「第一次使用」与安装提示同步改口径；面向用户文案全部去「投影」术语（协议文档不动）；docs/GUIDE.md 相应入口段落同步（文件：修改: README.md、docs/GUIDE.md；对应 AC-8、AC-9；完成判据：README 正文无深层旗标残留且无「投影」表述，GUIDE 入口段与 README 口径一致）
+- [x] TODO-6 新增 `docs/cli-reference.md`：eo-board / eo-sync / eo-helper 三命令全量参数与示例下沉于此（含 `--scan`、`--interval`、`--port`、注册表维护等深层旗标），并链接既有协议/迁移文档（文件：新增: docs/cli-reference.md；对应 AC-8；完成判据：cli-reference 旗标集合与三命令 `--help` 输出机械核对一致、无缺漏）
+- [x] TODO-7 README 收纳重构：原「看板与投影：两个 CLI」一节改为「看板与同步」——eo-helper 主推 + 极简速查（几条最常用原生命令）+ 链接 cli-reference；「第一次使用」与安装提示同步改口径；面向用户文案全部去「投影」术语（协议文档不动）；docs/GUIDE.md 相应入口段落同步（文件：修改: README.md、docs/GUIDE.md；对应 AC-8、AC-9；完成判据：README 正文无深层旗标残留且无「投影」表述，GUIDE 入口段与 README 口径一致）
 
 > 批间串行：Batch 2 的菜单条目转发 Batch 1 新增的 `--all --serve`（消费其 CLI 形态，构成逻辑依赖）；Batch 3 文档要引用两边落定的最终形态。不标并行组。
 
