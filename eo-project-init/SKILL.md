@@ -52,12 +52,12 @@ description: "eo-skills 在当前仓库的总入口：生成 .eo-project.json、
 对已有 `.eo-project.json` 的项目，重跑是**幂等的补齐动作**，逐项执行、已达标项静默跳过：
 
 0. **v1 痕迹检测**：发现 `eo-doc/dev/` 存在、`kanban_path` 非 null 等信号 → 先按 [references/migrate-v1.md](references/migrate-v1.md) 执行迁移子流程（冻结 spec、建项目级 changes、kanban 退役、roadmap 补 frontmatter、backlog 打散成卡等，幂等），完成后继续下列步骤
-0.5. **协作者接入（local 覆盖）**：按 config.md 规则合并同目录 `.eo-project.local.json`（如有）后，检查合并结果的 `project_root` 在本机是否存在可写。不可用（典型：clone 了别人提交的配置，`project_root` 指向他人 vault）或必填字段缺失 → 按「2. 询问运行模式」问 mode，算出本机 `project_root`，把机器相关字段（`mode` / `project_root`，及 vault 模式的 `board` 问答结果）写入 `.eo-project.local.json`——**不改动提交的 `.eo-project.json`**。后续步骤一律以合并结果为准
-1. **配置校验**：读现有 `.eo-project.json`（合并 local 覆盖），对照 [references/config.md](references/config.md) 的 schema——基础字段（project_name/mode/project_root/doc_root）缺失按默认补写；存量配置的 `kanban_path` 字段忽略不改（旧看板体系已退役），已有字段一律不改；**`board` / `github` 段缺失时不在本步补写**（补了默认关闭值会吞掉第 5 步的询问），只记录缺段，留给第 5 步问答后落盘
+0.5. **协作者接入（local 覆盖）**：按 config.md 规则合并同目录 `.eo-project.local.json`（如有）后，检查合并结果的 `project_root` 在本机是否存在可写。不可用（典型：clone 了别人提交的配置，`project_root` 指向他人 vault）或必填字段缺失 → 按「2. 询问运行模式」问 mode，算出本机 `project_root`，把机器相关字段（`mode` / `project_root`，及 vault 模式的 `sync` 问答结果——`sync` 是顶层段，整段入 local）写入 `.eo-project.local.json`——**不改动提交的 `.eo-project.json`**。后续步骤一律以合并结果为准
+1. **配置校验**：读现有 `.eo-project.json`（合并 local 覆盖），对照 [references/config.md](references/config.md) 的 schema——基础字段（project_name/mode/project_root/doc_root）缺失按默认补写；存量配置的 `kanban_path` 字段忽略不改（旧看板体系已退役），已有字段一律不改；**`sync` 段（或其适配器键）缺失时不在本步补写**（补了显式关闭条目会吞掉第 5 步的询问），只记录缺失，留给第 5 步问答/迁移后落盘
 2. **骨架补齐**：项目管理侧必建 roadmap.md 与代码侧 `eo-doc/` 骨架缺什么补什么；**不触碰任何已有文件的内容**
 3. **注入段刷新**：按标记对整段替换 agent 配置文件中的 `eo-project` / `eo-doc` 注入段；仓库根存在 `DESIGN.md` 时核对 `eo-design` 注入段
 4. **.gitignore 与软链核对**：`tmp/eo/`、`.eo-project.local.json`、（vault 模式）`<doc_root>/vault` 缺项补写；`.eo-project/` 的 ignore 状态**保持现状不核对**——已 ignore 的不删行、未 ignore 的不补写（新口径「缺省随仓库提交」仅作用于新项目，存量零改动）；若历史遗留把 `<doc_root>/.sync-cursor` 写进了 `.gitignore`，删掉该行并 `git add -f` 补入库（它须随文档一起共享，见 [../eo-doc-manager/references/git-sync.md](../eo-doc-manager/references/git-sync.md)）；vault 模式且 `create_symlink: true` 时核对 `<doc_root>/vault` **软链本体**存在且指向 `project_root`，缺失/指错按「9. 建立软链」重建
-5. **联动两问**（仅对应段缺失时，规则见「8. 生成 .eo-project.json」的 board/github 小节）：开启 board → 立即做 stub 历史同步
+5. **联动两问与存量迁移**（仅合并配置 `sync` 段缺对应适配器键时问，规则见「8. 生成 .eo-project.json」的 sync 段小节）：开启 obsidian → 立即做 stub 历史同步。**存量迁移**：检测到旧 `board` / `github` 段且合并配置无 `sync` 键 → 提示用户并**代写等价 `sync` 段**（启用集与兼容映射派生结果逐项一致；旧段问答已答过的适配器写显式条目——含关闭态，**不重问**；**旧段保留不删**，旧版工具仍可读）；已有 `sync` 键 → **零动作**零提示
 5.5. **顺手注册**：执行 `eo-board --register`（幂等，已注册则原地更新）。**失败不阻塞本流程**——注册失败时输出告警并给手工补注册指引：「⚠ 项目注册失败（<原因>），init 已正常完成；稍后可在项目目录手工执行 `eo-board --register` 补注册（注册后任意目录 `eo-board --all` 可见本项目）」
 6. **输出摘要**：列出本次补齐/刷新/跳过了什么（含注册结果），然后结束——不执行首次创建流程的其余步骤
 
@@ -162,13 +162,13 @@ eo-doc/
 
 `kanban_path`：**已废弃**（旧手工看板体系退役，项目级总览由 Bases 聚合各项目 roadmap.md 的 frontmatter 承担）。新配置一律写 `null`；存量配置该字段被所有 skill 忽略。
 
-**协作/多机场景**：机器相关字段（`project_root` / `mode` / `board`）可拆到不提交的 `.eo-project.local.json`（顶层字段覆盖合并，规则见 [references/config.md](references/config.md)）。首次 init 默认全部写入 `.eo-project.json` 即可；协作者 clone 后重跑本 skill 走「1.5 更新/修复分支」的协作者接入步骤生成 local 覆盖。
+**协作/多机场景**：机器相关字段（`project_root` / `mode` / `sync`——顶层段整段覆盖）可拆到不提交的 `.eo-project.local.json`（顶层字段覆盖合并，规则见 [references/config.md](references/config.md)）。首次 init 默认全部写入 `.eo-project.json` 即可；协作者 clone 后重跑本 skill 走「1.5 更新/修复分支」的协作者接入步骤生成 local 覆盖。
 
-**board / github 段**（投影开关，由 `eo-sync` 兼容映射消费——机制见 [../eo-shared/board-github.md](../eo-shared/board-github.md)，`sync` 段 schema 见 [references/config.md](references/config.md)；OQ-1 前 init 仍写这两段，等价映射护住存量）：按封闭选择协议各问一次——
-- `board.enabled`（仅 vault 模式提供此问；推荐开启）：开启则写 `{"enabled": true}` 并——① **立即做历史同步**：调 `eo-sync run` 一次（内置 obsidian 适配器把 `eo-doc/changes/` 全部 change 投影到 `<project_root>/board/`，幂等可重跑）；② `<vault_root>/eo-project-board.base` 不存在时按 [references/board-setup.md](references/board-setup.md) 模板创建（存在则不碰）——**starter `.base` 创建是一次性 setup 动作，不迁入适配器**；③ 提示：主视图需 Kanban Bases View 插件（未装可在 UI 换官方 cards 视图，见 board-setup.md）
-- `github.issue` + `github.pr`（检测到 git remote 指向 GitHub 时才问；pr 推荐 `auto`）
+**sync 段**（投影开关，`eo-sync` 直接消费——机制见 [../eo-shared/board-github.md](../eo-shared/board-github.md)，schema 见 [references/config.md](references/config.md)；新配置**不再写 `board` / `github` 段**，存量旧段由兼容映射护住）：按封闭选择协议各问一次（触发判据 = 合并配置 `sync` 段缺对应适配器键）——
+- obsidian 适配器（仅 vault 模式提供此问；推荐开启）：开启则写 `sync.obsidian = {"enabled": true, "stub_dir": "board"}` 并——① **立即做历史同步**：调 `eo-sync run` 一次（内置 obsidian 适配器把 `eo-doc/changes/` 全部 change 投影到 `<project_root>/board/`，幂等可重跑）；② `<vault_root>/eo-project-board.base` 不存在时按 [references/board-setup.md](references/board-setup.md) 模板创建（存在则不碰）——**starter `.base` 创建是一次性 setup 动作，不迁入适配器**；③ 提示：主视图需 Kanban Bases View 插件（未装可在 UI 换官方 cards 视图，见 board-setup.md）
+- github 适配器（检测到 git remote 指向 GitHub 时才问；pr 推荐 `auto`）：写 `sync.github = {"enabled": true, "issue": <bool>, "pr": "auto"|"always"|"never"}`
 
-用户跳过 → 写显式关闭值（`false` / `"never"`），后续 skill 不再询问。**后开场景**：对已初始化项目重跑本 skill 走「1.5 更新/修复分支」，其第 5 步提供这两问，开启 board 即触发历史同步。
+用户跳过 → 对应适配器写显式关闭条目（`{"enabled": false}`），后续 skill 不再询问。**后开场景**：对已初始化项目重跑本 skill 走「1.5 更新/修复分支」，其第 5 步提供这两问，开启 obsidian 即触发历史同步。
 
 ### 9. 建立软链（vault 模式 + `create_symlink: true`）
 

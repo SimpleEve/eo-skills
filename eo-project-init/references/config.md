@@ -63,8 +63,10 @@ mv ~/.eo-skills.json "$EO_HOME/config.json"
   "project_root": "/Users/xxx/EveOS/30-我的项目/my-project",
   "doc_root": "eo-doc",
   "kanban_path": null,
-  "board": { "enabled": false },
-  "github": { "issue": false, "pr": "never" }
+  "sync": {
+    "obsidian": { "enabled": true, "stub_dir": "board" },
+    "github":   { "enabled": false }
+  }
 }
 ```
 
@@ -75,13 +77,13 @@ mv ~/.eo-skills.json "$EO_HOME/config.json"
 | `project_root` | string（绝对路径） | ✅ | **项目管理侧根**。vault 模式=vault 项目目录；local 模式=`<repo>/.eo-project` |
 | `doc_root` | string（相对 repo root） | ✅ | **代码侧根**，默认 `"eo-doc"` |
 | `kanban_path` | null | ❌ | **已废弃**（旧手工看板体系退役）。新配置一律 `null`；存量值被所有 skill 忽略。项目级总览 = Bases 聚合各项目 roadmap.md frontmatter |
-| `board.enabled` | bool | ❌（默认 `false`） | change 看板投影开关（vault 模式才有意义）。开启后 `eo-sync`（obsidian 适配器）把 stub 卡片投影到 `<project_root>/board/`，见 `eo-shared/board-github.md` 与上文 `sync` 段 |
-| `board.stub_dir` | string | ❌（默认 `"board"`） | stub 目录名（相对 `project_root`） |
-| `github.issue` | bool | ❌（默认 `false`） | change ↔ GitHub issue 联动开关 |
-| `github.pr` | `"auto"` \| `"always"` \| `"never"` | ❌（默认 `"never"`） | archive 时的 PR 策略：`auto` = 在非默认分支且有 remote 时自动建 PR |
-| `sync` | object \| null | ❌ | `eo-sync` 适配器启用制。**键存在性决定是否回落**：缺省（键不在）→ 由 `board`/`github` 兼容映射派生；键存在（含空 `{}` 或显式 `null`）→ 完全以其为准、绝不回落，其中 `{}`/`null` = 显式零目标；object 以外的类型（数字/字符串等）→ 配置错误。schema 见下 |
+| `board.enabled` | bool | ❌（默认 `false`） | **legacy**（新配置不再生成，仅兼容映射消费；首选写 `sync.obsidian.enabled`）。change 看板投影开关（vault 模式才有意义）。开启后 `eo-sync`（obsidian 适配器）把 stub 卡片投影到 `<project_root>/board/`，见 `eo-shared/board-github.md` 与下文 `sync` 段 |
+| `board.stub_dir` | string | ❌（默认 `"board"`） | **legacy**（首选 `sync.obsidian.stub_dir`）。stub 目录名（相对 `project_root`） |
+| `github.issue` | bool | ❌（默认 `false`） | **legacy**（首选 `sync.github.issue`）。change ↔ GitHub issue 联动开关 |
+| `github.pr` | `"auto"` \| `"always"` \| `"never"` | ❌（默认 `"never"`） | **legacy**（首选 `sync.github.pr`）。archive 时的 PR 策略：`auto` = 在非默认分支且有 remote 时自动建 PR |
+| `sync` | object \| null | ❌ | **首选**（init 新配置写本段，legacy `board`/`github` 仅存量兼容）。`eo-sync` 适配器启用制。**键存在性决定是否回落**：缺省（键不在）→ 由 `board`/`github` 兼容映射派生；键存在（含空 `{}` 或显式 `null`）→ 完全以其为准、绝不回落，其中 `{}`/`null` = 显式零目标；object 以外的类型（数字/字符串等）→ 配置错误。schema 见下 |
 
-缺省 `board` / `github` 字段 = 全部关闭（向后兼容 v1 生成的配置）。
+缺省 `board` / `github` 字段 = 全部关闭（向后兼容 v1 生成的配置；新配置不再含这两段）。
 
 ### `sync` 段（eo-sync 适配器启用制）
 
@@ -102,7 +104,7 @@ mv ~/.eo-skills.json "$EO_HOME/config.json"
 | `sync.<name>.enabled` | bool，仅 `true` 的适配器会被 `eo-sync run` 执行 |
 | `sync.<name>.<其它>` | 该适配器的自定义参数，`enabled` 之外的键原样透传给适配器 |
 
-**兼容映射**：以**键是否存在**判定（非「值是否非空」）——合并配置**无** `sync` 键时由存量 `board` / `github` 段等价派生启用集（`board.enabled`→`obsidian`、`github.issue`/`pr`→`github`）；`sync` 键**存在**（含空 `{}` 或显式 `null`）则完全以其为准、不与 `board`/`github` 深合并，其中 `{}`/`null` 是用户显式选择的零目标（绝不回落存量段）；`sync` 值为 object 以外的类型 → 配置校验失败（不静默降级）。存量项目无需改配置即按等价映射生效。正式收编（init 停写旧段 + 存量迁移）时机见 change `sync-plugin-layer` 的 OQ-1。协议契约见 [../../docs/sync-adapter-protocol.md](../../docs/sync-adapter-protocol.md)。
+**兼容映射**：以**键是否存在**判定（非「值是否非空」）——合并配置**无** `sync` 键时由存量 `board` / `github` 段等价派生启用集（`board.enabled`→`obsidian`、`github.issue`/`pr`→`github`）；`sync` 键**存在**（含空 `{}` 或显式 `null`）则完全以其为准、不与 `board`/`github` 深合并，其中 `{}`/`null` 是用户显式选择的零目标（绝不回落存量段）；`sync` 值为 object 以外的类型 → 配置校验失败（不静默降级）。存量项目无需改配置即按等价映射生效。正式收编已由 change `sync-config-consolidation` 完成：init 新配置只写 `sync` 段，重跑 init（1.5 分支）对仅有旧段的项目提示并代写等价 `sync` 段（旧段保留不删）。协议契约见 [../../docs/sync-adapter-protocol.md](../../docs/sync-adapter-protocol.md)。
 
 **设计约束**：
 - `project_root` 永远是绝对路径。vault 模式不依赖软链——软链只是给用户查看方便，skill 一律走 `project_root`。
@@ -111,14 +113,14 @@ mv ~/.eo-skills.json "$EO_HOME/config.json"
 
 ## `<repo>/.eo-project.local.json`（项目级个人覆盖，可选）
 
-**动机**：`.eo-project.json` 提交进仓库，但 `project_root`（绝对路径）、`mode`、`board` 因人/机器而异——协作者 clone 后拿到的是别人的 vault 路径。local 文件承载这些机器相关字段，共享文件只留团队口径。
+**动机**：`.eo-project.json` 提交进仓库，但 `project_root`（绝对路径）、`mode`、`sync`（obsidian 侧因 vault 而异）因人/机器而异——协作者 clone 后拿到的是别人的 vault 路径。local 文件承载这些机器相关字段，共享文件只留团队口径。
 
 **规则**：
 
 - 与 `.eo-project.json` **同目录**；schema 相同，**所有字段可选**。
-- **顶层浅合并**，local 优先：local 出现的顶层字段整段覆盖共享文件的同名字段（`board` / `github` 是对象也**整段覆盖**，不做深合并）。
-- 团队仓库的 `.eo-project.json` 可只保留共享字段（`project_name` / `doc_root` / `github`），机器相关字段（`project_root` / `mode` / `board`）由每人的 local 文件提供。
-- **字段写回**（如 board/github 后开补齐，见 `eo-shared/board-github.md`）：该顶层字段已存在于 local 文件 → 写 local（写共享文件会被覆盖屏蔽）；否则写 `.eo-project.json`。
+- **顶层浅合并**，local 优先：local 出现的顶层字段整段覆盖共享文件的同名字段（`sync` 及 legacy `board` / `github` 是对象也**整段覆盖**，不做深合并）。
+- 团队仓库的 `.eo-project.json` 可只保留共享字段（`project_name` / `doc_root`），机器相关字段（`project_root` / `mode` / `sync`）由每人的 local 文件提供。
+- **字段写回**（如 sync 段后开补齐，见 `eo-shared/board-github.md`）：该顶层字段已存在于 local 文件 → 写 local（写共享文件会被覆盖屏蔽）；否则写 `.eo-project.json`。
 
 ## 运行模式对比
 
@@ -176,7 +178,7 @@ eo-doc/
 ├── decisions/     # 按需，首次记录决策时建
 ├── lessons/       # 按需，首次记录经验时建（**项目级**，替代全局 _lessons/）
 ├── brainstorm/    # 按需，eo-brainstorming 首次产出时建
-├── board/         # 按需，change 看板 stub（board.enabled/sync.obsidian 时由 eo-sync 投影维护）
+├── board/         # 按需，change 看板 stub（sync.obsidian（或 legacy board.enabled）启用时由 eo-sync 投影维护）
 ├── research/      # 按需，调研沉淀（带 INDEX + frontmatter；eo-recall / eo-change 事实自查消费）
 └── docs/          # 按需，原始 PRD / 设计 / 规划
 ```

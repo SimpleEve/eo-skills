@@ -5,5 +5,9 @@
   "doc_root": "eo-doc",
   "kanban_path": null,
   "board": { "enabled": true },
-  "github": { "issue": false, "pr": "never" }
+  "github": { "issue": false, "pr": "never" },
+  "sync": {
+    "obsidian": { "enabled": true, "stub_dir": "board" },
+    "github": { "enabled": false, "issue": false, "pr": "never" }
+  }
 }
