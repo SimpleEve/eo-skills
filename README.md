@@ -4,6 +4,7 @@
 
 > 从 v1 升级？破坏性变更与迁移步骤见 [docs/migration-v1-to-v2.md](docs/migration-v1-to-v2.md)。
 
+> 装好之后每天到底敲什么？看 [docs/usage.md](docs/usage.md)（使用说明：skill + eo-board 看板 + eo-sync 投影）。
 > 想直接看每个 skill 的详细用法、典型流程、设计权衡？请看 [docs/GUIDE.md](docs/GUIDE.md)。
 
 > 担心流程的 token 开销？实测数据与 gstack / Anthropic 官方对标见 [docs/token-budget-benchmark.md](docs/token-budget-benchmark.md)。

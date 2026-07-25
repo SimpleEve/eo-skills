@@ -291,7 +291,7 @@
   </div>
   <div class="proj reveal">
     <span class="tag">投影层 · OPT-IN</span>
-    <p>change 的 frontmatter 可以单向投影成 <b>Obsidian 看板卡片</b>（多项目聚合观测）和 <b>GitHub issue / PR</b>（AC 全勾才 <span class="mono">Closes</span>）。本地文件永远是唯一真相源，投影只读不回写——GitHub 上关了 issue 而本地没归档？只会收到一行告警。</p>
+    <p>change 的 frontmatter 由 <b>eo-sync 单命令</b>投影成 <b>Obsidian 看板卡片</b>和 <b>GitHub issue / PR</b>（AC 全勾才 <span class="mono">Closes</span>）——归档时自动跑一次，平时挂 <span class="mono">eo-sync watch --all</span> 状态一变几秒内自动追平；投影目标是插件化的（PATH 放一个 <span class="mono">eo-sync-&lt;name&gt;</span> 即可接 Notion 等）。本地文件永远是唯一真相源，投影只读不回写——GitHub 上关了 issue 而本地没归档？只会收到一行告警。终端侧另有 <span class="mono">eo-board --all</span>：所有注册项目一屏总览。</p>
   </div>
 
   <div style="margin-top:44px" class="reveal">
@@ -303,7 +303,8 @@
       <tr><td>已钉决策</td><td>change.md §1（brainstorming 移交）；流程外重大决策 → decisions/</td><td class="who">brainstorming / change / eo-project-record</td><td>下游不重问；recall 回答「当初为什么」</td></tr>
       <tr><td>设计口径</td><td>DESIGN.md（token + 决策日志）</td><td class="who">eo-design</td><td>一切 UI 改动前必读 · review 一致性维度</td></tr>
       <tr><td>教训</td><td>&lt;项目&gt;/lessons/ + INDEX</td><td class="who">eo-project-record</td><td>change / implement / fix 启动时按 trigger 命中</td></tr>
-      <tr><td>待办与灵感</td><td>&lt;项目&gt;/backlog.md</td><td class="who">eo-backlog</td><td>被采纳时升级为 change（顺带升级成 issue）</td></tr>
+      <tr><td>待办与灵感</td><td>&lt;项目&gt;/backlog/（每条一张卡）</td><td class="who">eo-backlog</td><td>上看板 backlog 列；被 change 采纳时归档留痕</td></tr>
+      <tr><td>项目注册表</td><td>~/.eo/projects.json</td><td class="who">eo-project-init / eo-board --register</td><td>eo-board --all 多项目总览 · eo-sync watch --all 自动同步</td></tr>
       <tr><td>临时现场</td><td>tmp/eo/{handoff,fix,design}/</td><td class="who">各 skill</td><td>用完即弃，永不当信源</td></tr>
     </table>
   </div>
@@ -317,7 +318,7 @@
 </div></section>
 
 <footer><div class="wrap">
-  <span>想看严肃版：<a href="GUIDE.md">GUIDE.md</a> · <a href="../README.md">README</a> · 从 v1 来：<a href="migration-v1-to-v2.md">迁移指南</a></span>
+  <span>上手速查：<a href="usage.md">使用说明</a> · 想看严肃版：<a href="GUIDE.md">GUIDE.md</a> · <a href="../README.md">README</a> · 从 v1 来：<a href="migration-v1-to-v2.md">迁移指南</a></span>
   <span class="mono" style="font-size:11px;color:var(--ink-3)">本页零依赖，离线可开 · 数据不出本文件</span>
 </div></footer>
 
@@ -362,7 +363,7 @@ const STEPS=[
  {n:"STEP 1",t:"起草",title:"验收先于代码",who:"/eo-change",
   talk:[["a","速览：<b>改什么</b>·选中记录打包 zip 导出 / <b>行为差异</b>·之前只能逐条下载 → 之后可批量 / <b>怎么验</b>·AC 4 条（含一条失败路径：「超过 500 条时提示分批」）。TODO 拆成 2 批，Batch 1 是 MVP。粒度自检：5 条 TODO / 210 行，合规 ✓"],
         ["u","可以，就这么干"],
-        ["a","已确认。<span class=\"mono\">status: draft → confirmed</span>（我改的，你永远不用碰 frontmatter）。看板卡片和 GitHub issue #42 已建"],
+        ["a","已确认。<span class=\"mono\">status: draft → confirmed</span>（我改的，你永远不用碰 frontmatter）。投影交给 eo-sync——watch 挂着的话，看板卡片和 GitHub issue #42 几秒内自动出现"],
         ["s","确认时亮的是速览 + AC——30 秒读懂，不用通读文件"]],
   tree:`eo-doc/changes/
 ├─ INDEX.md          <span class="chg">+1 行</span>
@@ -373,7 +374,7 @@ const STEPS=[
       <span class="dim">§2 AC ×4 ☐☐☐☐   §3 TODO ×5（2 批）</span>
       <span class="dim">issue: 42</span>
 
-<span class="dim">vault/board/014-batch-export.md（投影）</span>`,
+<span class="dim">vault/board/014-batch-export.md（eo-sync 投影）</span>`,
   st:"confirmed"},
  {n:"STEP 2",t:"实施",title:"按批走，批末必须停下来验收",who:"/eo-implement",
   talk:[["a","Batch 1（MVP）完成：TODO 1-3 勾掉，AC-1、AC-2 按验证方式跑过 ✓。已提交 <span class=\"mono\">[014] 导出核心链路</span>。继续 Batch 2 还是先停？"],
@@ -458,7 +459,7 @@ const CAT=[
   ["eo-fix","bug 口喷入口","<b>为什么不直接改？</b>——大多数时候它就是直接改：明显缺陷（报错/崩溃）不查任何文档，速度对齐裸改。只多三层<b>按需</b>保险：① 落点记账（勾 AC、commit 前缀，30 秒，是归档/看板/统计的输入）；② 误修保险——「这行为不对吧」类分歧先取证（口述 &gt; AC &gt; state 佐证 &gt; git 归属），防止静默推翻上个 change 特意做的设计，是有意的会停下来告诉你「要改它就是需求变更」；③ 难缠 bug 深挖模式（插桩/bisect，结束还原现场）。启动时还会撞一下 lessons 的 trigger——同类坑直接给答案。","修代码 · 落点：勾 AC 或 fix: 直改 · 调查记录进 tmp/eo/fix/"],
   ["直改模式","不是 skill，是一条豁免规则","纯样式/文案/多语言/小修 → 不开 change，改完 commit（fix:/ui: 前缀），cursor sync 兜底归档。","零工件"]]],
  ["基座 · 一次配置长期受益",[
-  ["eo-project-init","总入口","生成 .eo-project.json、双侧骨架、CLAUDE.md 注入；看板 / GitHub 联动在这里开关（问一次写回配置）。","所有 skill 的前置"],
+  ["eo-project-init","总入口","生成 .eo-project.json、双侧骨架、CLAUDE.md 注入；投影目标（看板 / GitHub）在这里开关（问一次写进 sync 段）；顺手登记进 ~/.eo/projects.json；协作者 clone 后重跑即引导生成个人 .eo-project.local.json 覆盖。","所有 skill 的前置"],
   ["eo-doc-manager","活文档引擎","cursor sync 按 commit 增量把代码变化归档进 state/ + handbook；脏变更三选一；每 5 次 sync 提示一致性抽查。","维护 eo-doc/ 活文档"],
   ["eo-recall","回忆与解释","「当时怎么设计的 / 逻辑怎么实现的 / 为什么这么定」——按问题类型走检索瀑布（state / handbook→源码 / change 已钉决策 + decisions），<b>分层作答、每个论断带出处、查无记载明说</b>（不把编造当回忆）；复杂逻辑可出 mermaid 或一次性 HTML 解释页。活文档的消费入口：记下来的东西从这扇门被读回来。","只读 · 解释页进 tmp/eo/explain/"],
   ["eo-shared","共享规范（非技能）","提问纪律 / AC 规范 / 粒度判据 / lessons 格式 / 联动规范的单一来源——skill 只引用，不复述。","被所有 skill 引用"]]],
@@ -467,8 +468,11 @@ const CAT=[
   ["eo-change-review","方案审查（可选）","AC 质量、TODO↔AC 映射、粒度合规、占位符检测——implement 之前把牢方向。","产出 change-review.md"],
   ["eo-loop","总控调度","圈状态机线段（入口 → 出口 → 收敛标准），派发到可插拔基底（子 agent / codex / orca）循环推进至收敛；<b>互不干扰的并行组</b>（Batch 2a/2b、可并行 change）多 worker 并行——worktree 隔离 + 文件集机械校验 + 合流 checkpoint；每 ≤30 分钟主动观测出进度报告。","跨节点循环 · journal 进 tmp/eo/loop/"],
   ["eo-handoff","会话交接","/clear 前把「状态 + 口径 + 下一步」写成开机指令，新会话 5 分钟接上。","tmp/eo/handoff/<topic>.md"]]],
- ["项目管理 · 落在 vault",[
-  ["eo-backlog","待办池","一句话灵感 / 以后再说的事，追加进 backlog.md；被采纳时升级成 change。","backlog.md"],
+ ["CLI · 终端里敲的",[
+  ["eo-board","只读看板 CLI","单项目：终端摘要 / <span class=\"mono\">--html</span> 快照 / <span class=\"mono\">--serve</span> 实时看板（有缓存）。多项目：<span class=\"mono\">--all</span> 注册项目一屏总览（状态计数 + 新鲜度戳）、<span class=\"mono\">--project</span> 任意目录下钻、<span class=\"mono\">--scan</span> 临时扫描兜底。<b>永远只读</b>，绝不写项目文件。","cli/eo-board · 注册表 ~/.eo/projects.json"],
+  ["eo-sync","投影同步 CLI","<span class=\"mono\">run</span> 一次跑完全部投影（幂等）、<span class=\"mono\">--dry-run</span> 只看计划、<span class=\"mono\">watch --all</span> 常驻自动追平（新鲜度键短路，无变化零成本）。适配器插件化：内置 obsidian / github，第三方放一个 <span class=\"mono\">eo-sync-&lt;name&gt;</span> 可执行即可接入。","cli/eo-sync · 协议见 docs/sync-adapter-protocol.md"]]],
+ ["项目管理 · 落在管理侧",[
+  ["eo-backlog","待办池","一句话灵感 / 以后再说的事，一条一张卡进 backlog/（上看板 backlog 列）；被 change 采纳时三件套归档留痕。","backlog/ 卡片目录"],
   ["eo-project-record","项目记忆","统一写入口：<b>教训</b>（结论前置 + trigger 锚点，下次相关任务自动回响）与<b>决策</b>（背景/候选/裁定/理由，recall 的「当初为什么」信源）。流程内的决策不进来——change 已钉决策、brainstorming 决策表各有其家；这里只收流程外的重大裁定。","lessons/ + decisions/，各带 INDEX"]]]];
 const catEl=document.getElementById('cat');
 catEl.innerHTML=CAT.map(g=>`<div class="cat-group reveal"><div class="gt">${g[0]}</div><div class="cards">${
