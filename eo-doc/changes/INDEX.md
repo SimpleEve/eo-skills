@@ -8,3 +8,4 @@
 | 4 | [sot-default-local-committed](04-sot-default-local-committed/change.md) | light | enhance | archived | 2026-07-25 | init 新项目默认 local 且管理侧随仓库提交，vault 仍可选，存量零改动 |
 | 5 | [sync-config-consolidation](05-sync-config-consolidation/change.md) | light | enhance | archived | 2026-07-25 | init 停写 board/github 旧段改写 sync 段，存量重跑代写等价迁移，兼容回落不动 |
 | 6 | [watch-single-instance](06-watch-single-instance/change.md) | light | enhance | archived | 2026-07-25 | watch 同作用域硬互斥（--all 撞 --all、同仓 --project 互撞即报错退出），跨域重叠仅告警 |
+| 7 | [project-root-normalization](07-project-root-normalization/change.md) | light | enhance | archived | 2026-07-25 | 配置读取时把相对 project_root 按 repo root 解析并解软链，告警放行；解析不到仍报错 |
