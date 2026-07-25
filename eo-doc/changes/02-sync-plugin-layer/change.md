@@ -3,14 +3,14 @@ id: sync-plugin-layer
 seq: 2
 title: eo-sync 插件层与存量适配器迁移
 summary: 投影插件化为 eo-sync 单命令同步；stub/issue/PR 迁内置适配器，逐流转触发点全面退役
-status: reviewed
+status: archived
 tier: full
 type: feature
 base_commit: 5f38497da71eb7ca17b0fa10e0fe4453251399b8
 plan_revision: 1
 fix_rounds: 3
 fix_consumed: [review#1, review#2, review#3]
-commits: []
+commits: ["21458aa", "7771c58", "5da3e6a", "2a6644f", "7167f35", "1aa4e10", "3be8ca2", "b543b56", "a3af2d6", "b2e9950", "cb86ffd"]
 issue: ~
 pr: ~
 created: 2026-07-24
