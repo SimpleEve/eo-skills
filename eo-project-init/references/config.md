@@ -47,10 +47,10 @@ mv ~/.eo-skills.json "$EO_HOME/config.json"
 
 | 字段 | 类型 | 默认 | 说明 |
 |------|------|------|------|
-| `vault_root` | string | — | vault 根路径（绝对）。不配 → 默认 `local` 模式 |
+| `vault_root` | string | — | vault 根路径（绝对）。vault 模式的前提，但仅凭它存在不改变新项目的默认推荐 |
 | `projects_subdir` | string | `"projects"` | vault 下的项目子目录（vault 模式才用到） |
 | `create_symlink` | bool | `true` | vault 模式下是否在代码仓库建 `<repo>/<doc_root>/vault` 软链指向 `<project_root>` |
-| `default_mode` | `"vault"` \| `"local"` | 由 `vault_root` 推断 | 新项目默认模式；配了 `vault_root` → `vault`，否则 `local` |
+| `default_mode` | `"vault"` \| `"local"` | `"local"` | 新项目默认模式；显式配 `"vault"` 时 init 询问才推荐 vault |
 
 **整个文件可选**。完全不存在时等同于「纯本地模式，永不碰 vault」。
 
@@ -124,10 +124,10 @@ mv ~/.eo-skills.json "$EO_HOME/config.json"
 
 | 方面 | `vault` 模式 | `local` 模式 |
 |------|-----------|-----------|
-| 触发条件 | `~/.eo/config.json` 里有 `vault_root`，且用户选 vault | 反之 |
+| 触发条件 | 有 `vault_root` 且用户在 init 询问中选 vault（`default_mode: "vault"` 时为推荐项） | 缺省推荐 |
 | `project_root` 落在哪 | `<vault_root>/<projects_subdir>/<project_name>/` | `<repo>/.eo-project/` |
 | 是否建软链 | 默认建 `<repo>/<doc_root>/vault` → `<project_root>`（整个 vault 项目目录单点挂进来；`create_symlink` 控制） | 不建 |
-| `.eo-project/`（local 模式目录）入 git | — | **默认进 `.gitignore`** |
+| `.eo-project/`（local 模式目录）入 git | — | **缺省随仓库提交**；用户明确不想提交时才进 `.gitignore` |
 
 ## Skill 启动时的配置解析流程
 

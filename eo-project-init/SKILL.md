@@ -56,14 +56,14 @@ description: "eo-skills 在当前仓库的总入口：生成 .eo-project.json、
 1. **配置校验**：读现有 `.eo-project.json`（合并 local 覆盖），对照 [references/config.md](references/config.md) 的 schema——基础字段（project_name/mode/project_root/doc_root）缺失按默认补写；存量配置的 `kanban_path` 字段忽略不改（旧看板体系已退役），已有字段一律不改；**`board` / `github` 段缺失时不在本步补写**（补了默认关闭值会吞掉第 5 步的询问），只记录缺段，留给第 5 步问答后落盘
 2. **骨架补齐**：项目管理侧必建 roadmap.md 与代码侧 `eo-doc/` 骨架缺什么补什么；**不触碰任何已有文件的内容**
 3. **注入段刷新**：按标记对整段替换 agent 配置文件中的 `eo-project` / `eo-doc` 注入段；仓库根存在 `DESIGN.md` 时核对 `eo-design` 注入段
-4. **.gitignore 与软链核对**：`tmp/eo/`、`.eo-project.local.json`、（local 模式）`.eo-project/`、（vault 模式）`<doc_root>/vault` 缺项补写；若历史遗留把 `<doc_root>/.sync-cursor` 写进了 `.gitignore`，删掉该行并 `git add -f` 补入库（它须随文档一起共享，见 [../eo-doc-manager/references/git-sync.md](../eo-doc-manager/references/git-sync.md)）；vault 模式且 `create_symlink: true` 时核对 `<doc_root>/vault` **软链本体**存在且指向 `project_root`，缺失/指错按「9. 建立软链」重建
+4. **.gitignore 与软链核对**：`tmp/eo/`、`.eo-project.local.json`、（vault 模式）`<doc_root>/vault` 缺项补写；`.eo-project/` 的 ignore 状态**保持现状不核对**——已 ignore 的不删行、未 ignore 的不补写（新口径「缺省随仓库提交」仅作用于新项目，存量零改动）；若历史遗留把 `<doc_root>/.sync-cursor` 写进了 `.gitignore`，删掉该行并 `git add -f` 补入库（它须随文档一起共享，见 [../eo-doc-manager/references/git-sync.md](../eo-doc-manager/references/git-sync.md)）；vault 模式且 `create_symlink: true` 时核对 `<doc_root>/vault` **软链本体**存在且指向 `project_root`，缺失/指错按「9. 建立软链」重建
 5. **联动两问**（仅对应段缺失时，规则见「8. 生成 .eo-project.json」的 board/github 小节）：开启 board → 立即做 stub 历史同步
 5.5. **顺手注册**：执行 `eo-board --register`（幂等，已注册则原地更新）。**失败不阻塞本流程**——注册失败时输出告警并给手工补注册指引：「⚠ 项目注册失败（<原因>），init 已正常完成；稍后可在项目目录手工执行 `eo-board --register` 补注册（注册后任意目录 `eo-board --all` 可见本项目）」
 6. **输出摘要**：列出本次补齐/刷新/跳过了什么（含注册结果），然后结束——不执行首次创建流程的其余步骤
 
-### 2. 询问运行模式（必须问，不默认）
+### 2. 询问运行模式（保留询问，缺省推荐 local）
 
-**不要直接默认到 local**。按封闭选择协议（[../eo-shared/questioning.md](../eo-shared/questioning.md) §4）呈现两个选项（用户级配置有 `default_mode` 时标为推荐），选项说明取自下方要点：
+**缺省推荐 local**：按封闭选择协议（[../eo-shared/questioning.md](../eo-shared/questioning.md) §4）呈现两个选项——用户级配置显式配了 `default_mode` 时按其值标推荐；未配则推荐 local（**仅凭 `vault_root` 存在不推断推荐 vault**）。选项说明取自下方要点：
 
 ```
 这个项目的"项目管理侧"（roadmap / backlog 卡片 / decisions / lessons 等）放在哪里？
@@ -73,11 +73,11 @@ A) vault 模式 —— 集中到 Obsidian/文档 vault，跨项目统一浏览
    • 默认把整个 vault 项目目录软链挂到代码侧 eo-doc/vault/（单点整挂，vault 侧新增子目录代码侧自动可见）
    • 适合：多个项目并行、用 Obsidian 做 PKM、想在一处看所有项目状态
 
-B) local 模式 —— 放在仓库自己的 .eo-project/ 下，跟代码走
+B) local 模式（推荐缺省）—— 放在仓库自己的 .eo-project/ 下，跟代码走
    • project_root = <repo>/.eo-project/
-   • 默认进 .gitignore（不提交），也可选随仓库提交
+   • 管理侧缺省随仓库提交（roadmap / backlog / decisions / lessons 对协作者可见）；明确不想提交可当场选进 .gitignore
    • 不建软链
-   • 适合：单个项目、没有统一 vault、不想跨目录跳转
+   • 适合：绝大多数项目——协作友好、不依赖 Obsidian
 ```
 
 用户回答后：
@@ -191,14 +191,14 @@ local 模式**不建软链**。
 
 ### 10. 处理 `.eo-project/`（仅 local 模式）
 
-`.eo-project/` 即 `project_root`。默认追加到 `.gitignore`：
+`.eo-project/` 即 `project_root`。**缺省随仓库提交，不写入 `.gitignore`**——roadmap / backlog / decisions / lessons 是协作者最需要的项目记忆，跟代码走。
+
+仅当用户明确表示不想提交管理侧时，当场追加：
 
 ```
 # eo-project local management side
 .eo-project/
 ```
-
-若用户明确想让管理侧随仓库提交，当场询问后跳过 gitignore 追加。
 
 ### 11. Agent 配置注入
 
@@ -262,6 +262,6 @@ local 模式**不建软链**。
 - 项目名用用户给的原始名称，不转换
 - 原始 PRD/MVP 若提供，存到 `<project_root>/docs/`（lazy 建）
 - 软链仅 vault 模式 + `create_symlink: true` 才建
-- `.eo-project/` 默认进 `.gitignore`；用户可当场覆盖
+- `.eo-project/` 缺省随仓库提交、不进 `.gitignore`；用户明确不想提交时当场覆盖。存量项目重跑本 skill 不改其既有 ignore 状态
 - `.eo-project.local.json` **始终**进 `.gitignore`（个人/机器覆盖，不提交）；协作者接入只写 local，不改共享的 `.eo-project.json`
 - agent 配置注入使用 `<!-- eo-project:start/end -->` 标记，幂等可重复执行

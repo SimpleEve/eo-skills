@@ -27,8 +27,8 @@
 
 | 模式 | 触发条件 | 项目管理侧落在哪 | 软链 |
 |------|---------|---------------|------|
-| **local**（默认） | `~/.eo/config.json` 不存在 或不配 `vault_root` | 仓库内 `.eo-project/`（默认进 `.gitignore`） | 不建 |
-| **vault** | `~/.eo/config.json` 有 `vault_root` | `<vault_root>/<projects_subdir>/<project_name>/` | 默认在 `<repo>/<doc_root>/vault` 建指向 `<project_root>`（整目录单点挂，`create_symlink` 控制） |
+| **local**（默认） | 缺省推荐——未显式配 `default_mode: "vault"` 时 init 询问推荐它 | 仓库内 `.eo-project/`（缺省随仓库提交；明确不想提交才进 `.gitignore`） | 不建 |
+| **vault** | `~/.eo/config.json` 有 `vault_root` 且用户在 init 询问中选它 | `<vault_root>/<projects_subdir>/<project_name>/` | 默认在 `<repo>/<doc_root>/vault` 建指向 `<project_root>`（整目录单点挂，`create_symlink` 控制） |
 
 配置约定：
 
