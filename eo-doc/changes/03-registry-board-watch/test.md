@@ -6,8 +6,8 @@ created: 2026-07-25
 updated: 2026-07-25
 status: active
 summary: >
-  既有 105 例审计通过，新增 6 个隔离的真实 watch 进程场景中 5 个通过；
-  发现首轮同步后基线重算窗口会吞掉状态流转，AC-6 不通过。
+  第 2 轮复验通过：既有 106 例与 6 个隔离的真实 watch 进程场景全部通过；
+  FAIL-1 已验证修复，窗口内流转会触发一次幂等复跑后收敛。
 ---
 
 # 项目注册表 + eo-board 多项目聚合 + eo-sync watch 测试报告
@@ -19,7 +19,7 @@ summary: >
 
 | ID | 级别 | 摘要 | 位置 | 状态 | 根因 | 首见/最近轮 | 基线/修复 commit |
 |----|------|------|------|------|------|-------------|------------------|
-| FAIL-1 | 阻塞 | 首轮 run 的 post-run 基线重算会吞掉同窗口内的 change 状态流转，stub 永久停在旧状态 | `cli/eo-sync:836-842`；`tests/test_eo_sync_watch_integration.py#test_transition_during_post_sync_key_recompute_is_not_lost` | fixed | implementation | 1/1 | `5da41b8` / `ae894d8` |
+| FAIL-1 | 阻塞 | 首轮 run 的 post-run 基线重算会吞掉同窗口内的 change 状态流转，stub 永久停在旧状态 | `cli/eo-sync:836-842`；`tests/test_eo_sync_watch_integration.py#test_transition_during_post_sync_key_recompute_is_not_lost` | verified | implementation | 1/2 | `5da41b8` / `ae894d8` |
 
 ## 测试总结（首轮快照）
 
@@ -85,7 +85,15 @@ eo-sync watch 已停止。
 
 - FAIL-1 阻塞 AC-6 完整通过。修复后应保留新增真实进程回归并重跑本报告全部 6 个场景。
 
+## 第 2 轮记录（revision 1 · 2026-07-25）
+
+- 测试基线：`ae894d8`（`6dd44ce` 仅回写 FAIL-1 为 fixed，不改变业务代码基线）。
+- 核销：FAIL-1 verified。真实首轮投影确认后立即写入 `reviewed` 状态，watch 首轮输出“同步期间检测到新变化，下一轮复跑确认”；下一间隔内 stub 更新为 `reviewed`，复跑后稳定短路。新增真实进程断言锁定恰好两次 run 诊断，证明不忙循环。
+- 复验：`python3 tests/test_eo_sync_watch_integration.py` 6/6 通过（22.113s），其中必失败适配器场景仅 1 次 run 诊断和 1 次适配器告警后静置无输出；`python3 tests/test_eo_lib_registry.py` 14/14、`python3 tests/test_eo_board_cache.py` 13/13、`python3 tests/test_eo_sync.py` 74/74、`python3 tests/test_eo_sync_smoke.py` 5/5，既有自动回归合计 106/106。
+- 新增：无。所有项目、registry、适配器与 flock 均在 `TemporaryDirectory` 和临时 `EO_HOME` 下运行，未访问真实 `~/.eo` 或 vault board。
+- 本轮结论：通过（112/112）。AC-6 已由本轮真实常驻场景勾选；AC-7/8/9/11 的既有勾选经本轮复验保持有效。
+
 ## 速报
 
-结论：不通过（失败 1 项）［第 1 轮 · revision 1 · 基线 `5da41b8`］
-下一步：回 /eo-implement 修复 FAIL-1 后重测。
+结论：通过［第 2 轮 · revision 1 · 基线 `ae894d8`］
+下一步：可进入 /eo-review（尚未审码）。

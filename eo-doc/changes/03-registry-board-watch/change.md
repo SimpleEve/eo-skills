@@ -3,7 +3,7 @@ id: registry-board-watch
 seq: 3
 title: 项目注册表 + eo-board 多项目聚合 + eo-sync watch
 summary: 新建 ~/.eo/projects.json 生态注册表；eo-board 多项目聚合与下钻；eo-sync watch 自动追平投影
-status: implementing
+status: reviewed
 tier: full
 type: feature
 base_commit: 85ad4fccba8c983e4c104b8c78b00b00a14ca9c7
@@ -52,7 +52,7 @@ created: 2026-07-25
 - [x] AC-3 `eo-board --all` 每注册项目一行：项目名 + 各状态 change 计数 + backlog 数 + as-of 新鲜度戳（验证：≥2 个注册项目下运行，核对行内容与时间戳）
 - [x] AC-4 用户在任意目录 `eo-board --project <路径|注册名>` 直接看到该项目的单项目视图，无需 cd；注册名命中多个项目时报歧义并列出候选路径、要求改用路径（不静默取第一项）（验证：在 $HOME 下用注册名跑一次；注册两个同名项目后再按名跑一次看歧义提示）
 - [x] AC-5 未注册项目可被扫描兜底纳入：`eo-board --all --scan <父目录>` 把含 `.eo-project.json` 的一层子目录并入本次聚合并提示可注册，但不写注册表（验证：跑完后核对 projects.json 未变）
-- [ ] AC-6 `eo-sync watch` 常驻期间，change 状态流转后至多一个轮询间隔（默认 10s）内投影追平——看板 stub 卡状态更新（验证：watch 挂起时手改一个 change 的 status，观察 stub 卡）
+- [x] AC-6 `eo-sync watch` 常驻期间，change 状态流转后至多一个轮询间隔（默认 10s）内投影追平——看板 stub 卡状态更新（验证：watch 挂起时手改一个 change 的 status，观察 stub 卡）
 - [x] AC-7 项目无变化时 watch 不执行同步（freshness 键短路，短路轮无输出）；每次实际同步在 stderr 打一行诊断；watch 自身 run 产生的回写不引发自触发循环（键变无法归因时至多一轮幂等复跑即收敛——test#1 FAIL-1 后的保守口径：绝不为省一轮 run 吸收未投影的流转）；run 部分失败（个别适配器出错）的轮次同样按上述口径收敛——项目无新变化时下一轮回到静默，不对持续性故障忙循环重试（验证：静置数轮确认 stderr 静默；一次流转只出现一次 run 诊断；构造一个必失败适配器观察仅告警一轮后恢复静默）
 - [x] AC-8 watch 撞上进行中的手动/archive 同步（锁占用）时跳过本轮不崩溃，下一轮自动追平（验证：人为持锁一轮后释放）
 - [x] AC-9 异常路径：`--all` 在注册表缺失/为空时明确提示如何注册；注册表内路径失效或配置非法时，`eo-board --all` 该行显示错误、`eo-sync watch --all` 告警并跳过该项目，其余项目均不受影响；watch 常驻期间同一故障项目按错误指纹只告警一次（不逐轮刷屏），故障修复后自动重新纳入同步且抑制记录清除（验证：注册一个不存在的路径后各跑一次；watch 下静置数轮确认告警不重复，修复路径后观察该项目恢复追平）

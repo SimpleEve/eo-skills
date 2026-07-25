@@ -6,8 +6,8 @@ created: 2026-07-25
 updated: 2026-07-25
 status: active
 summary: >
-  首轮审查发现 3 条 P1：结构性坏注册条目可击穿项目隔离，watch 基线遗漏配置状态，
-  且 run 后 freshness 重算异常会终止常驻循环；当前未达到 reviewed 门。
+  第 3 轮增量复审通过，当前 P0/P1 清零；test 已 112/112 通过，
+  status 已置 reviewed，另留 1 条不阻塞流转的 AC-7 验证措辞 P2。
 ---
 
 # 项目注册表 + eo-board 多项目聚合 + eo-sync watch 代码审查报告
@@ -27,11 +27,12 @@ summary: >
 
 | ID | 级别 | 摘要 | 位置 | 状态 | 根因 | 首见/最近轮 | 基线/修复 commit |
 |----|------|------|------|------|------|-------------|------------------|
-| P1-1 | P1 | 非字符串 registry path 会击穿 board 行隔离并终止 watch --all | `cli/eo-board:1561`、`cli/eo-sync:849` | fixed | implementation | 1/1 | `8b30a1c` / `5da41b8` |
-| P1-2 | P1 | watch 基线不含配置状态，配置变更与同键故障恢复会被静默短路 | `cli/eo-sync:802`、`cli/eo_lib/freshness.py:37` | fixed | implementation | 1/1 | `8b30a1c` / `5da41b8` |
-| P1-3 | P1 | run 后 freshness 重算未进入异常矩阵，单项目异常可终止整个 watch | `cli/eo-sync:820` | fixed | implementation | 1/1 | `8b30a1c` / `5da41b8` |
-| P2-1 | P2 | --scan 不去重本轮新发现的同仓 worktree | `cli/eo-board:1595` | fixed | implementation | 1/1 | `8b30a1c` / `5da41b8` |
-| P2-2 | P2 | CLI 帮助重新使用不可安全照抄的 EO_HOME 缺省表达式 | `cli/eo-board:1735` | fixed | implementation | 1/1 | `8b30a1c` / `5da41b8` |
+| P1-1 | P1 | 非字符串 registry path 会击穿 board 行隔离并终止 watch --all | `cli/eo-board:1561`、`cli/eo-sync:849` | verified | implementation | 1/2 | `8b30a1c` / `5da41b8` |
+| P1-2 | P1 | watch 基线不含配置状态，配置变更与同键故障恢复会被静默短路 | `cli/eo-sync:802`、`cli/eo_lib/freshness.py:37` | verified | implementation | 1/2 | `8b30a1c` / `5da41b8` |
+| P1-3 | P1 | run 后 freshness 重算未进入异常矩阵，单项目异常可终止整个 watch | `cli/eo-sync:820` | verified | implementation | 1/2 | `8b30a1c` / `5da41b8` |
+| P2-1 | P2 | --scan 不去重本轮新发现的同仓 worktree | `cli/eo-board:1595` | verified | implementation | 1/2 | `8b30a1c` / `5da41b8` |
+| P2-2 | P2 | CLI 帮助重新使用不可安全照抄的 EO_HOME 缺省表达式 | `cli/eo-board:1735` | verified | implementation | 1/2 | `8b30a1c` / `5da41b8` |
+| P2-3 | P2 | AC-7 验证语句仍要求一次流转只有一次 run 诊断，与保守复跑口径冲突 | `eo-doc/changes/03-registry-board-watch/change.md:56` | open | implementation | 3/3 | `ae894d8` / ~ |
 
 ## 审查总结（首轮快照）
 
@@ -116,14 +117,31 @@ summary: >
 - 合计 99/99；`git diff --check 85ad4fc..8b30a1c` 通过。
 - 额外对抗探针：非字符串 registry path 在 board/watch 均复现未捕获 `TypeError`；有效配置仅修改 `sync` 后 runner 未再次调用；run 后 freshness 重算异常会逃逸；已有 baseline 的配置故障恢复后 suppression 未清除。
 
+## 第 2 轮记录（revision 1 · 2026-07-25）
+
+- 审查基线：`5da41b8`（台账回写提交 `1365fcb` 仅把本修复 commit 标为 fixed，不改变代码基线）。
+- 核销：P1-1 verified。`entry_path()` 统一拒绝缺失/非字符串 path，board 增加 worker 兜底错误行，watch 按坏条目指纹告警并继续；原对抗输入 `{"name":"bad","path":123}` 在两侧均不再逃逸。
+- 核销：P1-2 verified。`_watch_key()` 把 freshness 与整个合并后 `cfg` 的确定性 JSON 指纹组成基线键；逐项反查 `cmd_run()` 的配置消费面后，`project_name/mode/project_root/doc_root/board/github/sync/config_path/repo_root` 均被覆盖，`sync` 缺席与显式 null 可区分，嵌套适配器参数及 `.eo-project.local.json` 顶层覆盖也会改键，字典键序变化则保持同键。配置失败还会丢弃旧 baseline，恢复轮必 run 并重新武装告警；未发现新的行为相关短路盲区。
+- 核销：P1-3 verified。run 后 `_watch_key()` 重算已进入项目级 try/except，失败不写新 baseline、同指纹只告警一次并返回外层循环；瞬时失败下一轮可重试，单项目异常不再终止 `watch --all`。
+- 核销：P2-1 verified。扫描发现新 identity 时立即加入 `known`，主/linked worktree 同轮只保留一行。
+- 核销：P2-2 verified。CLI epilog 与 `--register` help 均统一为 `${EO_HOME:-$HOME/.eo}`。
+- reopen：无。
+- 新增：无。修复 diff 未引入越出原 finding 的行为或流程溯源注释。
+- 验证：`test_eo_lib_registry.py` 14/14、`test_eo_board_cache.py` 13/13、`test_eo_sync.py` 73/73、`test_eo_sync_smoke.py` 5/5，合计 105/105；另做配置指纹 10 个有效维度、local 覆盖/嵌套参数、键序稳定性及三条 P1 原对抗输入的独立探针，均符合预期。
+- 本轮结论：通过。P0/P1 已清零，具备置 `reviewed` 条件；按本次调度要求暂不置位，留待 `/eo-test` 后处理。
+
+## 第 3 轮记录（revision 1 · 2026-07-25）
+
+- 审查基线：`ae894d8`；范围严格限定为 `5da41b8..ae894d8`（中间提交 `1365fcb` 仅回写上一轮 Finding 台账）。
+- 既有台账：P1-1～P1-3、P2-1～P2-2 均保持 verified，无 reopen。
+- FAIL-1 修复：verified。退出 0/1 后仅在 `K_post == K_pre` 时写 baseline；窗口内第三方流转或本次 run 自身回写导致键变化时不吸收 `K_post`，下一轮幂等复跑，稳定后再落 baseline。锁占与异常格的“不记 baseline、下轮重试”边界未被改坏。
+- 文档口径：§5.3 四态矩阵与 `docs/GUIDE.md` 已同步为保守吸收口径；生产代码未引入流程溯源注释。新增 P2-3：AC-7 主句已允许一次保守复跑，但同一条末尾的验证语句仍要求“一次流转只出现一次 run 诊断”，与真实窗口场景断言恰好两次诊断相冲突。建议后续区分稳定窗口的一次诊断与 `K_post != K_pre` 的至多两次诊断。
+- 验证：`test_eo_lib_registry.py` 14/14、`test_eo_board_cache.py` 13/13、`test_eo_sync.py` 74/74、`test_eo_sync_smoke.py` 5/5、`test_eo_sync_watch_integration.py` 6/6，合计 112/112；窗口竞态集成用例另重复 10/10 通过；`git diff --check 5da41b8..ae894d8` 通过。
+- 本轮结论：通过。P0/P1 已清零，P2-3 不阻塞；`/eo-test` 已通过，status 已由 `implementing` 置 `reviewed`，并同步 `eo-doc/changes/INDEX.md`。
+
 ## 速报
 
-结论：有保留通过（P1 3 条）［第 1 轮 · revision 1 · 基线 `8b30a1c`］
-P1（应修）：
-1. 结构性坏 registry path 会终止 `eo-board --all` / `eo-sync watch --all` — `cli/eo-board:1561`
-2. watch 基线遗漏同步配置与故障健康状态，配置变更/恢复可被静默短路 — `cli/eo-sync:802`
-3. run 后 freshness 重算异常会终止整个 watch 循环 — `cli/eo-sync:820`
+结论：通过［第 3 轮 · revision 1 · 基线 `ae894d8`］
 P2（可后置）：
-4. `--scan` 未去重本轮新发现的同仓 worktree — `cli/eo-board:1595`
-5. CLI 帮助仍使用 `${EO_HOME:-~/.eo}` — `cli/eo-board:1735`
-下一步：回 `/eo-implement` 模式二修复 P1-1～P1-3 后复审；watch 常驻 AC 的执行证据仍由 `/eo-test` 收口。
+1. AC-7 验证语句的“一次流转只出现一次 run 诊断”与保守复跑口径冲突 — `eo-doc/changes/03-registry-board-watch/change.md:56`
+下一步：P0/P1 已清零且 `/eo-test` 112/112 通过；status 已置 `reviewed`，可进入 `/eo-archive registry-board-watch`。
