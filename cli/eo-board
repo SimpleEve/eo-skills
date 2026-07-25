@@ -2108,8 +2108,8 @@ def build_arg_parser():
     parser.add_argument("--scan", metavar="父目录",
                         help="--all 模式下把含 .eo-project.json 的一层子目录临时并入聚合（不写注册表）")
     parser.add_argument("-o", "--output", metavar="PATH", help="--html 模式下指定输出文件路径（默认写到系统 tmp 目录）")
-    parser.add_argument("--port", type=int, default=7333, help="--serve 模式下监听端口（默认 7333）")
-    parser.add_argument("--no-open", action="store_true", help="生成/启动后不自动打开浏览器")
+    parser.add_argument("--port", type=int, default=None, help="--serve 模式下监听端口（默认 7333）")
+    parser.add_argument("--no-open", action="store_true", help="--html/--serve 模式下生成/启动后不自动打开浏览器")
     parser._optionals.title = "选项"
     return parser
 
@@ -2123,8 +2123,14 @@ def main():
         parser.error("--scan 仅在 --all 模式下有效")
     if args.project and args.all:
         parser.error("--project 与 --all 互斥（--project 是单项目下钻）")
+    if args.port is not None and not args.serve:
+        parser.error("--port 仅在 --serve 模式下有效")
+    if args.no_open and not (args.html or args.serve):
+        parser.error("--no-open 仅在 --html/--serve 模式下有效")
     if (args.register is not None or args.unregister is not None) and (args.all or args.project or args.output):
         parser.error("--register/--unregister 是注册表维护动作，不与 --all/--project/-o 混用")
+    if args.port is None:
+        args.port = 7333
 
     if args.register is not None:
         sys.exit(cmd_register(args.register))

@@ -109,6 +109,16 @@ class HelperInteractiveTests(unittest.TestCase):
         self.assertEqual(run_calls, [])
         self.assertEqual(exec_calls, [])
 
+    def test_unicode_digits_and_oversized_input_are_invalid_not_traceback(self):
+        # ²（isdigit 真但 int 失败）、全角４、中文数字、阿拉伯-印度数字、超长数字串：
+        # 一律走非法编号提示，绝不 traceback
+        weird = ["²", "４", "一", "١", "9" * 5000]
+        code, out, run_calls, exec_calls = self.run_main(weird + ["q"])
+        self.assertEqual(code, 0)
+        self.assertEqual(out.count("无效编号"), len(weird))
+        self.assertEqual(run_calls, [])
+        self.assertEqual(exec_calls, [])
+
     def test_eof_exits_cleanly_like_q(self):
         code, out, run_calls, exec_calls = self.run_main([EOFError()])
         self.assertEqual(code, 0)

@@ -561,11 +561,15 @@ class BoardAllAggregateTests(MultiProjectFixture):
         calls = 0
         original = board.build_data
         lock = threading.Lock()
+        # 两个槽的构建必须同时在场才能过桥——若跨槽退化成串行，这里超时、
+        # 构建抛 BrokenBarrierError 落进行内 error，最下方的 error 断言随之失败
+        overlap = threading.Barrier(2, timeout=15)
 
         def counted(cfg):
             nonlocal calls
             with lock:
                 calls += 1
+            overlap.wait()
             return original(cfg)
 
         with self.env_patch(), mock.patch.object(board, "build_data", side_effect=counted):
@@ -588,6 +592,7 @@ class BoardAllAggregateTests(MultiProjectFixture):
             self.assertEqual(calls, 2)
         names = sorted(row["label"] for row in again["rows"])
         self.assertEqual(names, ["alpha", "beta"])
+        self.assertEqual([row["error"] for row in again["rows"]], [None, None])
         self.assertTrue(again["serve"])
 
     def test_all_serve_rereads_registry_each_request(self):
@@ -675,6 +680,12 @@ class BoardAllAggregateTests(MultiProjectFixture):
             ["--unregister", "--serve"],
             ["--all", "-o", "x.html"],  # -o 仅在 --html 下有效
             ["-o", "x.html"],
+            ["--all", "--port", "7444"],  # --port 仅在 --serve 下有效
+            ["--html", "--port", "7444"],
+            ["--port", "7444"],
+            ["--register", "--no-open"],  # --no-open 仅在 --html/--serve 下有效
+            ["--no-open"],
+            ["--all", "--html", "--port", "7444", "-o", "x.html", "--no-open"],
         ):
             r = self.run_board(*combo)
             self.assertNotEqual(r.returncode, 0, f"应当拒绝：{combo}")

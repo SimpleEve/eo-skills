@@ -64,6 +64,18 @@ def run_choice(item):
         print(f"↑ {cmd_str} 退出码 {rc}")
 
 
+def parse_choice(choice):
+    """合法菜单编号 → int，其余一律 None。只认 ASCII 数字——上标（²）、全角（４）、
+    中文数字等 int() 接受域内外的花式输入都按非法处理，不让任何输入变成 traceback。"""
+    if not (choice.isascii() and choice.isdecimal()):
+        return None
+    try:
+        idx = int(choice)
+    except ValueError:
+        return None
+    return idx if 1 <= idx <= len(MENU) else None
+
+
 def main():
     if len(sys.argv) > 1:
         if sys.argv[1] in ("-h", "--help"):
@@ -84,11 +96,12 @@ def main():
             return 0
         if choice.lower() == "q":
             return 0
-        if not choice.isdigit() or not 1 <= int(choice) <= len(MENU):
+        idx = parse_choice(choice)
+        if idx is None:
             print(f"无效编号：{choice or '（空）'}——请输入 1-{len(MENU)} 或 q")
             print()
             continue
-        run_choice(MENU[int(choice) - 1])
+        run_choice(MENU[idx - 1])
         print()
 
 

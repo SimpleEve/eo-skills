@@ -70,7 +70,7 @@ eo-helper · eo-skills 日常入口（选数字，q 退出）
 | `--port PORT` | `--serve` | 监听端口（默认 7333） |
 | `--no-open` | `--html` / `--serve` | 生成/启动后不自动打开浏览器 |
 
-不合法组合（会直接报错）：`--all --project`、`--register`/`--unregister` 混用 `--html`/`--serve`/`--all`/`--project`/`-o`、`-o` 用在非 `--html` 模式、`--scan` 用在非 `--all` 模式。
+不合法组合（会直接报错）：`--all --project`、`--register`/`--unregister` 混用 `--html`/`--serve`/`--all`/`--project`/`-o`、`-o` 用在非 `--html` 模式、`--scan` 用在非 `--all` 模式、`--port` 用在非 `--serve` 模式、`--no-open` 用在非 `--html`/`--serve` 模式。
 
 ### 示例
 
