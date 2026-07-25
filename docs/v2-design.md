@@ -467,6 +467,7 @@ install.sh 是逐目录软链，跨 skill 相对路径引用不可靠。方案�
 ## 15. 展望：生态划界与候选技能（不在 v2 范围）
 
 - **eo-board server 独立立项**：多项目看板 server（实时推送、点击交互、聚合视图）不进 eo-skills 仓库——server 是有自己变更节奏的独立产品，与「md 文件 + 软链」的分发模型不兼容。定位为**重做后 eo-platform 的第一个垂直切片**（旧 platform 设计已废弃；围绕看板这个具体需求重启，比抽象注册表先行健康）。第一版严格只读；写操作必须 shell out 给 skill/CLI，绝不直接改文件（防止长成第二真相源）。消费 §13 文件契约；建议作为 v2 工作流的第一个狗粮项目。
+  > ⚠️ 2026-07-24 注记（见 decisions/2026-07-24-dashboard-deprecated-board-cli.md）：本条规划的独立仓库（eo-dashboard）已建成后**废弃**，activity 观测需求彻底放弃；「勿成第二真相源、重产品独立节奏」的精神条款收编为 cli/eo-board 四条宪法，cli/eo-board 成为唯一呈现层（单/多项目一体）。dashboard 遗留的 `~/.eo/workbench.json` 已无任何 eo 工具读取，用户可自行删除（eo 工具不代删）；多项目注册表现为 `~/.eo/projects.json`。
 - **候选技能决策池**（全文见 vault research/v2/《竞品-外围skill生态与候选补充》）：
   - ~~eo-investigate~~ → 已并入 v2 的 eo-fix 深挖模式（§5.2）；
   - lessons 消费机制 → 已并入 v2（§3.1）；
