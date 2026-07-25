@@ -805,10 +805,12 @@ def _watch_key(cfg):
 def watch_project_tick(state, label, cfg_path, runner=_run_once):
     """单项目单轮：基线键（freshness + 配置指纹）比对短路；键变则进程内调用既有 run 编排。
 
-    结果矩阵：退出 0/1 → run 后重算键记基线（吸收 identity 回写的 mtime 变化，防自触发循环；
-    部分失败同样记基线，防对持续性故障忙循环）；2（锁占用）→ 不记基线，打一行跳过提示；
-    异常（含 run 后重算异常）→ 不记基线，按（项目, 错误指纹）抑制告警。首轮无基线视为键已变；
-    配置故障轮丢弃旧基线，恢复轮必然重新 run 并借成功路径清空抑制。
+    结果矩阵：退出 0/1 → run 后重算键，**与 run 前键一致才记基线**——不一致说明窗口内有
+    无法归因于本次 run 的新状态（第三方流转，或自身回写；键粒度无法区分，一律视为不能证明），
+    不记基线，下轮重 run（幂等，多跑一轮无害且必然追平），绝不把未投影的流转吸收进基线；
+    2（锁占用）→ 不记基线，打一行跳过提示；异常（含 run 后重算异常）→ 不记基线，
+    按（项目, 错误指纹）抑制告警。首轮无基线视为键已变；配置故障轮丢弃旧基线，
+    恢复轮必然重新 run 并借成功路径清空抑制。
     """
     key_id = str(cfg_path)
     try:
@@ -839,9 +841,15 @@ def watch_project_tick(state, label, cfg_path, runner=_run_once):
         _watch_warn(state, key_id, f"run:recompute:{type(e).__name__}:{e}",
                     f"[eo-sync watch] ⚠ {label}：run 后基线重算失败（{e}），下一轮重试")
         return
-    state["baselines"][key_id] = new_key
     _clear_suppression(state, key_id)
-    tail = "" if rc == EXIT_OK else "（部分失败，详见上方告警；下一轮无新变化时静默）"
+    parts = []
+    if rc != EXIT_OK:
+        parts.append("部分失败，详见上方告警")
+    if new_key == fkey:
+        state["baselines"][key_id] = new_key
+    else:
+        parts.append("同步期间检测到新变化，下一轮复跑确认")
+    tail = f"（{'；'.join(parts)}）" if parts else ""
     print(f"[eo-sync watch] ✓ {label} 已同步 @ {datetime.now().strftime('%H:%M:%S')}{tail}", file=sys.stderr)
 
 

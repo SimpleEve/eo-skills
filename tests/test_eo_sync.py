@@ -986,6 +986,26 @@ class WatchTests(unittest.TestCase):
         err = self._tick(state, runner)
         self.assertIn("⚠", err)  # 恢复后抑制清除，再故障重新告警
 
+    def test_post_run_window_transition_not_absorbed_into_baseline(self):
+        state, calls = self._state(), []
+
+        def run_with_concurrent_transition(cfg):
+            calls.append(1)
+            self._bump_change()  # 模拟同步窗口内落地的第三方流转（run 已扫过旧状态）
+            return 0
+
+        err = self._tick(state, run_with_concurrent_transition)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("下一轮复跑", err)
+        self.assertEqual(state["baselines"], {})  # 无法归因的键变绝不吸收进基线
+        err = self._tick(state, lambda cfg: calls.append(1) or 0)
+        self.assertEqual(len(calls), 2)  # 下一轮幂等复跑追平
+        self.assertIn("已同步", err)
+        self.assertEqual(len(state["baselines"]), 1)  # 复跑无新变化后基线落定
+        err = self._tick(state, lambda cfg: calls.append(1) or 0)
+        self.assertEqual(len(calls), 2)  # 收敛：回到短路静默
+        self.assertEqual(err, "")
+
     def test_post_run_recompute_exception_stays_in_matrix(self):
         import unittest.mock as mock
         from eo_lib import compute_freshness_key as real_key
