@@ -897,6 +897,61 @@ def watch_scope(state, args, bare_cfg_path=None):
     return [(bare_cfg_path.parent.name, bare_cfg_path)]
 
 
+def _watch_lock_dir():
+    home = os.environ.get("EO_HOME") or str(Path.home() / ".eo")
+    return Path(home) / "sync-state"
+
+
+def _watch_lock_path(args, bare_cfg_path):
+    """作用域锁文件：--all 一把全局锁；项目域（--project/裸 watch）按 repo identity 一仓一把。
+    项目无法解析时返回 None（不加锁，作用域内的既有逐轮告警继续兜底）。"""
+    if args.all:
+        return _watch_lock_dir() / "watch-all.lock"
+    cfg_path = bare_cfg_path
+    if args.project:
+        cfg_path = find_project_config(Path(args.project).expanduser().resolve())
+    if cfg_path is None:
+        return None
+    try:
+        name = json.loads(cfg_path.read_text(encoding="utf-8")).get("project_name") or cfg_path.parent.name
+    except (ValueError, OSError, AttributeError):
+        name = cfg_path.parent.name
+    hash8 = hashlib.sha256(repo_identity(cfg_path.parent).encode("utf-8")).hexdigest()[:8]
+    return _watch_lock_dir() / f"watch-{name}-{hash8}.lock"
+
+
+def _lock_held_by(lock_path):
+    """有活跃 flock 持有者 → 返回其 holder dict（读不出内容给空 dict）；否则 None。
+    以 flock 探测为准：能非阻塞取到即无人持有（取到即放），不以文件存在性判活。"""
+    if fcntl is None or not lock_path.is_file():
+        return None
+    try:
+        fd = os.open(str(lock_path), os.O_RDWR)
+    except OSError:
+        return None
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        os.close(fd)
+        return _read_lock_holder(lock_path) or {}
+    fcntl.flock(fd, fcntl.LOCK_UN)
+    os.close(fd)
+    return None
+
+
+def _warn_scope_overlap(args, lock_dir):
+    if args.all:
+        peers = sorted(p for p in lock_dir.glob("watch-*.lock") if p.name != "watch-all.lock")
+    else:
+        peers = [lock_dir / "watch-all.lock"]
+    for peer in peers:
+        holder = _lock_held_by(peer)
+        if holder is None:
+            continue
+        print(f"[eo-sync watch] ⚠ 作用域重叠：{peer.stem} 已在运行（pid {holder.get('pid', '?')}）"
+              "——仅提示不阻止，两个 watch 会各自轮询", file=sys.stderr)
+
+
 def cmd_watch(args, bare_cfg_path=None):
     if args.interval < 1:
         print("❌ --interval 下限为 1 秒", file=sys.stderr)
@@ -913,8 +968,21 @@ def cmd_watch(args, bare_cfg_path=None):
         scope_desc = f"--project {args.project}"
     else:
         scope_desc = str(bare_cfg_path.parent)
-    print(f"eo-sync watch 已启动（间隔 {args.interval:g}s · 作用域 {scope_desc}；Ctrl+C 停止）", file=sys.stderr)
+    lock_fd = None
+    lock_path = _watch_lock_path(args, bare_cfg_path)
+    if lock_path is not None:
+        lock_fd, holder = acquire_lock(lock_path)
+        if lock_fd is None:
+            pid = holder.get("pid", "?") if isinstance(holder, dict) else "?"
+            at = holder.get("at") if isinstance(holder, dict) else None
+            started = (time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(at))
+                       if isinstance(at, (int, float)) else "未知")
+            print(f"❌ 同作用域 watch 已在运行（作用域 {scope_desc}，持有者 pid {pid}，启动于 {started}）",
+                  file=sys.stderr)
+            return EXIT_LOCKED
+        _warn_scope_overlap(args, lock_path.parent)
     try:
+        print(f"eo-sync watch 已启动（间隔 {args.interval:g}s · 作用域 {scope_desc}；Ctrl+C 停止）", file=sys.stderr)
         while True:
             for label, cfg_path in watch_scope(state, args, bare_cfg_path):
                 watch_project_tick(state, label, cfg_path)
@@ -922,6 +990,9 @@ def cmd_watch(args, bare_cfg_path=None):
     except KeyboardInterrupt:
         print("\neo-sync watch 已停止。", file=sys.stderr)
         return EXIT_OK
+    finally:
+        if lock_fd is not None:
+            release_lock(lock_fd)
 
 
 # --------------------------------------------------------------------------- 入口
