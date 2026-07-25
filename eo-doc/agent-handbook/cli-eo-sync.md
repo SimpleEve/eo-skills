@@ -13,7 +13,7 @@ summary: >
 conclusions:
   - 严格单向：适配器 plan 是纯函数、apply 只写自己的目标介质，永不写仓库文件；SoT 回写（identity_fields）与簿记由核统一执行
   - 持锁 scan→plan→apply 全链：权威计划只在锁内生成；快照与 snapshot_complete 是单一原子结构，不可证完整时孤儿删除一律跳过（fail-safe）
-  - 触发点：archive 收口自动一次 + 手动 run；watch 自动档已获准（并入 C3 实施）
+  - 触发点：archive 收口自动一次 + 手动 run + watch 常驻自动档（三者对适配器透明）
 ---
 
 投影层唯一写入面。发现 `eo-sync-*`（PATH 前缀）≠ 执行（须合并配置 `sync` 段或存量 `board`/`github` 段兼容映射启用）。
@@ -29,7 +29,7 @@ conclusions:
 | 锁 | `acquire_lock` / `_lock_is_stale` | flock + pid/时间戳；陈锁（>10min 且 pid 死）自清重试一次；后到者非零退出 |
 | 回写 | `validate_identity_ownership` + apply 后统一回写 | 字段 ∈ 声明的 `identity_fields`、键名校验、保留键黑名单、同名冲突 fail-closed、非空不覆盖、保序插入（eo_lib `upsert_frontmatter_fields`） |
 
-子命令：`run [--dry-run] [--change <id>] [--target <name>]`、`adapters`。退出码 0/1/2（全成/部分失败/锁占用）。`--change` 过滤时快照标记不完整，孤儿删除自动跳过。
+子命令：`run [--dry-run] [--change <id>] [--target <name>]`、`adapters`、`watch [--interval N(默认10)] [--all|--project <path>]`（freshness+配置指纹双维基线、K_post≠K_pre 不记基线防吞流转、四态结果矩阵、告警按项目×错误指纹抑制、--all 每轮重读注册表、SIGTERM 干净退出）。退出码 0/1/2（全成/部分失败/锁占用）。`--change` 过滤时快照标记不完整，孤儿删除自动跳过。
 
 ## 内置适配器
 

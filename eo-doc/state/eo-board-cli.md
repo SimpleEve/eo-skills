@@ -23,6 +23,9 @@ conclusions:
 | `eo-board` | 终端摘要：状态分列 + backlog + 警告 + 统计 |
 | `eo-board --html [-o 路径]` | 自包含静态 HTML 快照，自动开浏览器 |
 | `eo-board --serve` | 本地只读服务（127.0.0.1:7333），页面每 3 秒热刷新 |
+| `eo-board --all [--scan 父目录]` | 多项目总览：每注册项目一行（状态计数+backlog+as-of） |
+| `eo-board --project <路径\|名>` | 任意目录下钻单项目视图 |
+| `eo-board --register / --unregister` | 维护 ~/.eo/projects.json 注册表 |
 
 ## 配置解析规则
 

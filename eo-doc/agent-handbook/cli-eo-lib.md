@@ -26,6 +26,7 @@ conclusions:
 | `gitio.py` | `run_git` / `list_worktrees` / `list_worktrees_status`（降级感知枚举，供快照完整性判定） | git 子进程封装（15s 超时、失败返空串）；worktree 枚举（porcelain 解析 + 分支名覆盖） |
 | `frontmatter.py` | `split_frontmatter` / `parse_yaml_subset` / `parse_yaml_scalar` / `unquote` / `upsert_frontmatter_fields`（保序回写：已存字段原地换值、新字段 frontmatter 尾插） | 手写 YAML 子集（容错、BOM、行内注释、`[a,b]` 列表；不支持多行值/嵌套对象） |
 | `changes.py`（249 行） | `parse_change_file` / `scan_all_changes` / `parse_ac_section` / `parse_todo_section` / `parse_oq_section` / `count_ac` / `count_todo` | change.md 各节解析与多 worktree 扫描（同 id 取状态最高者、seq 撞号告警） |
+| `registry.py` | `load_registry` / `register` / `unregister` / `entry_path` | 生态项目注册表 `${EO_HOME:-$HOME/.eo}/projects.json`：schema v1、原子写、未知字段保留、损坏报错不清空；去重键=`gitio.repo_identity()`（与 eo-sync 簿记 hash8 同源单一 API） |
 | `freshness.py`（69 行） | `compute_freshness_key(cfg)` | 缓存新鲜度键：当天日期 + worktree(路径,分支,HEAD) 三元组集 + `for-each-ref` sha256 指纹 + changes 树 max-mtime + backlog/roadmap mtime |
 
 ## 使用约束
