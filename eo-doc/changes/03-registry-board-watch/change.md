@@ -74,7 +74,7 @@ created: 2026-07-25
 
 ### Batch 2b（eo-sync watch）
 
-- [ ] TODO-6 `watch` 子命令：轮询语义按 §5.3（首轮必 run、键短路、四态结果矩阵与基线更新、锁占跳过、告警抑制与恢复、`--all` 每轮重读注册表、`--project` 显式作用域、SIGINT/SIGTERM 干净退出）；main 的 cwd 配置解析对 `watch --all` / `watch --project` 放行（文件：修改: cli/eo-sync、tests/test_eo_sync.py；对应 AC-6、AC-7、AC-8、AC-9 的 watch 半边、AC-11；完成判据：四态矩阵逐格有单测（0/1 记基线、2/异常不记且重试）+ 告警抑制与恢复用例绿）
+- [x] TODO-6 `watch` 子命令：轮询语义按 §5.3（首轮必 run、键短路、四态结果矩阵与基线更新、锁占跳过、告警抑制与恢复、`--all` 每轮重读注册表、`--project` 显式作用域、SIGINT/SIGTERM 干净退出）；main 的 cwd 配置解析对 `watch --all` / `watch --project` 放行（文件：修改: cli/eo-sync、tests/test_eo_sync.py；对应 AC-6、AC-7、AC-8、AC-9 的 watch 半边、AC-11；完成判据：四态矩阵逐格有单测（0/1 记基线、2/异常不记且重试）+ 告警抑制与恢复用例绿）
 
 ### Batch 3（文档口径）
 

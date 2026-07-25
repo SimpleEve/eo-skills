@@ -797,5 +797,195 @@ class AtomicScanTests(unittest.TestCase):
             self.assertIn("worktree 枚举降级", scan["reasons"])
 
 
+class WatchTests(unittest.TestCase):
+    """watch 四态结果矩阵逐格 + 告警抑制/恢复 + --all 每轮重读注册表 + main 分派放行与干净退出。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name).resolve()
+        self.eo_home = self.root / "eo-home"
+        import unittest.mock as mock
+        patcher = mock.patch.dict(os.environ, {"EO_HOME": str(self.eo_home)})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.repo = init_repo(self.root, {
+            "project_name": "p", "mode": "local", "project_root": str(self.root / "pm"),
+            "doc_root": "eo-doc", "sync": None,
+        }, changes=[{"cid": "c1", "seq": 1}])
+        self.cfg_path = self.repo / ".eo-project.json"
+
+    def _state(self):
+        return {"baselines": {}, "suppressed": set()}
+
+    def _tick(self, state, runner, label="p"):
+        import contextlib
+        import io
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            eo_sync.watch_project_tick(state, label, self.cfg_path, runner=runner)
+        return err.getvalue()
+
+    def _bump_change(self):
+        p = self.repo / "eo-doc" / "changes" / "01-c1" / "change.md"
+        ts = time.time() + 10
+        os.utime(p, (ts, ts))
+
+    def test_matrix_exit0_records_baseline_then_short_circuits(self):
+        state, calls = self._state(), []
+        runner = lambda cfg: calls.append(1) or 0
+        err = self._tick(state, runner)
+        self.assertEqual(len(calls), 1)  # 首轮无基线视为键已变
+        self.assertIn("已同步", err)
+        err = self._tick(state, runner)
+        self.assertEqual(len(calls), 1)  # 短路轮零输出
+        self.assertEqual(err, "")
+        self._bump_change()
+        self._tick(state, runner)
+        self.assertEqual(len(calls), 2)  # 键变才 run
+
+    def test_matrix_exit1_partial_failure_also_records_baseline(self):
+        state, calls = self._state(), []
+        runner = lambda cfg: calls.append(1) or 1
+        err = self._tick(state, runner)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("部分失败", err)
+        err = self._tick(state, runner)
+        self.assertEqual(len(calls), 1)  # 不对持续性故障忙循环重试
+        self.assertEqual(err, "")
+
+    def test_matrix_exit2_locked_no_baseline_and_retries(self):
+        state, calls = self._state(), []
+        runner = lambda cfg: calls.append(1) or 2
+        err = self._tick(state, runner)
+        self.assertIn("锁被占用", err)
+        err = self._tick(state, runner)
+        self.assertEqual(len(calls), 2)  # 基线未记，下一轮自动重试
+        self.assertIn("锁被占用", err)
+
+    def test_matrix_exception_no_baseline_warn_suppressed_then_recovers(self):
+        state, calls = self._state(), []
+
+        def boom(cfg):
+            calls.append(1)
+            raise RuntimeError("boom")
+
+        err1 = self._tick(state, boom)
+        self.assertIn("boom", err1)
+        err2 = self._tick(state, boom)
+        self.assertEqual(len(calls), 2)  # 自动重试
+        self.assertEqual(err2, "")  # 同一错误指纹只告警一次
+        # 恢复：成功 run 清除抑制记录，再故障可重新告警
+        self._tick(state, lambda cfg: 0)
+        self._bump_change()
+        err3 = self._tick(state, boom)
+        self.assertIn("boom", err3)
+
+    def test_config_error_suppressed_and_auto_recovers(self):
+        state, calls = self._state(), []
+        good = self.cfg_path.read_text(encoding="utf-8")
+        self.cfg_path.write_text("{broken", encoding="utf-8")
+        err1 = self._tick(state, lambda cfg: calls.append(1) or 0)
+        self.assertIn("⚠", err1)
+        err2 = self._tick(state, lambda cfg: calls.append(1) or 0)
+        self.assertEqual(err2, "")  # 抑制不刷屏
+        self.assertEqual(calls, [])
+        self.cfg_path.write_text(good, encoding="utf-8")
+        err3 = self._tick(state, lambda cfg: calls.append(1) or 0)
+        self.assertEqual(len(calls), 1)  # 修复后自动重新纳入
+        self.assertIn("已同步", err3)
+
+    def _scope(self, state, all_=False, project=None, bare=None):
+        import argparse
+        import contextlib
+        import io
+        args = argparse.Namespace(all=all_, project=project)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            scope = eo_sync.watch_scope(state, args, bare)
+        return scope, err.getvalue()
+
+    def test_all_rereads_registry_each_round_and_isolates_bad_entries(self):
+        from eo_lib import register_project
+        state = self._state()
+        register_project(self.repo, "p")
+        scope, _ = self._scope(state, all_=True)
+        self.assertEqual(len(scope), 1)
+        # watch 期间新注册 → 下一轮即纳入
+        (self.root / "second").mkdir()
+        repo2 = init_repo(self.root / "second", {
+            "project_name": "q", "mode": "local", "project_root": str(self.root / "pm2"),
+            "doc_root": "eo-doc", "sync": None,
+        })
+        register_project(repo2, "q")
+        scope, _ = self._scope(state, all_=True)
+        self.assertEqual(len(scope), 2)
+        # 失效路径：告警一次并跳过，其余项目不受影响；恢复后重新纳入且抑制清除
+        import json as _json
+        reg_file = self.eo_home / "projects.json"
+        data = _json.loads(reg_file.read_text(encoding="utf-8"))
+        data["projects"].append({"name": "ghost", "path": str(self.root / "gone"), "registered_at": "2026-07-25"})
+        reg_file.write_text(_json.dumps(data), encoding="utf-8")
+        scope, err = self._scope(state, all_=True)
+        self.assertEqual(len(scope), 2)
+        self.assertIn("ghost", err)
+        scope, err = self._scope(state, all_=True)
+        self.assertEqual(err, "")  # 同一故障不逐轮刷屏
+        gone = self.root / "gone"
+        (gone / "eo-doc").mkdir(parents=True)
+        (gone / ".eo-project.json").write_text(self.cfg_path.read_text(encoding="utf-8"), encoding="utf-8")
+        scope, _ = self._scope(state, all_=True)
+        self.assertEqual(len(scope), 3)  # 修复后自动重新纳入
+        self.assertNotIn((str(gone), "missing-config"), state["suppressed"])
+
+    def test_all_empty_registry_hints_once(self):
+        state = self._state()
+        scope, err = self._scope(state, all_=True)
+        self.assertEqual(scope, [])
+        self.assertIn("--register", err)
+        scope, err = self._scope(state, all_=True)
+        self.assertEqual(err, "")
+
+    def test_project_scope_resolves_from_anywhere(self):
+        state = self._state()
+        scope, _ = self._scope(state, project=str(self.repo))
+        self.assertEqual(scope, [(self.repo.name, self.cfg_path)])
+        scope, err = self._scope(state, project=str(self.root / "nowhere"))
+        self.assertEqual(scope, [])
+        self.assertIn("未找到", err)
+
+    def test_bare_scope_uses_cwd_config(self):
+        state = self._state()
+        scope, _ = self._scope(state, bare=self.cfg_path)
+        self.assertEqual(scope, [(self.repo.name, self.cfg_path)])
+
+    def test_interval_below_floor_rejected(self):
+        import argparse
+        import contextlib
+        import io
+        args = argparse.Namespace(interval=0.5, all=True, project=None)
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            rc = eo_sync.cmd_watch(args)
+        self.assertEqual(rc, eo_sync.EXIT_FAILURE)
+        self.assertIn("下限", err.getvalue())
+
+    def test_main_allows_watch_all_outside_project_and_sigterm_clean_exit(self):
+        import signal as _signal
+        outside = self.root / "outside"
+        outside.mkdir()
+        env = dict(os.environ)
+        env["EO_HOME"] = str(self.eo_home)
+        proc = subprocess.Popen(
+            [sys.executable, str(EO_SYNC), "watch", "--all", "--interval", "1"],
+            cwd=outside, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        time.sleep(1.5)
+        proc.send_signal(_signal.SIGTERM)
+        _, err = proc.communicate(timeout=10)
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn("已停止", err)
+        self.assertNotIn("未找到 .eo-project.json", err)
+
+
 if __name__ == "__main__":
     unittest.main()

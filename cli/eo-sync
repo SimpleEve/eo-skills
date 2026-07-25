@@ -4,6 +4,7 @@
 子命令：
   eo-sync run [--dry-run] [--change <id>] [--target <name>]   持锁编排一次同步
   eo-sync adapters                                            列出 PATH 上发现的适配器与其 capabilities
+  eo-sync watch [--interval N] [--all | --project <path>]     常驻轮询：freshness 键变才 run
 
 核只做：发现（PATH 前缀 eo-sync-*）、配置解析与兼容映射、持锁编排、SoT 身份字段回写、簿记持久化。
 适配器（同协议、同发现路径、无后门）只算投影 + 写自己的目标介质，永不写代码仓库文件。
@@ -16,6 +17,7 @@ import hashlib
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -32,9 +34,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from eo_lib import (
     ConfigError,
+    compute_freshness_key,
     count_ac,
     count_todo,
     find_project_config,
+    load_registry,
+    registry_path,
     list_worktrees,
     list_worktrees_status,
     load_project_config,
@@ -766,6 +771,129 @@ def cmd_adapters(cfg, args):
     return EXIT_OK
 
 
+# --------------------------------------------------------------------------- watch
+
+def _watch_warn(state, project_key, fingerprint, message):
+    """（项目, 错误指纹）级告警抑制：同一故障常驻期间只告警一次，不逐轮刷屏。"""
+    token = (project_key, fingerprint)
+    if token in state["suppressed"]:
+        return
+    state["suppressed"].add(token)
+    print(message, file=sys.stderr)
+
+
+def _clear_suppression(state, project_key):
+    state["suppressed"] = {t for t in state["suppressed"] if t[0] != project_key}
+
+
+def _run_once(cfg):
+    return cmd_run(cfg, argparse.Namespace(dry_run=False, change=None, target=None))
+
+
+def watch_project_tick(state, label, cfg_path, runner=_run_once):
+    """单项目单轮：freshness 键与基线比对短路；键变则进程内调用既有 run 编排。
+
+    结果矩阵：退出 0/1 → run 后重算键记基线（吸收 identity 回写的 mtime 变化，防自触发循环；
+    部分失败同样记基线，防对持续性故障忙循环）；2（锁占用）→ 不记基线，打一行跳过提示；
+    异常 → 不记基线，按（项目, 错误指纹）抑制告警。首轮无基线视为键已变。
+    """
+    key_id = str(cfg_path)
+    try:
+        cfg = load_project_config(cfg_path)
+        fkey = compute_freshness_key(cfg)
+    except ConfigError as e:
+        _watch_warn(state, key_id, f"cfg:{e}", f"[eo-sync watch] ⚠ {label}：{e}（已跳过，修复后自动恢复）")
+        return
+    except Exception as e:
+        _watch_warn(state, key_id, f"cfg:{type(e).__name__}:{e}", f"[eo-sync watch] ⚠ {label}：加载失败（{e}），已跳过")
+        return
+    if state["baselines"].get(key_id) == fkey:
+        return
+    try:
+        rc = runner(cfg)
+    except Exception as e:
+        _watch_warn(state, key_id, f"run:{type(e).__name__}:{e}", f"[eo-sync watch] ⚠ {label}：run 异常（{e}），下一轮重试")
+        return
+    if rc == EXIT_LOCKED:
+        print(f"[eo-sync watch] ⏸ {label}：锁被占用，本轮跳过，下一轮自动追平", file=sys.stderr)
+        return
+    state["baselines"][key_id] = compute_freshness_key(cfg)
+    _clear_suppression(state, key_id)
+    tail = "" if rc == EXIT_OK else "（部分失败，详见上方告警；下一轮无新变化时静默）"
+    print(f"[eo-sync watch] ✓ {label} 已同步 @ {datetime.now().strftime('%H:%M:%S')}{tail}", file=sys.stderr)
+
+
+def watch_scope(state, args, bare_cfg_path=None):
+    """算本轮作用域 [(label, cfg_path)]。--all 每轮重读注册表（watch 期间新注册项目下一轮即纳入）；
+    单项目故障只影响该行，循环与其余项目不受影响。"""
+    if args.all:
+        try:
+            reg = load_registry()
+        except ConfigError as e:
+            _watch_warn(state, "<registry>", f"corrupt:{e}", f"[eo-sync watch] ⚠ {e}")
+            return []
+        state["suppressed"] = {t for t in state["suppressed"]
+                               if not (t[0] == "<registry>" and t[1].startswith("corrupt:"))}
+        entries = reg.get("projects") or []
+        if not entries:
+            _watch_warn(state, "<registry>", "empty",
+                        f"[eo-sync watch] 注册表为空（{registry_path()}）——在项目目录运行 eo-board --register 注册后自动纳入")
+            return []
+        state["suppressed"].discard(("<registry>", "empty"))
+        scope = []
+        for entry in entries:
+            if not isinstance(entry, dict) or not entry.get("path"):
+                _watch_warn(state, "<registry>", f"entry:{entry!r}",
+                            f"[eo-sync watch] ⚠ 注册条目非法，已跳过：{entry!r}")
+                continue
+            path = Path(entry["path"])
+            cfg_path = path / ".eo-project.json"
+            if not cfg_path.is_file():
+                _watch_warn(state, str(path), "missing-config",
+                            f"[eo-sync watch] ⚠ {entry.get('name') or path.name}：路径失效或缺 .eo-project.json（{path}），已跳过")
+                continue
+            state["suppressed"].discard((str(path), "missing-config"))
+            scope.append((entry.get("name") or path.name, cfg_path))
+        return scope
+    if args.project:
+        start = Path(args.project).expanduser().resolve()
+        cfg_path = find_project_config(start)
+        if cfg_path is None:
+            _watch_warn(state, str(start), "missing-config",
+                        f"[eo-sync watch] ⚠ 未找到 .eo-project.json（自 {start} 向上），已跳过")
+            return []
+        state["suppressed"].discard((str(start), "missing-config"))
+        return [(cfg_path.parent.name, cfg_path)]
+    return [(bare_cfg_path.parent.name, bare_cfg_path)]
+
+
+def cmd_watch(args, bare_cfg_path=None):
+    if args.interval < 1:
+        print("❌ --interval 下限为 1 秒", file=sys.stderr)
+        return EXIT_FAILURE
+    state = {"baselines": {}, "suppressed": set()}
+
+    def _sigterm(signum, frame):
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, _sigterm)
+    if args.all:
+        scope_desc = f"--all（{registry_path()}）"
+    elif args.project:
+        scope_desc = f"--project {args.project}"
+    else:
+        scope_desc = str(bare_cfg_path.parent)
+    print(f"eo-sync watch 已启动（间隔 {args.interval:g}s · 作用域 {scope_desc}；Ctrl+C 停止）", file=sys.stderr)
+    try:
+        while True:
+            for label, cfg_path in watch_scope(state, args, bare_cfg_path):
+                watch_project_tick(state, label, cfg_path)
+            time.sleep(args.interval)
+    except KeyboardInterrupt:
+        print("\neo-sync watch 已停止。", file=sys.stderr)
+        return EXIT_OK
+
+
 # --------------------------------------------------------------------------- 入口
 
 def build_arg_parser():
@@ -782,6 +910,13 @@ def build_arg_parser():
     p_run.add_argument("--target", metavar="NAME", help="只跑指定适配器")
 
     sub.add_parser("adapters", help="列出 PATH 上发现的适配器与其 capabilities")
+
+    p_watch = sub.add_parser("watch", help="常驻轮询：freshness 键变才 run，键不变零成本跳过")
+    p_watch.add_argument("--interval", type=float, default=10.0, metavar="N",
+                         help="轮询间隔秒数（默认 10，下限 1）")
+    scope = p_watch.add_mutually_exclusive_group()
+    scope.add_argument("--all", action="store_true", help="追平注册表全部项目（每轮重读，无需在项目内运行）")
+    scope.add_argument("--project", metavar="PATH", help="只追平指定路径的项目（无需 cd）")
     return parser
 
 
@@ -791,6 +926,10 @@ def main(argv=None):
     if not args.command:
         parser.print_help()
         return EXIT_OK
+
+    # watch --all / --project 是显式作用域，不要求 cwd 在任何项目内；裸 watch 沿用 cwd 解析与既有报错
+    if args.command == "watch" and (args.all or args.project):
+        return cmd_watch(args)
 
     cfg_path = find_project_config(Path.cwd())
     if cfg_path is None:
@@ -809,6 +948,8 @@ def main(argv=None):
             return cmd_run(cfg, args)
         if args.command == "adapters":
             return cmd_adapters(cfg, args)
+        if args.command == "watch":
+            return cmd_watch(args, bare_cfg_path=cfg["config_path"])
     except ConfigError as e:
         print(f"❌ {e}", file=sys.stderr)
         return EXIT_FAILURE
