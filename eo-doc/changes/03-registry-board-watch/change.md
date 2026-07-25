@@ -3,14 +3,14 @@ id: registry-board-watch
 seq: 3
 title: 项目注册表 + eo-board 多项目聚合 + eo-sync watch
 summary: 新建 ~/.eo/projects.json 生态注册表；eo-board 多项目聚合与下钻；eo-sync watch 自动追平投影
-status: reviewed
+status: archived
 tier: full
 type: feature
 base_commit: 85ad4fccba8c983e4c104b8c78b00b00a14ca9c7
 plan_revision: 1
 fix_rounds: 2
 fix_consumed: ["review#1", "test#1"]
-commits: []
+commits: ["8290253", "3714a74", "c9d67a1", "8b30a1c", "5da41b8", "1365fcb", "ae894d8", "6dd44ce", "89ed12a"]
 issue: ~
 pr: ~
 created: 2026-07-25
