@@ -45,10 +45,10 @@ created: 2026-07-25
 - [x] AC-1 用户跑 `eo-board --all --html` 得到自包含聚合快照：每个注册项目一个区块（状态计数 + backlog 数 + as-of 戳），失效/非法条目行内显示错误不缺席不中断；`-o` 指定输出路径与单项目 `--html` 语义一致（验证：≥2 个注册项目 + 1 条坏路径条目下生成并打开）
 - [x] AC-2 用户跑 `eo-board --all --serve` 得到多项目一页看板，某项目 change 状态流转后页面在轮询间隔内自动刷新；数据无变化的重复请求命中缓存（stderr hit 诊断），同项目并发请求只触发一次重扫（验证：挂 serve 后手改一个 change 的 status 观察页面；缓存/单飞以 `build_data` 调用计数断言为准——稳定键重复请求计数不增、同槽并发只增 1，stderr hit/miss 仅作辅助观察）
 - [x] AC-3 serve 挂起期间新注册的项目无需重启即出现在聚合页（每轮重读注册表）；注册表缺失/为空时页面显示注册指引而非空页或报错（验证：serve 挂起时在新项目目录 `eo-board --register` 后刷新页面）
-- [ ] AC-4 用户在任意目录运行 `eo-helper` 看到数字菜单（条目清单见 §5.2），选数字后**先回显将执行的底层命令再执行**，用户可据此渐进学会原生命令
-- [ ] AC-5 转发不复制逻辑：底层命令的输出与报错原样透传；短命令（同步一次/终端速览等）结束后回到菜单，失败时非零退出状态明确回显（非零状态可见，不静默）；长驻命令（serve/watch）接管前台且 Ctrl+C 行为与直接运行一致
-- [ ] AC-6 异常路径：stdin 非 TTY 时 `eo-helper` 打印菜单↔命令对照表后直接退出（不挂起等输入）；输入非法编号提示重选；菜单态按 Ctrl+D（EOF）/Ctrl+C 与 `q` 同款干净退出（无 traceback）；在无 `.eo-project.json` 的目录选项目级条目时原样转发、用户看到的是底层 CLI 自己的报错与 init 指引（helper 不自检配置），全局选项（多项目看板/看板自动跟手）照常可用（验证：`echo | eo-helper` 看对照表退出；在 $HOME 下逐项试）
-- [ ] AC-7 `sh install.sh` 后 `eo-helper` 在 PATH 可用，安装完成提示以 eo-helper 为主推入口（验证：临时前缀安装后 `command -v eo-helper`）
+- [x] AC-4 用户在任意目录运行 `eo-helper` 看到数字菜单（条目清单见 §5.2），选数字后**先回显将执行的底层命令再执行**，用户可据此渐进学会原生命令
+- [x] AC-5 转发不复制逻辑：底层命令的输出与报错原样透传；短命令（同步一次/终端速览等）结束后回到菜单，失败时非零退出状态明确回显（非零状态可见，不静默）；长驻命令（serve/watch）接管前台且 Ctrl+C 行为与直接运行一致
+- [x] AC-6 异常路径：stdin 非 TTY 时 `eo-helper` 打印菜单↔命令对照表后直接退出（不挂起等输入）；输入非法编号提示重选；菜单态按 Ctrl+D（EOF）/Ctrl+C 与 `q` 同款干净退出（无 traceback）；在无 `.eo-project.json` 的目录选项目级条目时原样转发、用户看到的是底层 CLI 自己的报错与 init 指引（helper 不自检配置），全局选项（多项目看板/看板自动跟手）照常可用（验证：`echo | eo-helper` 看对照表退出；在 $HOME 下逐项试）
+- [x] AC-7 `sh install.sh` 后 `eo-helper` 在 PATH 可用，安装完成提示以 eo-helper 为主推入口（验证：临时前缀安装后 `command -v eo-helper`）
 - [ ] AC-8 README 用 `eo-helper` 一条命令讲完看板与同步入口，原全量 CLI 旗标细节移入 `docs/cli-reference.md` 且 README 给出链接；cli-reference 覆盖 eo-board/eo-sync/eo-helper 三命令全部参数（验证：README 正文 grep 不到 `--scan`/`--interval` 等深层旗标，也 grep 不到「投影」表述——该术语只留在协议与内部文档；对照 `--help` 核 cli-reference 完整性）
 - [ ] AC-9 README 重构后新用户视角通读顺畅——只需记 `eo-helper` 一条命令即可跑通「初始化后看板+同步」日常（人工:通读 README 安装→第一次使用→看板一节 → 过目认可）
 
@@ -62,8 +62,8 @@ created: 2026-07-25
 
 ### Batch 2（eo-helper 单一入口）
 
-- [ ] TODO-4 新增 `cli/eo-helper`：数字菜单循环（条目与交互按 §5.2），选项回显底层命令后转发；短命令 subprocess 前台执行完回菜单（非零退出状态回显）、长驻命令 `os.exec*` 接管进程；非 TTY 打印对照表退出、菜单态 EOF/Ctrl+C 干净退出；只维护固定 argv 映射、不读项目配置不做前检（项目级报错与 init 指引全部由底层 CLI 透传）；Python stdlib 单文件零第三方依赖（文件：新增: cli/eo-helper、tests/test_eo_helper.py；对应 AC-4、AC-5、AC-6）
-- [ ] TODO-5 安装接线：install.sh 的 cli 安装列表加 `eo-helper`，安装完成提示改为主推 `eo-helper`（文件：修改: install.sh；对应 AC-7）
+- [x] TODO-4 新增 `cli/eo-helper`：数字菜单循环（条目与交互按 §5.2），选项回显底层命令后转发；短命令 subprocess 前台执行完回菜单（非零退出状态回显）、长驻命令 `os.exec*` 接管进程；非 TTY 打印对照表退出、菜单态 EOF/Ctrl+C 干净退出；只维护固定 argv 映射、不读项目配置不做前检（项目级报错与 init 指引全部由底层 CLI 透传）；Python stdlib 单文件零第三方依赖（文件：新增: cli/eo-helper、tests/test_eo_helper.py；对应 AC-4、AC-5、AC-6）
+- [x] TODO-5 安装接线：install.sh 的 cli 安装列表加 `eo-helper`，安装完成提示改为主推 `eo-helper`（文件：修改: install.sh；对应 AC-7）
 
 ### Batch 3（命令面收纳）
 

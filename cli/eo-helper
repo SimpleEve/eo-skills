@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+"""eo-helper —— eo-skills 日常操作的数字菜单入口。
+
+薄壳：只维护「菜单编号 → 底层命令 argv」的固定映射，选择后先回显命令再执行。
+不读项目配置、不做任何前检——报错与 init 指引全部由底层 CLI 原样透传。
+只用标准库，零第三方依赖。
+"""
+
+import os
+import shutil
+import subprocess
+import sys
+
+# mode: "run" = 前台跑完回菜单（stdio 直通，非零退出码回显）；
+#       "exec" = os.exec* 替换进程（serve/watch 长驻，信号与退出码归底层 CLI）
+MENU = [
+    {"label": "本项目实时看板", "argv": ["eo-board", "--serve"], "mode": "exec"},
+    {"label": "所有项目一页看板", "argv": ["eo-board", "--all", "--serve"], "mode": "exec"},
+    {"label": "注册本项目到多项目看板", "argv": ["eo-board", "--register"], "mode": "run"},
+    {"label": "同步看板卡片（跑一次）", "argv": ["eo-sync", "run"], "mode": "run"},
+    {"label": "看板自动跟手（常驻）", "argv": ["eo-sync", "watch", "--all"], "mode": "exec"},
+    {"label": "终端速览：本项目", "argv": ["eo-board"], "mode": "run"},
+    {"label": "终端速览：所有项目", "argv": ["eo-board", "--all"], "mode": "run"},
+]
+
+INSTALL_HINT = "未找到命令 {cmd}——请先运行 sh install.sh 安装 CLI（或确认 ~/.local/bin 在 PATH 中）。"
+
+
+def disp_width(s):
+    # 终端对齐用：CJK 与全角按 2 列估宽，够用即可（不引第三方 wcwidth）
+    return sum(2 if ord(ch) > 0x2E7F or 0xFF00 <= ord(ch) <= 0xFFEF else 1 for ch in s)
+
+
+def menu_lines():
+    label_width = max(disp_width(item["label"]) for item in MENU)
+    lines = ["eo-helper · eo-skills 日常入口（选数字，q 退出）"]
+    for i, item in enumerate(MENU, start=1):
+        pad = " " * (label_width - disp_width(item["label"]))
+        lines.append(f"  {i}) {item['label']}{pad}  → {' '.join(item['argv'])}")
+    return lines
+
+
+def print_menu():
+    print("\n".join(menu_lines()))
+
+
+def run_choice(item):
+    argv = item["argv"]
+    cmd_str = " ".join(argv)
+    if shutil.which(argv[0]) is None:
+        print(INSTALL_HINT.format(cmd=argv[0]))
+        return
+    print(f"→ 正在执行：{cmd_str}")
+    sys.stdout.flush()
+    if item["mode"] == "exec":
+        os.execvp(argv[0], argv)
+        return  # 仅 exec 被测试替身拦下时到达
+    try:
+        rc = subprocess.run(argv).returncode
+    except KeyboardInterrupt:
+        rc = 130
+        print()
+    if rc != 0:
+        print(f"↑ {cmd_str} 退出码 {rc}")
+
+
+def main():
+    if len(sys.argv) > 1:
+        if sys.argv[1] in ("-h", "--help"):
+            print_menu()
+            return 0
+        print(f"未知参数：{sys.argv[1]}（eo-helper 不接受参数，直接运行后选数字）", file=sys.stderr)
+        return 2
+    if not sys.stdin.isatty():
+        # 脚本/管道场景：只给对照表，不挂起等输入、不拉起子进程
+        print_menu()
+        return 0
+    while True:
+        print_menu()
+        try:
+            choice = input("> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 0
+        if choice.lower() == "q":
+            return 0
+        if not choice.isdigit() or not 1 <= int(choice) <= len(MENU):
+            print(f"无效编号：{choice or '（空）'}——请输入 1-{len(MENU)} 或 q")
+            print()
+            continue
+        run_choice(MENU[int(choice) - 1])
+        print()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

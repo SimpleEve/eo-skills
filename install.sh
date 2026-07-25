@@ -16,8 +16,9 @@ usage() {
   - ~/.claude/skills          (Claude Code)
   - ~/.agents/skills          (Codex)
   - ~/.gemini/antigravity/skills  (Antigravity)
-  并把 cli/ 下的命令 (eo-board 看板 + eo-sync 同步核 + eo-sync-obsidian/eo-sync-github 适配器)
-  链接进 EO_BIN_DIR (默认 ~/.local/bin，可覆盖)。这些 CLI 为 POSIX-only。
+  并把 cli/ 下的命令 (eo-helper 日常入口 + eo-board 看板 + eo-sync 同步核
+  + eo-sync-obsidian/eo-sync-github 适配器) 链接进 EO_BIN_DIR (默认 ~/.local/bin，可覆盖)。
+  这些 CLI 为 POSIX-only。
 EOF
 }
 
@@ -190,8 +191,8 @@ install_cli() {
   bin_dir=${EO_BIN_DIR:-"$HOME/.local/bin"}
   mkdir -p "$bin_dir"
 
-  # eo-board 只读看板；eo-sync 投影同步核 + 两个内置适配器（POSIX-only）
-  for cli_name in eo-board eo-sync eo-sync-obsidian eo-sync-github; do
+  # eo-helper 日常入口；eo-board 只读看板；eo-sync 同步核 + 两个内置适配器（POSIX-only）
+  for cli_name in eo-helper eo-board eo-sync eo-sync-obsidian eo-sync-github; do
     link_one_cli "$cli_name" "$bin_dir"
   done
 
@@ -219,4 +220,4 @@ fi
 install_cli
 
 echo "安装完成。"
-echo "提示: 在任何有 .eo-project.json 的项目目录里运行 eo-board --serve 打开实时看板。"
+echo "提示: 日常只需记一条命令——eo-helper，选数字即达看板与同步各入口。"
