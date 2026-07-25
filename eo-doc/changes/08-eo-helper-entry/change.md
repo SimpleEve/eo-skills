@@ -10,7 +10,7 @@ base_commit: 6998899d55eba93a0e3a0335a4e013780c298796
 plan_revision: 1
 fix_rounds: 2
 fix_consumed: ["review#1", "acceptance#AC-9@14f7307"]
-commits: []
+commits: ["8512f1c", "9c70a58", "14f7307", "dabaf0b", "5581b61", "c757368", "4233bce", "b57a106", "874a80d"]
 issue: ~
 pr: ~
 created: 2026-07-25
