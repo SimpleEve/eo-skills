@@ -12,11 +12,13 @@
 
 ## 依赖
 
-| 依赖 | 用途 | 安装 |
-|------|------|------|
-| [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) | skill 运行时 | 官方 CLI |
-| [Antigravity](https://antigravity.dev) | skill 运行时（可选） | 官方 CLI |
-| [smux](https://github.com/ShawnPana/smux) | tmux pane 间通信桥（`tmux-bridge`） | 见上游仓库 README |
+| 运行时 | 必需性 | 安装 |
+|--------|--------|------|
+| [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) | 必需（skill 运行时） | 官方 CLI |
+| [Codex](https://github.com/openai/codex) | 可选（skill 运行时） | 官方 CLI |
+| [Antigravity](https://antigravity.dev) | 可选（skill 运行时） | 官方 CLI |
+
+终端 CLI（`eo-helper` / `eo-board` / `eo-sync`）只用 Python 3 标准库，零第三方依赖（macOS / Linux 自带 python3 即可）。
 
 
 ---
