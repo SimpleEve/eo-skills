@@ -460,7 +460,7 @@ class BoardAllAggregateTests(MultiProjectFixture):
             self.assertEqual(response.status, 200)
             return json.loads(response.read().decode("utf-8"))
 
-    # ---------- TODO-1 数据层注入 ----------
+    # ---------- 聚合数据层：getter 注入 ----------
 
     def test_build_all_data_fresh_getter_rebuilds_every_call(self):
         a = self.make_project("alpha", statuses=("confirmed",))
@@ -513,7 +513,7 @@ class BoardAllAggregateTests(MultiProjectFixture):
         # 缓存命中时 as-of 保持构建时刻，不按请求时刻重打
         self.assertEqual(second["rows"][0]["as_of"], first["rows"][0]["as_of"])
 
-    # ---------- TODO-2 --all --html ----------
+    # ---------- --all --html ----------
 
     def test_all_html_with_output_path_contains_blocks_and_inline_errors(self):
         a = self.make_project("alpha", statuses=("confirmed", "implementing"), backlog_cards=1)
@@ -552,7 +552,7 @@ class BoardAllAggregateTests(MultiProjectFixture):
         self.assertEqual(len(generated), 1)
         self.assertIn(str(generated[0]), r.stdout)
 
-    # ---------- TODO-3 --all --serve ----------
+    # ---------- --all --serve ----------
 
     def test_all_serve_single_flight_per_slot_and_stable_key_no_rebuild(self):
         self.register(self.make_project("alpha", statuses=("confirmed",)))
