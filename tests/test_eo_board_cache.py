@@ -275,8 +275,8 @@ class BoardCacheServeTests(unittest.TestCase):
             self.assertNotEqual(initial["stats"]["direct_commits"]["since"], february["stats"]["direct_commits"]["since"])
 
 
-class BoardMultiProjectTests(unittest.TestCase):
-    """--all / --project / --scan 多项目聚合与下钻。EO_HOME 一律临时目录，不触碰真实 ~/.eo。"""
+class MultiProjectFixture(unittest.TestCase):
+    """多项目 fixture 基座。EO_HOME 一律临时目录，不触碰真实 ~/.eo。"""
 
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
@@ -331,6 +331,10 @@ class BoardMultiProjectTests(unittest.TestCase):
 
     def registry_file(self):
         return self.eo_home / "projects.json"
+
+
+class BoardMultiProjectTests(MultiProjectFixture):
+    """--all / --project / --scan 多项目聚合与下钻（终端形态）。"""
 
     def test_all_one_row_per_project_with_counts_and_as_of(self):
         a = self.make_project("alpha", statuses=("confirmed", "implementing", "archived"), backlog_cards=2)
@@ -427,6 +431,263 @@ class BoardMultiProjectTests(unittest.TestCase):
     def test_scan_requires_all(self):
         r = self.run_board("--scan", str(self.root))
         self.assertNotEqual(r.returncode, 0)
+
+
+class BoardAllAggregateTests(MultiProjectFixture):
+    """--all 的 --html / --serve 聚合形态：数据层注入、缓存单飞、逐请求重读注册表、参数矩阵。"""
+
+    def load_board(self):
+        board = load_module(f"eo_board_all_{id(self)}", BOARD_PATH)
+        board._BOARD_CACHE.clear()
+        board._BOARD_BUILD_LOCKS.clear()
+        return board
+
+    def env_patch(self):
+        return mock.patch.dict(os.environ, {"EO_HOME": str(self.eo_home)})
+
+    def start_all_server(self, board, scan_dir=None):
+        handler = type("AllFixtureHandler", (board.AllBoardRequestHandler,), {"scan_dir": scan_dir})
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(thread.join, 5)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        return server
+
+    def get_all_json(self, server):
+        with urlopen(f"http://127.0.0.1:{server.server_port}/data.json", timeout=5) as response:
+            self.assertEqual(response.status, 200)
+            return json.loads(response.read().decode("utf-8"))
+
+    # ---------- TODO-1 数据层注入 ----------
+
+    def test_build_all_data_fresh_getter_rebuilds_every_call(self):
+        a = self.make_project("alpha", statuses=("confirmed",))
+        self.register(a)
+        board = self.load_board()
+        calls = 0
+        original = board.build_data
+
+        def counted(cfg):
+            nonlocal calls
+            calls += 1
+            return original(cfg)
+
+        with self.env_patch(), mock.patch.object(board, "build_data", side_effect=counted):
+            first = board.build_all_data()
+            second = board.build_all_data()
+        self.assertEqual(calls, 2)
+        self.assertEqual(first["reg_count"], 1)
+        self.assertIsNone(first["rows"][0]["error"])
+        self.assertEqual(second["rows"][0]["counts"], {"confirmed": 1})
+
+    def test_build_all_data_cached_getter_hits_cache_and_keeps_as_of(self):
+        from datetime import datetime as real_datetime, timedelta
+
+        a = self.make_project("alpha", statuses=("confirmed",))
+        self.register(a)
+        board = self.load_board()
+        calls = 0
+        original = board.build_data
+
+        def counted(cfg):
+            nonlocal calls
+            calls += 1
+            return original(cfg)
+
+        class ShiftedDateTime(real_datetime):
+            shift = timedelta()
+
+            @classmethod
+            def now(cls, tz=None):
+                return real_datetime.now(tz) + cls.shift
+
+        with self.env_patch(), \
+                mock.patch.object(board, "build_data", side_effect=counted), \
+                mock.patch.object(board, "datetime", ShiftedDateTime):
+            first = board.build_all_data(get_entry=board._get_board_entry_cached)
+            ShiftedDateTime.shift = timedelta(hours=2)
+            second = board.build_all_data(get_entry=board._get_board_entry_cached)
+        self.assertEqual(calls, 1)  # 第二次命中缓存不重扫
+        # 缓存命中时 as-of 保持构建时刻，不按请求时刻重打
+        self.assertEqual(second["rows"][0]["as_of"], first["rows"][0]["as_of"])
+
+    # ---------- TODO-2 --all --html ----------
+
+    def test_all_html_with_output_path_contains_blocks_and_inline_errors(self):
+        a = self.make_project("alpha", statuses=("confirmed", "implementing"), backlog_cards=1)
+        b = self.make_project("beta", statuses=("draft",))
+        self.register(a)
+        self.register(b)
+        data = json.loads(self.registry_file().read_text(encoding="utf-8"))
+        data["projects"].append({"name": "ghost", "path": str(self.root / "gone"), "registered_at": "2026-07-25"})
+        self.registry_file().write_text(json.dumps(data), encoding="utf-8")
+        out = self.root / "sub" / "all.html"
+        r = self.run_board("--all", "--html", "-o", str(out), "--no-open")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        html = out.read_text(encoding="utf-8")
+        self.assertIn("eo board · 所有项目", html)
+        self.assertIn('"alpha"', html)  # 每项目区块数据就位（JSON 注入 + 前端渲染）
+        self.assertIn('"beta"', html)
+        self.assertIn('"ghost"', html)
+        self.assertIn("路径失效或缺 .eo-project.json", html)  # 坏条目行内错误不缺席
+        self.assertIn('"reg_count": 3', html)
+        self.assertNotIn("__EO_BOARD_ALL_DATA_JSON__", html)
+
+    def test_all_html_default_path_goes_to_tmp_like_single_project(self):
+        a = self.make_project("alpha")
+        self.register(a)
+        tmp_home = self.root / "tmp-home"
+        tmp_home.mkdir()
+        env = dict(os.environ)
+        env["EO_HOME"] = str(self.eo_home)
+        env["TMPDIR"] = str(tmp_home)
+        r = subprocess.run(
+            [sys.executable, str(BOARD_PATH), "--all", "--html", "--no-open"],
+            cwd=self.root, env=env, capture_output=True, text=True,
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        generated = list((tmp_home / "eo-board").glob("eo-board-all-*.html"))
+        self.assertEqual(len(generated), 1)
+        self.assertIn(str(generated[0]), r.stdout)
+
+    # ---------- TODO-3 --all --serve ----------
+
+    def test_all_serve_single_flight_per_slot_and_stable_key_no_rebuild(self):
+        self.register(self.make_project("alpha", statuses=("confirmed",)))
+        self.register(self.make_project("beta", statuses=("draft",)))
+        board = self.load_board()
+        calls = 0
+        original = board.build_data
+        lock = threading.Lock()
+
+        def counted(cfg):
+            nonlocal calls
+            with lock:
+                calls += 1
+            return original(cfg)
+
+        with self.env_patch(), mock.patch.object(board, "build_data", side_effect=counted):
+            server = self.start_all_server(board)
+            results = []
+
+            def hit():
+                results.append(self.get_all_json(server))
+
+            threads = [threading.Thread(target=hit) for _ in range(6)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=30)
+            # 同槽 6 路并发只触发一次重扫；双槽并行各 +1
+            self.assertEqual(calls, 2)
+            self.assertEqual(len(results), 6)
+            # 稳定键重复请求计数不增
+            again = self.get_all_json(server)
+            self.assertEqual(calls, 2)
+        names = sorted(row["label"] for row in again["rows"])
+        self.assertEqual(names, ["alpha", "beta"])
+        self.assertTrue(again["serve"])
+
+    def test_all_serve_rereads_registry_each_request(self):
+        self.register(self.make_project("alpha"))
+        beta = self.make_project("beta", statuses=("draft",))
+        board = self.load_board()
+        with self.env_patch():
+            server = self.start_all_server(board)
+            before = self.get_all_json(server)
+            self.assertEqual([r["label"] for r in before["rows"]], ["alpha"])
+            self.register(beta)  # serve 挂起期间新注册
+            after = self.get_all_json(server)
+        self.assertEqual(sorted(r["label"] for r in after["rows"]), ["alpha", "beta"])
+
+    def test_all_serve_bad_entry_inline_and_empty_registry_guidance(self):
+        board = self.load_board()
+        with self.env_patch():
+            server = self.start_all_server(board)
+            empty = self.get_all_json(server)
+            self.assertEqual(empty["reg_count"], 0)
+            self.assertEqual(empty["rows"], [])
+            with urlopen(f"http://127.0.0.1:{server.server_port}/", timeout=5) as response:
+                self.assertEqual(response.status, 200)
+                html = response.read().decode("utf-8")
+            self.assertIn("注册表为空", html)
+            self.assertIn("--register", html)
+
+            self.register(self.make_project("alpha"))
+            data = json.loads(self.registry_file().read_text(encoding="utf-8"))
+            data["projects"].append({"name": "bad", "path": 123})
+            self.registry_file().write_text(json.dumps(data), encoding="utf-8")
+            mixed = self.get_all_json(server)
+        by_label = {r["label"]: r for r in mixed["rows"]}
+        self.assertIsNone(by_label["alpha"]["error"])
+        bad_rows = [r for r in mixed["rows"] if r["error"]]
+        self.assertEqual(len(bad_rows), 1)
+        self.assertIn("非法", bad_rows[0]["error"])
+
+    def test_all_serve_cli_end_to_end(self):
+        alpha = self.make_project("alpha", statuses=("implementing",))
+        self.register(alpha)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+        env = dict(os.environ)
+        env["EO_HOME"] = str(self.eo_home)
+        process = subprocess.Popen(
+            [sys.executable, str(BOARD_PATH), "--all", "--serve", "--port", str(port), "--no-open"],
+            cwd=self.root, env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        try:
+            deadline = time.monotonic() + 5
+            while True:
+                try:
+                    with urlopen(f"http://127.0.0.1:{port}/", timeout=1) as response:
+                        html = response.read().decode("utf-8")
+                    break
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        self.fail("eo-board --all --serve did not accept requests within five seconds")
+                    time.sleep(0.05)
+            self.assertIn("setInterval(refreshLoop, 3000)", html)  # 3 秒轮询热刷新沿用
+            with urlopen(f"http://127.0.0.1:{port}/data.json", timeout=5) as response:
+                data = json.loads(response.read().decode("utf-8"))
+            self.assertEqual(data["rows"][0]["label"], "alpha")
+            self.assertEqual(data["rows"][0]["counts"], {"implementing": 1})
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+            process.stdout.close()
+            process.stderr.close()
+
+    # ---------- 参数组合矩阵 ----------
+
+    def test_argparse_matrix_rejections(self):
+        for combo in (
+            ["--all", "--project", "somewhere"],
+            ["--register", "--all"],
+            ["--register", "--html"],
+            ["--unregister", "--serve"],
+            ["--all", "-o", "x.html"],  # -o 仅在 --html 下有效
+            ["-o", "x.html"],
+        ):
+            r = self.run_board(*combo)
+            self.assertNotEqual(r.returncode, 0, f"应当拒绝：{combo}")
+
+    def test_argparse_matrix_scan_composes_with_html(self):
+        parent = self.root / "scan-parent"
+        self.make_project("orphan", statuses=("draft",), parent=parent)
+        out = self.root / "scan.html"
+        r = self.run_board("--all", "--scan", str(parent), "--html", "-o", str(out), "--no-open")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        html = out.read_text(encoding="utf-8")
+        self.assertIn('"orphan"', html)
+        self.assertIn('"scanned_count": 1', html)
 
 
 if __name__ == "__main__":

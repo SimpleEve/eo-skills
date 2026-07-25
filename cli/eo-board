@@ -5,6 +5,7 @@
   eo-board                终端摘要
   eo-board --html [-o P]  生成自包含静态 HTML 快照
   eo-board --serve        本地只读 HTTP 服务（仅绑 127.0.0.1）
+多项目聚合（--all）同样支持三形态：终端 / --html / --serve。
 
 只用标准库，零第三方依赖。不写入项目仓库任何文件。
 """
@@ -1467,11 +1468,12 @@ def _cache_lookup(slot, key, cfg):
         cached = _BOARD_CACHE.get(slot)
         if cached is not None and cached[0] == key:
             print(f"[eo-board] cache hit（{cfg['project_name']}）", file=sys.stderr)
-            return cached[1]
+            return cached[1], cached[2]
     return None
 
 
-def get_board_data_cached(cfg):
+def _get_board_entry_cached(cfg):
+    """返回 (data, built_at)。built_at 是数据实际构建时刻——命中缓存时保持不变，供聚合 as-of 使用。"""
     slot = str(cfg["config_path"])
     key = compute_freshness_key(cfg)
     hit = _cache_lookup(slot, key, cfg)
@@ -1487,10 +1489,15 @@ def get_board_data_cached(cfg):
             return hit
         data = build_data(cfg)
         data["serve"] = True
+        built_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with _BOARD_CACHE_LOCK:
-            _BOARD_CACHE[slot] = (key, data)
+            _BOARD_CACHE[slot] = (key, data, built_at)
         print(f"[eo-board] cache miss，已重扫（{cfg['project_name']}）", file=sys.stderr)
-        return data
+        return data, built_at
+
+
+def get_board_data_cached(cfg):
+    return _get_board_entry_cached(cfg)[0]
 
 
 class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
@@ -1549,11 +1556,17 @@ def cmd_serve(cfg, args):
 
 
 # ============================================================
-# 多项目聚合（--all，v1 仅终端形态）与下钻解析
+# 多项目聚合（--all：终端 / --html / --serve 三形态）与下钻解析
 # ============================================================
 
-def _aggregate_row(kind, obj):
+def _fresh_entry(cfg):
+    """单次运行的数据获取：直连 build_data，全量扫，as-of 即当下。"""
+    return build_data(cfg), datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _aggregate_row(kind, obj, get_entry=_fresh_entry):
     """聚合单项目行数据。kind: "registry"（注册条目）| "scan"（扫描兜底纳入）。
+    get_entry(cfg) -> (data, as_of)：单次运行直连 build_data，serve 走缓存槽（as-of 保持构建时刻）。
     出错只落到本行 error，不中断其余项目。"""
     if kind == "registry":
         if entry_path(obj) is None:
@@ -1570,7 +1583,7 @@ def _aggregate_row(kind, obj):
         return row
     try:
         cfg = load_project_config(cfg_path)
-        data = build_data(cfg)
+        data, as_of = get_entry(cfg)
     except ConfigError as e:
         row["error"] = str(e)
         return row
@@ -1585,10 +1598,46 @@ def _aggregate_row(kind, obj):
         "label": cfg["project_name"],
         "counts": counts,
         "backlog": len(data["backlog"]),
-        "as_of": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "as_of": as_of,
         "name_mismatch": reg_name if (reg_name and reg_name != cfg["project_name"]) else None,
     })
     return row
+
+
+def build_all_data(scan_dir=None, get_entry=_fresh_entry):
+    """产出结构化聚合数据（rows/reg_count/scanned_count）。注册表每次调用重读——serve
+    逐请求调用即天然纳入新注册项目；--scan 同步逐次重枚举。损坏注册表抛 ConfigError，调用方分流。"""
+    reg = load_registry()
+    entries = list(reg.get("projects") or [])
+    scanned = []
+    if scan_dir:
+        parent = Path(scan_dir).expanduser().resolve()
+        if not parent.is_dir():
+            raise ConfigError(f"--scan 目录不存在：{parent}")
+        scanned = _scan_parent_dir(parent, entries)
+    sources = [("registry", e) for e in entries] + [("scan", p) for p in scanned]
+
+    def _safe_row(source):
+        kind, obj = source
+        try:
+            return _aggregate_row(kind, obj, get_entry)
+        except Exception as e:
+            # 单条目兜底：任何未预期异常都只坏本行，绝不终止整体聚合
+            return {"label": f"{obj!r}"[:48], "path": "?", "registered": kind == "registry",
+                    "error": f"条目处理异常：{e}"}
+
+    rows = []
+    if sources:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(sources))) as pool:
+            rows = list(pool.map(_safe_row, sources))
+    return {
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "serve": False,
+        "registry_path": str(registry_path()),
+        "reg_count": len(entries),
+        "scanned_count": len(scanned),
+        "rows": rows,
+    }
 
 
 def _scan_parent_dir(parent, entries):
@@ -1605,10 +1654,11 @@ def _scan_parent_dir(parent, entries):
     return found
 
 
-def render_all_terminal(rows, reg_count, scanned_count):
+def render_all_terminal(agg):
+    rows, reg_count, scanned_count = agg["rows"], agg["reg_count"], agg["scanned_count"]
     out = [f"eo board --all · 注册 {reg_count} 项目"
            + (f"（另扫描并入 {scanned_count}）" if scanned_count else "")
-           + f" · {registry_path()}", ""]
+           + f" · {agg['registry_path']}", ""]
     header = ["项目", "draft", "confirmed", "implementing", "reviewed", "archived", "backlog", "as-of"]
     table, errors, notes = [], [], []
     for row in rows:
@@ -1645,37 +1695,322 @@ def render_all_terminal(rows, reg_count, scanned_count):
     return "\n".join(out)
 
 
+ALL_HTML_TEMPLATE = r"""<title>eo board · 所有项目</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗂️</text></svg>">
+<style>
+  :root {
+    --bg: #F2F4F7; --surface: #FFFFFF; --surface2: #F7F9FB;
+    --ink: #1B2432; --muted: #647084; --faint: #8B96A8; --line: #E2E6ED;
+    --accent: #B4530A; --accent-soft: #F6E8DC;
+    --st-draft: #6B7A90;     --st-draft-soft: #ECEFF4;
+    --st-confirmed: #A87508; --st-confirmed-soft: #F7EEDA;
+    --st-implementing: #2563B0; --st-implementing-soft: #E4EEF9;
+    --st-reviewed: #0E8A74;  --st-reviewed-soft: #E0F2EE;
+    --st-archived: #8A93A1;  --st-archived-soft: #EEF0F3;
+    --st-backlog: #4E7A5A;   --st-backlog-soft: #E7F0E9;
+    --warn: #B0451E;         --warn-soft: #F9E9E2;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10141B; --surface: #171C25; --surface2: #1D2330;
+      --ink: #E6EAF1; --muted: #93A0B4; --faint: #6E7A8E; --line: #242B38;
+      --accent: #E08A3C; --accent-soft: #3A2717;
+      --st-draft: #97A6BC;     --st-draft-soft: #222938;
+      --st-confirmed: #D9A83E; --st-confirmed-soft: #33290F;
+      --st-implementing: #6CA5E8; --st-implementing-soft: #1A2A40;
+      --st-reviewed: #4CBFA6;  --st-reviewed-soft: #12312A;
+      --st-archived: #7C8798;  --st-archived-soft: #20262F;
+      --st-backlog: #7FAF8C;   --st-backlog-soft: #1D2B22;
+      --warn: #E37D53;         --warn-soft: #3A2018;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #F2F4F7; --surface: #FFFFFF; --surface2: #F7F9FB;
+    --ink: #1B2432; --muted: #647084; --faint: #8B96A8; --line: #E2E6ED;
+    --accent: #B4530A; --accent-soft: #F6E8DC;
+    --st-draft: #6B7A90;     --st-draft-soft: #ECEFF4;
+    --st-confirmed: #A87508; --st-confirmed-soft: #F7EEDA;
+    --st-implementing: #2563B0; --st-implementing-soft: #E4EEF9;
+    --st-reviewed: #0E8A74;  --st-reviewed-soft: #E0F2EE;
+    --st-archived: #8A93A1;  --st-archived-soft: #EEF0F3;
+    --st-backlog: #4E7A5A;   --st-backlog-soft: #E7F0E9;
+    --warn: #B0451E;         --warn-soft: #F9E9E2;
+  }
+  :root[data-theme="dark"] {
+    --bg: #10141B; --surface: #171C25; --surface2: #1D2330;
+    --ink: #E6EAF1; --muted: #93A0B4; --faint: #6E7A8E; --line: #242B38;
+    --accent: #E08A3C; --accent-soft: #3A2717;
+    --st-draft: #97A6BC;     --st-draft-soft: #222938;
+    --st-confirmed: #D9A83E; --st-confirmed-soft: #33290F;
+    --st-implementing: #6CA5E8; --st-implementing-soft: #1A2A40;
+    --st-reviewed: #4CBFA6;  --st-reviewed-soft: #12312A;
+    --st-archived: #7C8798;  --st-archived-soft: #20262F;
+    --st-backlog: #7FAF8C;   --st-backlog-soft: #1D2B22;
+    --warn: #E37D53;         --warn-soft: #3A2018;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--sans); font-size: 14px; line-height: 1.55;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px 64px; }
+
+  .topbar { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; padding: 20px 0 0; }
+  .wordmark { font-family: var(--mono); font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+  .wordmark .tail { color: var(--accent); }
+  .topmeta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: var(--mono); font-size: 11px; padding: 2px 8px;
+    border: 1px solid var(--line); border-radius: 4px; color: var(--muted);
+    background: var(--surface);
+  }
+  .chip b { color: var(--ink); font-weight: 600; }
+  .chip.serve-live { color: var(--st-implementing); border-color: var(--st-implementing); }
+  .gen { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--faint); }
+
+  .warn-banner {
+    margin-top: 16px; background: var(--warn-soft); border: 1px solid var(--warn);
+    color: var(--warn); border-radius: 8px; padding: 10px 14px; font-size: 12.5px; line-height: 1.7;
+    overflow-wrap: anywhere;
+  }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; margin-top: 20px; }
+  .proj {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 14px 16px 13px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .proj-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .proj-name { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+  .pill { font-family: var(--mono); font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 999px; }
+  .pill.unreg { background: var(--st-confirmed-soft); color: var(--st-confirmed); }
+  .as-of { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .counts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .count {
+    display: inline-flex; align-items: baseline; gap: 5px;
+    font-family: var(--mono); font-size: 11px; padding: 3px 8px; border-radius: 5px;
+  }
+  .count b { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .count.zero { opacity: 0.45; }
+  .proj-err { font-size: 12.5px; color: var(--warn); background: var(--warn-soft); border-radius: 6px; padding: 8px 10px; line-height: 1.6; overflow-wrap: anywhere; }
+  .proj-note { font-size: 11px; color: var(--st-confirmed); }
+  .proj-path { font-family: var(--mono); font-size: 10.5px; color: var(--faint); overflow-wrap: anywhere; }
+
+  .empty-panel {
+    margin-top: 24px; background: var(--surface); border: 1px dashed var(--line); border-radius: 8px;
+    padding: 28px 26px; color: var(--muted); font-size: 13.5px; line-height: 2;
+  }
+  .empty-panel h2 { margin: 0 0 6px; font-size: 15px; color: var(--ink); }
+  .empty-panel code {
+    font-family: var(--mono); font-size: 12px; background: var(--surface2);
+    border: 1px solid var(--line); border-radius: 3px; padding: 0 5px;
+  }
+  .foot-hint { margin-top: 22px; font-family: var(--mono); font-size: 11px; color: var(--faint); }
+</style>
+
+<div class="wrap">
+  <header class="topbar" id="topbar"></header>
+  <div id="content"></div>
+</div>
+
+<script type="application/json" id="eo-board-all-data">__EO_BOARD_ALL_DATA_JSON__</script>
+<script>
+var DATA = JSON.parse(document.getElementById('eo-board-all-data').textContent);
+var STATUS_COLS = [
+  ['draft', '草稿'], ['confirmed', '已确认'], ['implementing', '实施中'],
+  ['reviewed', '审查通过'], ['archived', '已归档']
+];
+
+function esc(s) {
+  return String(s === null || s === undefined ? '' : s).replace(/[&<>"]/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+  });
+}
+
+function projCard(row) {
+  var h = '<article class="proj"><div class="proj-head"><span class="proj-name">' + esc(row.label) + '</span>';
+  if (!row.registered) h += '<span class="pill unreg">未注册</span>';
+  if (row.as_of) h += '<span class="as-of">as-of ' + esc(row.as_of) + '</span>';
+  h += '</div>';
+  if (row.error) {
+    h += '<div class="proj-err">✗ ' + esc(row.error) + '</div>';
+  } else {
+    h += '<div class="counts">';
+    STATUS_COLS.forEach(function (col) {
+      var n = (row.counts && row.counts[col[0]]) || 0;
+      h += '<span class="count' + (n ? '' : ' zero') + '" style="background: var(--st-' + col[0] + '-soft); color: var(--st-' + col[0] + ')"><b>' + n + '</b>' + col[1] + '</span>';
+    });
+    h += '<span class="count' + (row.backlog ? '' : ' zero') + '" style="background: var(--st-backlog-soft); color: var(--st-backlog)"><b>' + row.backlog + '</b>backlog</span>';
+    h += '</div>';
+    if (row.name_mismatch) h += '<div class="proj-note">⚠ 注册名 ' + esc(row.name_mismatch) + ' 与项目配置不一致，已按配置显示</div>';
+  }
+  h += '<div class="proj-path">' + esc(row.path) + '</div></article>';
+  return h;
+}
+
+function render() {
+  document.getElementById('topbar').innerHTML =
+    '<div class="wordmark">eo<span class="tail"> board --all</span></div>'
+    + '<div class="topmeta">'
+    + '<span class="chip">注册 <b>' + DATA.reg_count + '</b> 项目</span>'
+    + (DATA.scanned_count ? '<span class="chip">扫描并入 <b>' + DATA.scanned_count + '</b></span>' : '')
+    + '<span class="chip">' + esc(DATA.registry_path) + '</span>'
+    + (DATA.serve ? '<span class="chip serve-live">● 自动刷新中</span>' : '')
+    + '</div>'
+    + '<div class="gen">生成于 ' + esc(DATA.generated_at) + ' · 只读投影，随时可重建</div>';
+
+  var h = '';
+  if (DATA.error) {
+    h += '<div class="warn-banner">⚠ ' + esc(DATA.error) + '</div>';
+  }
+  if (DATA.rows && DATA.rows.length) {
+    h += '<div class="grid">' + DATA.rows.map(projCard).join('') + '</div>';
+    h += '<div class="foot-hint">下钻：eo-board --project &lt;路径|注册名&gt;</div>';
+  } else if (!DATA.error) {
+    h += '<div class="empty-panel"><h2>注册表为空</h2>'
+      + '在项目目录运行 <code>eo-board --register</code> 注册项目；<br>'
+      + '或用 <code>eo-board --all --scan &lt;父目录&gt;</code> 临时聚合未注册项目（不写注册表）。'
+      + (DATA.serve ? '<br>本页会自动刷新——注册完成后无需重启即可看到项目。' : '')
+      + '</div>';
+  }
+  document.getElementById('content').innerHTML = h;
+}
+
+render();
+
+if (DATA.serve) {
+  var lastHash = null;
+  function hashStr(s) {
+    var h = 5381;
+    for (var i = 0; i < s.length; i++) { h = ((h << 5) + h + s.charCodeAt(i)) | 0; }
+    return h;
+  }
+  function refreshLoop() {
+    fetch('/data.json', { cache: 'no-store' }).then(function (r) { return r.text(); }).then(function (text) {
+      var h = hashStr(text);
+      if (h === lastHash) return;
+      lastHash = h;
+      DATA = JSON.parse(text);
+      render();
+    }).catch(function () { /* 网络抖动：静默跳过这一轮 */ });
+  }
+  setInterval(refreshLoop, 3000);
+}
+</script>
+"""
+
+
+def render_all_html(agg):
+    return ALL_HTML_TEMPLATE.replace("__EO_BOARD_ALL_DATA_JSON__", embed_json(agg))
+
+
 def cmd_all(args):
+    if args.serve:
+        return cmd_all_serve(args)
     try:
-        reg = load_registry()
+        agg = build_all_data(scan_dir=args.scan)
     except ConfigError as e:
         die(f"❌ {e}")
-    entries = list(reg.get("projects") or [])
-    scanned = []
+    if args.html:
+        return cmd_all_html(agg, args)
+    if not agg["reg_count"] and not agg["scanned_count"]:
+        print(f"注册表为空（{agg['registry_path']}）。")
+        print("  在项目目录运行 eo-board --register 注册项目；")
+        print("  或用 eo-board --all --scan <父目录> 临时聚合未注册项目（不写注册表）。")
+        return 0
+    print(render_all_terminal(agg))
+    return 0
+
+
+def cmd_all_html(agg, args):
+    html = render_all_html(agg)
+    if args.output:
+        out_path = Path(args.output).expanduser().resolve()
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        tmp_dir = Path(tempfile.gettempdir()) / "eo-board"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        out_path = tmp_dir / f"eo-board-all-{ts}.html"
+    out_path.write_text(html, encoding="utf-8")
+    print(f"已生成：{out_path}")
+    if not args.no_open:
+        try:
+            webbrowser.open(f"file://{out_path}")
+        except Exception:
+            print("（无法自动打开浏览器，请手动打开上方路径）")
+    return 0
+
+
+def build_all_serve_data(scan_dir):
+    """serve 逐请求聚合：每次重读注册表、逐项目走缓存槽。注册表级错误落 error 字段行内呈现，不 5xx。"""
+    try:
+        agg = build_all_data(scan_dir=scan_dir, get_entry=_get_board_entry_cached)
+    except ConfigError as e:
+        agg = {
+            "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "serve": False,
+            "registry_path": str(registry_path()),
+            "reg_count": 0,
+            "scanned_count": 0,
+            "rows": [],
+            "error": str(e),
+        }
+    agg["serve"] = True
+    return agg
+
+
+class AllBoardRequestHandler(http.server.BaseHTTPRequestHandler):
+    scan_dir = None
+
+    def log_message(self, fmt, *a):
+        pass  # 静默：只读服务不需要逐请求刷屏
+
+    def _send(self, status, content_type, body_bytes, message=None):
+        self.send_response(status, message)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body_bytes)))
+        self.end_headers()
+        self.wfile.write(body_bytes)
+
+    def do_GET(self):
+        path = self.path.split("?", 1)[0]
+        if path == "/":
+            data = build_all_serve_data(self.scan_dir)
+            self._send(200, "text/html; charset=utf-8", render_all_html(data).encode("utf-8"))
+        elif path == "/data.json":
+            data = build_all_serve_data(self.scan_dir)
+            self._send(200, "application/json; charset=utf-8", json.dumps(data, ensure_ascii=False).encode("utf-8"))
+        elif path == "/favicon.ico":
+            self.send_response(204)
+            self.end_headers()
+        else:
+            body = f"未找到：{path}".encode("utf-8")
+            self._send(404, "text/plain; charset=utf-8", body, message="Not Found")
+
+
+def cmd_all_serve(args):
     if args.scan:
         parent = Path(args.scan).expanduser().resolve()
         if not parent.is_dir():
             die(f"❌ --scan 目录不存在：{parent}")
-        scanned = _scan_parent_dir(parent, entries)
-    if not entries and not scanned:
-        print(f"注册表为空（{registry_path()}）。")
-        print("  在项目目录运行 eo-board --register 注册项目；")
-        print("  或用 eo-board --all --scan <父目录> 临时聚合未注册项目（不写注册表）。")
-        return 0
-    sources = [("registry", e) for e in entries] + [("scan", p) for p in scanned]
-
-    def _safe_row(source):
-        kind, obj = source
-        try:
-            return _aggregate_row(kind, obj)
-        except Exception as e:
-            # 单条目兜底：任何未预期异常都只坏本行，绝不终止整体聚合
-            return {"label": f"{obj!r}"[:48], "path": "?", "registered": kind == "registry",
-                    "error": f"条目处理异常：{e}"}
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(sources))) as pool:
-        rows = list(pool.map(_safe_row, sources))
-    print(render_all_terminal(rows, len(entries), len(scanned)))
+    handler = type("AllHandler", (AllBoardRequestHandler,), {"scan_dir": args.scan})
+    try:
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", args.port), handler)
+    except OSError as e:
+        die(f"❌ 无法监听 127.0.0.1:{args.port}（{e}）——换个 --port 试试")
+    url = f"http://127.0.0.1:{args.port}/"
+    print(f"eo-board 多项目聚合只读服务已启动：{url}（Ctrl+C 停止）")
+    if not args.no_open:
+        threading.Timer(0.3, safe_open, args=(url,)).start()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n已停止。")
+        server.shutdown()
     return 0
 
 
@@ -1750,6 +2085,8 @@ def build_arg_parser():
             "  eo-board --html -o a.html 生成到指定路径\n"
             "  eo-board --serve         本地只读服务（仅 127.0.0.1，默认 7333 端口）\n"
             "  eo-board --all           多项目聚合总览（读 ${EO_HOME:-$HOME/.eo}/projects.json）\n"
+            "  eo-board --all --html    多项目一页看板静态快照\n"
+            "  eo-board --all --serve   多项目一页看板本地服务（3 秒热刷新）\n"
             "  eo-board --project X     下钻指定项目（路径或注册名），无需 cd\n"
             "  eo-board --register      把当前项目注册进用户级注册表\n"
         ),
@@ -1758,13 +2095,14 @@ def build_arg_parser():
     )
     parser.add_argument("-h", "--help", action="help", default=argparse.SUPPRESS, help="显示本帮助信息并退出")
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--html", action="store_true", help="生成自包含静态 HTML 快照")
-    mode.add_argument("--serve", action="store_true", help="启动本地只读 HTTP 服务（仅绑 127.0.0.1）")
+    mode.add_argument("--html", action="store_true", help="生成自包含静态 HTML 快照（可与 --all 组合）")
+    mode.add_argument("--serve", action="store_true", help="启动本地只读 HTTP 服务（仅绑 127.0.0.1，可与 --all 组合）")
     mode.add_argument("--register", nargs="?", const=".", metavar="PATH",
                       help="把项目注册进用户级注册表 ${EO_HOME:-$HOME/.eo}/projects.json（缺省 PATH=当前目录）")
     mode.add_argument("--unregister", nargs="?", const=".", metavar="PATH",
                       help="从用户级注册表移除项目（缺省 PATH=当前目录）")
-    mode.add_argument("--all", action="store_true", help="多项目聚合总览：每注册项目一行（终端形态）")
+    parser.add_argument("--all", action="store_true",
+                        help="多项目聚合总览（终端形态；配 --html/--serve 得多项目一页看板）")
     parser.add_argument("--project", metavar="路径|注册名",
                         help="下钻指定项目（等价于在该目录运行，三形态通用），无需 cd")
     parser.add_argument("--scan", metavar="父目录",
@@ -1785,6 +2123,8 @@ def main():
         parser.error("--scan 仅在 --all 模式下有效")
     if args.project and args.all:
         parser.error("--project 与 --all 互斥（--project 是单项目下钻）")
+    if (args.register is not None or args.unregister is not None) and (args.all or args.project or args.output):
+        parser.error("--register/--unregister 是注册表维护动作，不与 --all/--project/-o 混用")
 
     if args.register is not None:
         sys.exit(cmd_register(args.register))
