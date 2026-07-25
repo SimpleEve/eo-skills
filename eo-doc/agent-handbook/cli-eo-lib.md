@@ -3,7 +3,7 @@ title: cli/eo_lib 共享解析库
 type: agent
 tags: [cli, shared-lib, config, frontmatter, freshness]
 created: 2026-07-24
-updated: 2026-07-24
+updated: 2026-07-25
 scope: 改动 cli/ 下任何消费 change/backlog/配置文件契约的代码时
 status: active
 source: cli/eo_lib/
@@ -23,8 +23,8 @@ conclusions:
 | 模块 | 关键函数 | 职责 |
 |------|---------|------|
 | `config.py`（74 行） | `find_project_config(start)` / `load_project_config(path)` / `ConfigError` | 向上定位 `.eo-project.json`；同目录 `.eo-project.local.json` 顶层字段覆盖合并（local 优先）→ `_validate_merged` 必填校验 → 标准化 |
-| `gitio.py`（43 行） | `run_git(args, cwd)` / `list_worktrees(anchor_dir)` | git 子进程封装（15s 超时、失败返空串）；worktree 枚举（porcelain 解析 + 分支名覆盖） |
-| `frontmatter.py`（60 行） | `split_frontmatter` / `parse_yaml_subset` / `parse_yaml_scalar` / `unquote` | 手写 YAML 子集（容错、BOM、行内注释、`[a,b]` 列表；不支持多行值/嵌套对象） |
+| `gitio.py` | `run_git` / `list_worktrees` / `list_worktrees_status`（降级感知枚举，供快照完整性判定） | git 子进程封装（15s 超时、失败返空串）；worktree 枚举（porcelain 解析 + 分支名覆盖） |
+| `frontmatter.py` | `split_frontmatter` / `parse_yaml_subset` / `parse_yaml_scalar` / `unquote` / `upsert_frontmatter_fields`（保序回写：已存字段原地换值、新字段 frontmatter 尾插） | 手写 YAML 子集（容错、BOM、行内注释、`[a,b]` 列表；不支持多行值/嵌套对象） |
 | `changes.py`（249 行） | `parse_change_file` / `scan_all_changes` / `parse_ac_section` / `parse_todo_section` / `parse_oq_section` / `count_ac` / `count_todo` | change.md 各节解析与多 worktree 扫描（同 id 取状态最高者、seq 撞号告警） |
 | `freshness.py`（69 行） | `compute_freshness_key(cfg)` | 缓存新鲜度键：当天日期 + worktree(路径,分支,HEAD) 三元组集 + `for-each-ref` sha256 指纹 + changes 树 max-mtime + backlog/roadmap mtime |
 
