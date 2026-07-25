@@ -1,6 +1,21 @@
 """git 子进程封装。失败一律返回空串，调用方按缺数据降级。"""
 
 import subprocess
+from pathlib import Path
+
+
+def repo_identity(path):
+    """规范化仓库身份：git common dir 的 realpath 绝对路径；非 git 目录退化为目录自身 realpath。
+
+    同一仓库的主/linked worktree 归一到同一身份。注册表去重与 eo-sync 簿记 hash8
+    必须同源消费本函数，不得各写等价实现。
+    """
+    base = Path(path)
+    common = run_git(["rev-parse", "--git-common-dir"], cwd=str(base)).strip()
+    if common:
+        cp = Path(common)
+        return str(cp.resolve()) if cp.is_absolute() else str((base / cp).resolve())
+    return str(base.resolve())
 
 
 def run_git(args, cwd=None):

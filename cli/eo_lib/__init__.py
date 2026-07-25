@@ -5,7 +5,15 @@
 
 from .config import ConfigError, find_project_config, load_project_config
 from .freshness import compute_freshness_key
-from .gitio import run_git, list_worktrees, list_worktrees_status
+from .gitio import run_git, list_worktrees, list_worktrees_status, repo_identity
+from .registry import (
+    registry_path,
+    load_registry,
+    save_registry,
+    register_project,
+    unregister_project,
+    find_by_name,
+)
 from .frontmatter import (
     split_frontmatter,
     parse_yaml_subset,
@@ -40,6 +48,13 @@ __all__ = [
     "run_git",
     "list_worktrees",
     "list_worktrees_status",
+    "repo_identity",
+    "registry_path",
+    "load_registry",
+    "save_registry",
+    "register_project",
+    "unregister_project",
+    "find_by_name",
     "split_frontmatter",
     "parse_yaml_subset",
     "parse_yaml_scalar",

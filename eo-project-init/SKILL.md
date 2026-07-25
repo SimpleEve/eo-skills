@@ -58,7 +58,8 @@ description: "eo-skills 在当前仓库的总入口：生成 .eo-project.json、
 3. **注入段刷新**：按标记对整段替换 agent 配置文件中的 `eo-project` / `eo-doc` 注入段；仓库根存在 `DESIGN.md` 时核对 `eo-design` 注入段
 4. **.gitignore 与软链核对**：`tmp/eo/`、`.eo-project.local.json`、（local 模式）`.eo-project/`、（vault 模式）`<doc_root>/vault` 缺项补写；若历史遗留把 `<doc_root>/.sync-cursor` 写进了 `.gitignore`，删掉该行并 `git add -f` 补入库（它须随文档一起共享，见 [../eo-doc-manager/references/git-sync.md](../eo-doc-manager/references/git-sync.md)）；vault 模式且 `create_symlink: true` 时核对 `<doc_root>/vault` **软链本体**存在且指向 `project_root`，缺失/指错按「9. 建立软链」重建
 5. **联动两问**（仅对应段缺失时，规则见「8. 生成 .eo-project.json」的 board/github 小节）：开启 board → 立即做 stub 历史同步
-6. **输出摘要**：列出本次补齐/刷新/跳过了什么，然后结束——不执行首次创建流程的其余步骤
+5.5. **顺手注册**：执行 `eo-board --register`（幂等，已注册则原地更新）。**失败不阻塞本流程**——注册失败时输出告警并给手工补注册指引：「⚠ 项目注册失败（<原因>），init 已正常完成；稍后可在项目目录手工执行 `eo-board --register` 补注册（注册后任意目录 `eo-board --all` 可见本项目）」
+6. **输出摘要**：列出本次补齐/刷新/跳过了什么（含注册结果），然后结束——不执行首次创建流程的其余步骤
 
 ### 2. 询问运行模式（必须问，不默认）
 
@@ -234,14 +235,20 @@ local 模式**不建软链**。
 
 **DESIGN.md 检查**：若仓库根存在 `DESIGN.md` 但 agent 配置文件中无 `<!-- eo-design:start -->` 标记段，执行 `/eo-design` 的约束注入子步骤补上（注入模板见 [../eo-design/references/design-md-template.md](../eo-design/references/design-md-template.md)）。
 
-### 12. 输出摘要
+### 12. 注册到生态注册表（顺手注册）
+
+执行 `eo-board --register`（在仓库根目录），把项目登记进用户级注册表 `${EO_HOME:-$HOME/.eo}/projects.json`，供 `eo-board --all` / `eo-sync watch --all` 跨项目枚举。
+
+**失败不阻塞 init**——注册失败（如注册表目录不可写）时本 skill 仍算成功完成，但必须输出告警与手工补注册指引：「⚠ 项目注册失败（<原因>），init 已正常完成；稍后可在项目目录手工执行 `eo-board --register` 补注册（注册后任意目录 `eo-board --all` 可见本项目）」
+
+### 13. 输出摘要
 
 展示：
 - 运行模式
 - `.eo-project.json` 路径和内容
 - 项目管理侧骨架结构
 - 代码侧骨架结构
-- 软链 / gitignore / agent 配置 状态
+- 软链 / gitignore / agent 配置 / 生态注册 状态
 
 ## 输出
 

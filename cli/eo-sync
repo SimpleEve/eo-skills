@@ -38,8 +38,8 @@ from eo_lib import (
     list_worktrees,
     list_worktrees_status,
     load_project_config,
+    repo_identity,
     resolve_change,
-    run_git,
     scan_changes_grouped,
     split_frontmatter,
     upsert_frontmatter_fields,
@@ -154,14 +154,8 @@ def resolve_enabled(cfg):
 
 def bookkeeping_path(cfg):
     home = os.environ.get("EO_HOME") or str(Path.home() / ".eo")
-    repo_root = str(cfg["repo_root"])
-    common = run_git(["rev-parse", "--git-common-dir"], cwd=repo_root).strip()
-    if common:
-        cp = Path(common)
-        common_abs = str(cp.resolve()) if cp.is_absolute() else str((Path(repo_root) / cp).resolve())
-    else:
-        common_abs = str(Path(repo_root).resolve())
-    hash8 = hashlib.sha256(common_abs.encode("utf-8")).hexdigest()[:8]
+    identity = repo_identity(cfg["repo_root"])
+    hash8 = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:8]
     return Path(home) / "sync-state" / f"{cfg['project_name']}-{hash8}.json"
 
 

@@ -29,12 +29,18 @@ from eo_lib import (
     compute_freshness_key,
     count_ac,
     count_todo,
+    find_by_name,
     find_project_config,
     list_worktrees,
     load_project_config,
+    load_registry,
+    register_project,
+    registry_path,
+    repo_identity,
     run_git,
     scan_all_changes,
     split_frontmatter,
+    unregister_project,
 )
 
 STALE_DAYS_THRESHOLD = 30
@@ -1541,6 +1547,41 @@ def cmd_serve(cfg, args):
 
 
 # ============================================================
+# 注册表维护（唯一的写路径例外：写的是用户级 ~/.eo 注册表，不是项目文件）
+# ============================================================
+
+def cmd_register(path_str):
+    start = Path(path_str).expanduser().resolve()
+    cfg_path = find_project_config(start)
+    if cfg_path is None:
+        die(f"❌ 未找到 .eo-project.json（自 {start} 向上）——先运行 /eo-project-init 初始化项目。")
+    try:
+        cfg = load_project_config(cfg_path)
+        result = register_project(cfg_path.parent, cfg["project_name"])
+    except ConfigError as e:
+        die(f"❌ {e}")
+    entry = result["entry"]
+    verb = "已注册" if result["action"] == "created" else "已更新注册（同一仓库，幂等）"
+    print(f"✓ {verb}：{entry['name']} → {entry['path']}")
+    if result["same_name"]:
+        paths = "、".join(str(e.get("path")) for e in result["same_name"])
+        print(f"⚠ 注册名 {entry['name']} 同名共存：{paths}——--project 按名解析遇歧义时请改用路径")
+    return 0
+
+
+def cmd_unregister(path_str):
+    target = Path(path_str).expanduser().resolve()
+    try:
+        removed = unregister_project(target)
+    except ConfigError as e:
+        die(f"❌ {e}")
+    if removed is None:
+        die(f"未命中任何注册条目：{target}（用 eo-board --all 查看当前注册项目）")
+    print(f"✓ 已移除注册：{removed.get('name')} → {removed.get('path')}")
+    return 0
+
+
+# ============================================================
 # CLI 入口
 # ============================================================
 
@@ -1562,6 +1603,10 @@ def build_arg_parser():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--html", action="store_true", help="生成自包含静态 HTML 快照")
     mode.add_argument("--serve", action="store_true", help="启动本地只读 HTTP 服务（仅绑 127.0.0.1）")
+    mode.add_argument("--register", nargs="?", const=".", metavar="PATH",
+                      help="把项目注册进用户级注册表 ${EO_HOME:-~/.eo}/projects.json（缺省 PATH=当前目录）")
+    mode.add_argument("--unregister", nargs="?", const=".", metavar="PATH",
+                      help="从用户级注册表移除项目（缺省 PATH=当前目录）")
     parser.add_argument("-o", "--output", metavar="PATH", help="--html 模式下指定输出文件路径（默认写到系统 tmp 目录）")
     parser.add_argument("--port", type=int, default=7333, help="--serve 模式下监听端口（默认 7333）")
     parser.add_argument("--no-open", action="store_true", help="生成/启动后不自动打开浏览器")
@@ -1574,6 +1619,11 @@ def main():
     args = parser.parse_args()
     if args.output and not args.html:
         parser.error("-o/--output 仅在 --html 模式下有效")
+
+    if args.register is not None:
+        sys.exit(cmd_register(args.register))
+    if args.unregister is not None:
+        sys.exit(cmd_unregister(args.unregister))
 
     cfg_path = find_project_config(Path.cwd())
     if cfg_path is None:
