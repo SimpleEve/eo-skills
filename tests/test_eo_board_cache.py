@@ -358,6 +358,28 @@ class BoardMultiProjectTests(unittest.TestCase):
         self.assertIn("ghost", r.stdout)
         self.assertIn("✗", r.stdout)
 
+    def test_all_structural_bad_entry_isolated_to_own_row(self):
+        a = self.make_project("alpha", statuses=("confirmed",))
+        self.register(a)
+        data = json.loads(self.registry_file().read_text(encoding="utf-8"))
+        data["projects"].append({"name": "bad", "path": 123})
+        self.registry_file().write_text(json.dumps(data), encoding="utf-8")
+        r = self.run_board("--all")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("alpha", r.stdout)  # 有效项目照常输出
+        self.assertIn("非法", r.stdout)
+
+    def test_scan_dedups_same_repo_worktrees(self):
+        a = self.make_project("alpha")
+        self.register(a)
+        parent = self.root / "scan-parent"
+        orphan = self.make_project("orphan", statuses=("draft",), parent=parent)
+        run_git(orphan, "worktree", "add", "-q", str(parent / "orphan-wt"), "-b", "side")
+        r = self.run_board("--all", "--scan", str(parent))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        rows = [l for l in r.stdout.splitlines() if "(未注册)" in l and not l.startswith("提示")]
+        self.assertEqual(len(rows), 1)  # 同仓主/linked worktree 只一行
+
     def test_all_empty_registry_prints_guidance(self):
         r = self.run_board("--all")
         self.assertEqual(r.returncode, 0, r.stderr)

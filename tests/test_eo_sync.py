@@ -938,6 +938,76 @@ class WatchTests(unittest.TestCase):
         self.assertEqual(len(scope), 3)  # 修复后自动重新纳入
         self.assertNotIn((str(gone), "missing-config"), state["suppressed"])
 
+    def test_scope_isolates_structural_bad_entry(self):
+        from eo_lib import register_project
+        state = self._state()
+        register_project(self.repo, "p")
+        reg_file = self.eo_home / "projects.json"
+        data = json.loads(reg_file.read_text(encoding="utf-8"))
+        data["projects"].append({"name": "bad", "path": 123})
+        reg_file.write_text(json.dumps(data), encoding="utf-8")
+        scope, err = self._scope(state, all_=True)
+        self.assertEqual(len(scope), 1)  # 结构性坏条目只坏本行，不终止循环
+        self.assertIn("非法", err)
+        scope, err = self._scope(state, all_=True)
+        self.assertEqual(len(scope), 1)
+        self.assertEqual(err, "")  # 抑制不刷屏
+
+    def test_config_change_triggers_run_without_fs_change(self):
+        state, calls = self._state(), []
+        runner = lambda cfg: calls.append(1) or 0
+        self._tick(state, runner)
+        self.assertEqual(len(calls), 1)
+        raw = json.loads(self.cfg_path.read_text(encoding="utf-8"))
+        raw["sync"] = {"obsidian": {"enabled": False}}
+        self.cfg_path.write_text(json.dumps(raw), encoding="utf-8")
+        err = self._tick(state, runner)
+        self.assertEqual(len(calls), 2)  # 配置指纹入基线：sync 段变更不被 freshness 键短路吞掉
+        self.assertIn("已同步", err)
+        err = self._tick(state, runner)
+        self.assertEqual(len(calls), 2)  # 无新变化回到短路静默
+        self.assertEqual(err, "")
+
+    def test_config_failure_recovery_rearms_warning_and_resyncs(self):
+        state, calls = self._state(), []
+        runner = lambda cfg: calls.append(1) or 0
+        self._tick(state, runner)
+        self.assertEqual(len(calls), 1)
+        good = self.cfg_path.read_text(encoding="utf-8")
+        self.cfg_path.write_text("{broken", encoding="utf-8")
+        err = self._tick(state, runner)
+        self.assertIn("⚠", err)
+        self.assertEqual(self._tick(state, runner), "")  # 同故障抑制
+        self.cfg_path.write_text(good, encoding="utf-8")
+        err = self._tick(state, runner)
+        self.assertEqual(len(calls), 2)  # 故障轮丢弃旧基线：恢复轮不得沿用旧基线静默返回
+        self.assertIn("已同步", err)
+        self.cfg_path.write_text("{broken", encoding="utf-8")
+        err = self._tick(state, runner)
+        self.assertIn("⚠", err)  # 恢复后抑制清除，再故障重新告警
+
+    def test_post_run_recompute_exception_stays_in_matrix(self):
+        import unittest.mock as mock
+        from eo_lib import compute_freshness_key as real_key
+        state, calls = self._state(), []
+        seq = {"n": 0}
+
+        def flaky(cfg):
+            seq["n"] += 1
+            if seq["n"] == 2:
+                raise OSError("transient")
+            return real_key(cfg)
+
+        with mock.patch.object(eo_sync, "compute_freshness_key", flaky):
+            err = self._tick(state, lambda cfg: calls.append(1) or 0)
+            self.assertEqual(len(calls), 1)
+            self.assertIn("重算失败", err)
+            self.assertEqual(state["baselines"], {})  # 异常格：不记基线
+            err2 = self._tick(state, lambda cfg: calls.append(1) or 0)
+            self.assertEqual(len(calls), 2)  # 下一轮自动重试
+            self.assertIn("已同步", err2)
+            self.assertEqual(len(state["baselines"]), 1)  # 瞬时故障过后基线恢复记录
+
     def test_all_empty_registry_hints_once(self):
         state = self._state()
         scope, err = self._scope(state, all_=True)

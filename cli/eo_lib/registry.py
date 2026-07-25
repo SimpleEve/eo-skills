@@ -48,10 +48,17 @@ def save_registry(data, path=None):
     os.replace(str(tmp), str(path))
 
 
-def _entry_identity(entry):
-    if not isinstance(entry, dict) or not entry.get("path"):
+def entry_path(entry):
+    """条目的合法 path（非空字符串），结构性坏条目返回 None——消费方据此行内隔离，不得直接 Path()。"""
+    if not isinstance(entry, dict):
         return None
-    return repo_identity(entry["path"])
+    path = entry.get("path")
+    return path if isinstance(path, str) and path else None
+
+
+def _entry_identity(entry):
+    path = entry_path(entry)
+    return repo_identity(path) if path else None
 
 
 def register_project(project_dir, name, today=None, path=None):

@@ -30,6 +30,7 @@ from eo_lib import (
     compute_freshness_key,
     count_ac,
     count_todo,
+    entry_path,
     find_by_name,
     find_project_config,
     list_worktrees,
@@ -1555,11 +1556,11 @@ def _aggregate_row(kind, obj):
     """聚合单项目行数据。kind: "registry"（注册条目）| "scan"（扫描兜底纳入）。
     出错只落到本行 error，不中断其余项目。"""
     if kind == "registry":
-        if not isinstance(obj, dict) or not obj.get("path"):
+        if entry_path(obj) is None:
             return {"label": f"{obj!r}"[:48], "path": "?", "registered": True,
-                    "error": "注册条目非法（缺 path）"}
+                    "error": "注册条目非法（path 缺失或不是字符串）"}
         path = Path(obj["path"])
-        label = obj.get("name") or path.name
+        label = obj.get("name") if isinstance(obj.get("name"), str) else path.name
     else:
         path, label = obj, obj.name
     row = {"label": label, "path": str(path), "registered": kind == "registry", "error": None}
@@ -1591,12 +1592,15 @@ def _aggregate_row(kind, obj):
 
 
 def _scan_parent_dir(parent, entries):
-    """一层枚举含 .eo-project.json 的子目录，剔除已注册者（repo identity 判等）。绝不写注册表。"""
-    known = {repo_identity(e["path"]) for e in entries if isinstance(e, dict) and e.get("path")}
+    """一层枚举含 .eo-project.json 的子目录，剔除已注册者与本轮已发现的同仓 worktree
+    （repo identity 判等，一个 identity 一行）。绝不写注册表。"""
+    known = {repo_identity(p) for p in map(entry_path, entries) if p}
     found = []
     for child in sorted(parent.iterdir()):
         if child.is_dir() and (child / ".eo-project.json").is_file():
-            if repo_identity(child) not in known:
+            ident = repo_identity(child)
+            if ident not in known:
+                known.add(ident)
                 found.append(child)
     return found
 
@@ -1659,8 +1663,18 @@ def cmd_all(args):
         print("  或用 eo-board --all --scan <父目录> 临时聚合未注册项目（不写注册表）。")
         return 0
     sources = [("registry", e) for e in entries] + [("scan", p) for p in scanned]
+
+    def _safe_row(source):
+        kind, obj = source
+        try:
+            return _aggregate_row(kind, obj)
+        except Exception as e:
+            # 单条目兜底：任何未预期异常都只坏本行，绝不终止整体聚合
+            return {"label": f"{obj!r}"[:48], "path": "?", "registered": kind == "registry",
+                    "error": f"条目处理异常：{e}"}
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(sources))) as pool:
-        rows = list(pool.map(lambda s: _aggregate_row(*s), sources))
+        rows = list(pool.map(_safe_row, sources))
     print(render_all_terminal(rows, len(entries), len(scanned)))
     return 0
 
@@ -1679,7 +1693,10 @@ def resolve_project_token(token):
         lines = "\n".join(f"  - {h.get('path')}" for h in hits)
         die(f"❌ 注册名 {token} 命中多个项目，请改用路径：\n{lines}")
     if len(hits) == 1:
-        return Path(hits[0]["path"])
+        hit_path = entry_path(hits[0])
+        if hit_path is None:
+            die(f"❌ 注册名 {token} 对应条目非法（path 缺失或不是字符串），请修复注册表或改用路径")
+        return Path(hit_path)
     die(f"❌ --project {token} 既不是存在的目录，也不是注册名（eo-board --all 查看已注册项目）")
 
 
@@ -1732,7 +1749,7 @@ def build_arg_parser():
             "  eo-board --html          生成静态 HTML 快照（写到 tmp 并自动打开）\n"
             "  eo-board --html -o a.html 生成到指定路径\n"
             "  eo-board --serve         本地只读服务（仅 127.0.0.1，默认 7333 端口）\n"
-            "  eo-board --all           多项目聚合总览（读 ${EO_HOME:-~/.eo}/projects.json）\n"
+            "  eo-board --all           多项目聚合总览（读 ${EO_HOME:-$HOME/.eo}/projects.json）\n"
             "  eo-board --project X     下钻指定项目（路径或注册名），无需 cd\n"
             "  eo-board --register      把当前项目注册进用户级注册表\n"
         ),
@@ -1744,7 +1761,7 @@ def build_arg_parser():
     mode.add_argument("--html", action="store_true", help="生成自包含静态 HTML 快照")
     mode.add_argument("--serve", action="store_true", help="启动本地只读 HTTP 服务（仅绑 127.0.0.1）")
     mode.add_argument("--register", nargs="?", const=".", metavar="PATH",
-                      help="把项目注册进用户级注册表 ${EO_HOME:-~/.eo}/projects.json（缺省 PATH=当前目录）")
+                      help="把项目注册进用户级注册表 ${EO_HOME:-$HOME/.eo}/projects.json（缺省 PATH=当前目录）")
     mode.add_argument("--unregister", nargs="?", const=".", metavar="PATH",
                       help="从用户级注册表移除项目（缺省 PATH=当前目录）")
     mode.add_argument("--all", action="store_true", help="多项目聚合总览：每注册项目一行（终端形态）")

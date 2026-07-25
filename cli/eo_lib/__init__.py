@@ -13,6 +13,7 @@ from .registry import (
     register_project,
     unregister_project,
     find_by_name,
+    entry_path,
 )
 from .frontmatter import (
     split_frontmatter,
@@ -55,6 +56,7 @@ __all__ = [
     "register_project",
     "unregister_project",
     "find_by_name",
+    "entry_path",
     "split_frontmatter",
     "parse_yaml_subset",
     "parse_yaml_scalar",

@@ -37,6 +37,7 @@ from eo_lib import (
     compute_freshness_key,
     count_ac,
     count_todo,
+    entry_path,
     find_project_config,
     load_registry,
     registry_path,
@@ -782,31 +783,46 @@ def _watch_warn(state, project_key, fingerprint, message):
     print(message, file=sys.stderr)
 
 
-def _clear_suppression(state, project_key):
-    state["suppressed"] = {t for t in state["suppressed"] if t[0] != project_key}
+def _clear_suppression(state, project_key, prefix=None):
+    """清除某项目的抑制记录；prefix 给定时只清该错误类（如 "cfg:"），其余类保持抑制。"""
+    state["suppressed"] = {
+        t for t in state["suppressed"]
+        if t[0] != project_key or (prefix is not None and not t[1].startswith(prefix))
+    }
 
 
 def _run_once(cfg):
     return cmd_run(cfg, argparse.Namespace(dry_run=False, change=None, target=None))
 
 
+def _watch_key(cfg):
+    """watch 基线键 = freshness 键 + 合并配置指纹——配置变更（sync 段/适配器参数/local 覆盖）
+    不在 freshness 键覆盖面内，必须并入基线才不会被短路吞掉。"""
+    fingerprint = json.dumps(cfg, sort_keys=True, ensure_ascii=False, default=str)
+    return (compute_freshness_key(cfg), fingerprint)
+
+
 def watch_project_tick(state, label, cfg_path, runner=_run_once):
-    """单项目单轮：freshness 键与基线比对短路；键变则进程内调用既有 run 编排。
+    """单项目单轮：基线键（freshness + 配置指纹）比对短路；键变则进程内调用既有 run 编排。
 
     结果矩阵：退出 0/1 → run 后重算键记基线（吸收 identity 回写的 mtime 变化，防自触发循环；
     部分失败同样记基线，防对持续性故障忙循环）；2（锁占用）→ 不记基线，打一行跳过提示；
-    异常 → 不记基线，按（项目, 错误指纹）抑制告警。首轮无基线视为键已变。
+    异常（含 run 后重算异常）→ 不记基线，按（项目, 错误指纹）抑制告警。首轮无基线视为键已变；
+    配置故障轮丢弃旧基线，恢复轮必然重新 run 并借成功路径清空抑制。
     """
     key_id = str(cfg_path)
     try:
         cfg = load_project_config(cfg_path)
-        fkey = compute_freshness_key(cfg)
+        fkey = _watch_key(cfg)
     except ConfigError as e:
+        state["baselines"].pop(key_id, None)
         _watch_warn(state, key_id, f"cfg:{e}", f"[eo-sync watch] ⚠ {label}：{e}（已跳过，修复后自动恢复）")
         return
     except Exception as e:
+        state["baselines"].pop(key_id, None)
         _watch_warn(state, key_id, f"cfg:{type(e).__name__}:{e}", f"[eo-sync watch] ⚠ {label}：加载失败（{e}），已跳过")
         return
+    _clear_suppression(state, key_id, prefix="cfg:")
     if state["baselines"].get(key_id) == fkey:
         return
     try:
@@ -817,7 +833,13 @@ def watch_project_tick(state, label, cfg_path, runner=_run_once):
     if rc == EXIT_LOCKED:
         print(f"[eo-sync watch] ⏸ {label}：锁被占用，本轮跳过，下一轮自动追平", file=sys.stderr)
         return
-    state["baselines"][key_id] = compute_freshness_key(cfg)
+    try:
+        new_key = _watch_key(cfg)
+    except Exception as e:
+        _watch_warn(state, key_id, f"run:recompute:{type(e).__name__}:{e}",
+                    f"[eo-sync watch] ⚠ {label}：run 后基线重算失败（{e}），下一轮重试")
+        return
+    state["baselines"][key_id] = new_key
     _clear_suppression(state, key_id)
     tail = "" if rc == EXIT_OK else "（部分失败，详见上方告警；下一轮无新变化时静默）"
     print(f"[eo-sync watch] ✓ {label} 已同步 @ {datetime.now().strftime('%H:%M:%S')}{tail}", file=sys.stderr)
@@ -842,9 +864,9 @@ def watch_scope(state, args, bare_cfg_path=None):
         state["suppressed"].discard(("<registry>", "empty"))
         scope = []
         for entry in entries:
-            if not isinstance(entry, dict) or not entry.get("path"):
+            if entry_path(entry) is None:
                 _watch_warn(state, "<registry>", f"entry:{entry!r}",
-                            f"[eo-sync watch] ⚠ 注册条目非法，已跳过：{entry!r}")
+                            f"[eo-sync watch] ⚠ 注册条目非法（path 缺失或不是字符串），已跳过：{entry!r}")
                 continue
             path = Path(entry["path"])
             cfg_path = path / ".eo-project.json"
