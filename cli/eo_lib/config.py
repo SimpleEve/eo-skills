@@ -1,6 +1,7 @@
 """.eo-project.json 定位与加载。必填字段与路径约束的权威口径见 eo-project-init/references/config.md。"""
 
 import json
+import sys
 from pathlib import Path
 
 
@@ -33,6 +34,17 @@ def _load_json_object(path, label):
     return raw
 
 
+def _normalize_project_root(project_root, path):
+    """v1 遗留形态：project_root 写成相对 repo root 的路径（常见是指向 vault 的软链）。
+    解析得出已存在的目录才归一化为其 realpath，否则返回 None 交由校验拒绝。
+    绝对路径不走本函数——既有项目的解析结果不因本归一化而改变。"""
+    try:
+        resolved = (path.parent / project_root).resolve()
+    except OSError:
+        return None
+    return resolved if resolved.is_dir() else None
+
+
 def _validate_merged(raw, path):
     problems = []
     for field in ("project_name", "mode", "project_root", "doc_root"):
@@ -43,8 +55,12 @@ def _validate_merged(raw, path):
     if isinstance(mode, str) and mode.strip() and mode not in ("vault", "local"):
         problems.append(f"mode 必须是 vault 或 local（当前 {mode!r}）")
     project_root = raw.get("project_root")
-    if isinstance(project_root, str) and project_root.strip() and not Path(project_root).is_absolute():
-        problems.append(f"project_root 必须是绝对路径（当前 {project_root!r}）")
+    if (isinstance(project_root, str) and project_root.strip()
+            and not Path(project_root).is_absolute() and _normalize_project_root(project_root, path) is None):
+        problems.append(
+            f"project_root 必须是绝对路径（当前 {project_root!r}；"
+            f"按 repo root {path.parent} 解析后也不是已存在的目录）"
+        )
     doc_root = raw.get("doc_root")
     if isinstance(doc_root, str) and doc_root.strip() and Path(doc_root).is_absolute():
         problems.append(f"doc_root 必须是相对 repo root 的路径（当前 {doc_root!r}）")
@@ -65,10 +81,16 @@ def load_project_config(path):
         # 顶层字段整体覆盖（local 优先）；必填校验看合并结果，单个文件不要求自包含
         raw = {**raw, **_load_json_object(local_path, ".eo-project.local.json")}
     _validate_merged(raw, path)
+    project_root = raw["project_root"]
+    if not Path(project_root).is_absolute():
+        normalized = _normalize_project_root(project_root, path)
+        print(f"⚠ project_root 是相对路径 {project_root!r}，已按 repo root 解析为 {normalized}；"
+              f"建议重跑 /eo-project-init 固化为绝对路径", file=sys.stderr)
+        project_root = str(normalized)
     merged = {
         "project_name": raw["project_name"],
         "mode": raw["mode"],
-        "project_root": raw["project_root"],
+        "project_root": project_root,
         "doc_root": raw["doc_root"],
         "board": raw.get("board") if isinstance(raw.get("board"), dict) else {},
         "github": raw.get("github") if isinstance(raw.get("github"), dict) else {},
