@@ -31,7 +31,7 @@ eo-skills 的默认呈现层。数据全部派生自 change.md frontmatter 与 b
 
 ## 三形态入口
 
-`eo-board`（终端）/ `--html [-o P]` / `--serve`；多项目：`--all`（注册表聚合，线程池并发、坏条目行内隔离、as-of 戳）/ `--project <路径|注册名>`（任意目录下钻，重名歧义拒绝）/ `--all --scan <父目录>`（一层兜底、同仓 worktree 去重、零写入）；`--register/--unregister` 维护注册表（写 ~/.eo，预钉例外）——共用 `build_data(cfg)`，只是渲染出口不同。单次运行形态不走缓存（天然全量扫）。
+`eo-board`（终端）/ `--html [-o P]` / `--serve`；多项目三形态：`--all`（终端 / `--html` 自包含聚合快照 / `--serve` 聚合页逐请求重读注册表+跨槽并行+空表指引页；argparse 组合矩阵钉定 --port 限 serve、--no-open 限 html/serve）（注册表聚合，线程池并发、坏条目行内隔离、as-of 戳）/ `--project <路径|注册名>`（任意目录下钻，重名歧义拒绝）/ `--all --scan <父目录>`（一层兜底、同仓 worktree 去重、零写入）；`--register/--unregister` 维护注册表（写 ~/.eo，预钉例外）——共用 `build_data(cfg)`，只是渲染出口不同。单次运行形态不走缓存（天然全量扫）。
 
 ## 来源
 
