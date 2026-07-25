@@ -47,11 +47,11 @@ created: 2026-07-25
 
 ## 2. 验收清单
 
-- [ ] AC-1 跑 `/eo-project-init`（首次创建或更新既有配置两个成功出口）时顺手注册：注册成功则项目出现在 `~/.eo/projects.json` 且任意目录 `eo-board --all` 可见；注册失败时 init 仍成功完成，但输出明确告警与手工补注册指引（`eo-board --register`），补注册后同样可见（验证：临时目录 init 后查注册表与聚合视图；将注册表目录置为不可写再 init 一次看告警与指引）
+- [x] AC-1 跑 `/eo-project-init`（首次创建或更新既有配置两个成功出口）时顺手注册：注册成功则项目出现在 `~/.eo/projects.json` 且任意目录 `eo-board --all` 可见；注册失败时 init 仍成功完成，但输出明确告警与手工补注册指引（`eo-board --register`），补注册后同样可见（验证：临时目录 init 后查注册表与聚合视图；将注册表目录置为不可写再 init 一次看告警与指引）
 - [x] AC-2 用户能用 `eo-board --register [path]` / `--unregister [path]` 手工维护注册表（缺省 path 为当前目录）；对同一项目重复 register（含从另一 worktree）不产生重复条目
-- [ ] AC-3 `eo-board --all` 每注册项目一行：项目名 + 各状态 change 计数 + backlog 数 + as-of 新鲜度戳（验证：≥2 个注册项目下运行，核对行内容与时间戳）
-- [ ] AC-4 用户在任意目录 `eo-board --project <路径|注册名>` 直接看到该项目的单项目视图，无需 cd；注册名命中多个项目时报歧义并列出候选路径、要求改用路径（不静默取第一项）（验证：在 $HOME 下用注册名跑一次；注册两个同名项目后再按名跑一次看歧义提示）
-- [ ] AC-5 未注册项目可被扫描兜底纳入：`eo-board --all --scan <父目录>` 把含 `.eo-project.json` 的一层子目录并入本次聚合并提示可注册，但不写注册表（验证：跑完后核对 projects.json 未变）
+- [x] AC-3 `eo-board --all` 每注册项目一行：项目名 + 各状态 change 计数 + backlog 数 + as-of 新鲜度戳（验证：≥2 个注册项目下运行，核对行内容与时间戳）
+- [x] AC-4 用户在任意目录 `eo-board --project <路径|注册名>` 直接看到该项目的单项目视图，无需 cd；注册名命中多个项目时报歧义并列出候选路径、要求改用路径（不静默取第一项）（验证：在 $HOME 下用注册名跑一次；注册两个同名项目后再按名跑一次看歧义提示）
+- [x] AC-5 未注册项目可被扫描兜底纳入：`eo-board --all --scan <父目录>` 把含 `.eo-project.json` 的一层子目录并入本次聚合并提示可注册，但不写注册表（验证：跑完后核对 projects.json 未变）
 - [ ] AC-6 `eo-sync watch` 常驻期间，change 状态流转后至多一个轮询间隔（默认 10s）内投影追平——看板 stub 卡状态更新（验证：watch 挂起时手改一个 change 的 status，观察 stub 卡）
 - [ ] AC-7 项目无变化时 watch 不执行同步（freshness 键短路，短路轮无输出）；每次实际同步在 stderr 打一行诊断；watch 自身 run 产生的回写不引发下一轮再次同步；run 部分失败（个别适配器出错）的轮次同样记基线——项目无新变化时下一轮回到静默，不对持续性故障忙循环重试（验证：静置数轮确认 stderr 静默；一次流转只出现一次 run 诊断；构造一个必失败适配器观察仅告警一轮后恢复静默）
 - [ ] AC-8 watch 撞上进行中的手动/archive 同步（锁占用）时跳过本轮不崩溃，下一轮自动追平（验证：人为持锁一轮后释放）
@@ -69,8 +69,8 @@ created: 2026-07-25
 
 ### Batch 2a（eo-board 多项目）
 
-- [ ] TODO-4 `--all` 聚合终端视图：枚举注册表、线程池并发扫描各项目（复用 `build_data`）、每项目一行计数 + as-of 戳、失效项目行内报错不中断、注册表缺失/空的引导提示（文件：修改: cli/eo-board、tests/test_eo_board_cache.py；对应 AC-1 的 `--all` 可见性半边、AC-3、AC-9 的 board 半边；完成判据：AC-3 行内容单测 + 失效项目行内报错用例绿）
-- [ ] TODO-5 下钻与扫描兜底：`--project <路径|注册名>`（注册名查表解析为路径，命中多项报歧义并列候选路径；等价于在该目录运行，三形态通用）+ `--all --scan <父目录>`（一层枚举临时并集，不写注册表，提示可 `--register` 收编）（文件：修改: cli/eo-board、tests/test_eo_board_cache.py；对应 AC-4、AC-5）
+- [x] TODO-4 `--all` 聚合终端视图：枚举注册表、线程池并发扫描各项目（复用 `build_data`）、每项目一行计数 + as-of 戳、失效项目行内报错不中断、注册表缺失/空的引导提示（文件：修改: cli/eo-board、tests/test_eo_board_cache.py；对应 AC-1 的 `--all` 可见性半边、AC-3、AC-9 的 board 半边；完成判据：AC-3 行内容单测 + 失效项目行内报错用例绿）
+- [x] TODO-5 下钻与扫描兜底：`--project <路径|注册名>`（注册名查表解析为路径，命中多项报歧义并列候选路径；等价于在该目录运行，三形态通用）+ `--all --scan <父目录>`（一层枚举临时并集，不写注册表，提示可 `--register` 收编）（文件：修改: cli/eo-board、tests/test_eo_board_cache.py；对应 AC-4、AC-5）
 
 ### Batch 2b（eo-sync watch）
 

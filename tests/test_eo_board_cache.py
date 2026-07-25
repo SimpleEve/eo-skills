@@ -275,5 +275,137 @@ class BoardCacheServeTests(unittest.TestCase):
             self.assertNotEqual(initial["stats"]["direct_commits"]["since"], february["stats"]["direct_commits"]["since"])
 
 
+class BoardMultiProjectTests(unittest.TestCase):
+    """--all / --project / --scan 多项目聚合与下钻。EO_HOME 一律临时目录，不触碰真实 ~/.eo。"""
+
+    def setUp(self):
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tempdir.cleanup)
+        self.root = Path(self.tempdir.name).resolve()
+        self.eo_home = self.root / "eo-home"
+
+    def make_project(self, name, statuses=(), backlog_cards=0, parent=None):
+        repo = (parent or self.root) / name
+        repo.mkdir(parents=True)
+        pm = self.root / f"{name}-pm"
+        (pm / "backlog").mkdir(parents=True)
+        (pm / "roadmap.md").write_text(
+            "---\nstatus: active\nphase: p1\nupdated: 2026-07-25\n---\n", encoding="utf-8"
+        )
+        for i in range(backlog_cards):
+            (pm / "backlog" / f"card-{i}.md").write_text(
+                f"---\ntitle: 卡{i}\nstatus: backlog\ncreated: 2026-07-25\n---\n内容\n", encoding="utf-8"
+            )
+        for i, status in enumerate(statuses, start=1):
+            p = repo / "eo-doc" / "changes" / f"{i:02d}-c{i}" / "change.md"
+            p.parent.mkdir(parents=True)
+            p.write_text(
+                f"---\nid: c{i}\nseq: {i}\ntitle: C{i}\nstatus: {status}\ntier: full\ntype: feature\ncreated: 2026-07-25\n---\n\n"
+                "# C\n\n## 2. 验收清单\n- [ ] AC-1 一\n",
+                encoding="utf-8",
+            )
+        (repo / ".eo-project.json").write_text(json.dumps({
+            "project_name": name,
+            "mode": "vault",
+            "project_root": str(pm),
+            "doc_root": "eo-doc",
+        }), encoding="utf-8")
+        run_git(repo, "init", "-q", "-b", "main")
+        run_git(repo, "config", "user.name", "t")
+        run_git(repo, "config", "user.email", "t@t")
+        run_git(repo, "add", "-A")
+        run_git(repo, "commit", "-qm", "init")
+        return repo
+
+    def run_board(self, *args, cwd=None):
+        env = dict(os.environ)
+        env["EO_HOME"] = str(self.eo_home)
+        return subprocess.run(
+            [sys.executable, str(BOARD_PATH), *args],
+            cwd=cwd or self.root, env=env, capture_output=True, text=True,
+        )
+
+    def register(self, repo):
+        r = self.run_board("--register", str(repo))
+        assert r.returncode == 0, r.stderr
+
+    def registry_file(self):
+        return self.eo_home / "projects.json"
+
+    def test_all_one_row_per_project_with_counts_and_as_of(self):
+        a = self.make_project("alpha", statuses=("confirmed", "implementing", "archived"), backlog_cards=2)
+        b = self.make_project("beta", statuses=("draft",))
+        self.register(a)
+        self.register(b)
+        r = self.run_board("--all")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        lines = [l for l in r.stdout.splitlines() if l.strip()]
+        row_a = next(l for l in lines if l.strip().startswith("alpha"))
+        row_b = next(l for l in lines if l.strip().startswith("beta"))
+        # 列序：draft confirmed implementing reviewed archived backlog as-of
+        self.assertRegex(row_a, r"alpha\s+0\s+1\s+1\s+0\s+1\s+2\s+\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
+        self.assertRegex(row_b, r"beta\s+1\s+0\s+0\s+0\s+0\s+0\s+\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
+
+    def test_all_invalid_entry_shows_error_row_without_breaking_others(self):
+        a = self.make_project("alpha", statuses=("confirmed",))
+        self.register(a)
+        data = json.loads(self.registry_file().read_text(encoding="utf-8"))
+        data["projects"].append({"name": "ghost", "path": str(self.root / "gone"), "registered_at": "2026-07-25"})
+        self.registry_file().write_text(json.dumps(data), encoding="utf-8")
+        r = self.run_board("--all")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("alpha", r.stdout)
+        self.assertIn("ghost", r.stdout)
+        self.assertIn("✗", r.stdout)
+
+    def test_all_empty_registry_prints_guidance(self):
+        r = self.run_board("--all")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("--register", r.stdout)
+
+    def test_project_by_name_and_by_path_from_anywhere(self):
+        a = self.make_project("alpha", statuses=("confirmed",))
+        self.register(a)
+        elsewhere = self.root / "elsewhere"
+        elsewhere.mkdir()
+        by_name = self.run_board("--project", "alpha", cwd=elsewhere)
+        self.assertEqual(by_name.returncode, 0, by_name.stderr)
+        self.assertIn("eo board · alpha", by_name.stdout)
+        by_path = self.run_board("--project", str(a), cwd=elsewhere)
+        self.assertEqual(by_path.returncode, 0, by_path.stderr)
+        self.assertIn("eo board · alpha", by_path.stdout)
+
+    def test_project_name_ambiguity_lists_candidates(self):
+        a = self.make_project("dup", parent=self.root / "d1")
+        b = self.make_project("dup2", parent=self.root / "d2")
+        # 第二个项目改成同注册名（配置同名，路径不同）
+        cfg = json.loads((b / ".eo-project.json").read_text(encoding="utf-8"))
+        cfg["project_name"] = "dup"
+        (b / ".eo-project.json").write_text(json.dumps(cfg), encoding="utf-8")
+        self.register(a)
+        self.register(b)
+        r = self.run_board("--project", "dup", cwd=self.root)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("命中多个", r.stderr)
+        self.assertIn(str(a.resolve()), r.stderr)
+        self.assertIn(str(b.resolve()), r.stderr)
+
+    def test_scan_merges_unregistered_without_writing_registry(self):
+        a = self.make_project("alpha")
+        self.register(a)
+        before = self.registry_file().read_bytes()
+        parent = self.root / "scan-parent"
+        self.make_project("orphan", statuses=("draft",), parent=parent)
+        r = self.run_board("--all", "--scan", str(parent))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("orphan (未注册)", r.stdout)
+        self.assertIn("--register", r.stdout)
+        self.assertEqual(self.registry_file().read_bytes(), before)
+
+    def test_scan_requires_all(self):
+        r = self.run_board("--scan", str(self.root))
+        self.assertNotEqual(r.returncode, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
