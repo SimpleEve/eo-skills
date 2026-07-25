@@ -4,7 +4,6 @@
 
 > 从 v1 升级？破坏性变更与迁移步骤见 [docs/migration-v1-to-v2.md](docs/migration-v1-to-v2.md)。
 
-> 装好之后每天到底敲什么？看 [docs/usage.md](docs/usage.md)（使用说明：skill + eo-board 看板 + eo-sync 投影）。
 > 想直接看每个 skill 的详细用法、典型流程、设计权衡？请看 [docs/GUIDE.md](docs/GUIDE.md)。
 
 > 担心流程的 token 开销？实测数据与 gstack / Anthropic 官方对标见 [docs/token-budget-benchmark.md](docs/token-budget-benchmark.md)。
@@ -81,6 +80,8 @@ install.bat --antigravity-only
 
 ## 第一次使用
 
+> 心智模型一句话：**对话里干活（skill），终端里看板（CLI）**。skill 在 Claude Code / Codex 会话里喊；CLI（`eo-board` / `eo-sync`）在任意终端敲，`install.sh` 已链接进 `~/.local/bin`（POSIX-only，Windows 用 WSL）。
+
 进入任意项目目录，在 Claude Code 里跑：
 
 ```
@@ -88,6 +89,8 @@ install.bat --antigravity-only
 ```
 
 它会生成 `.eo-project.json`（项目级配置）+ 双侧最小骨架（代码侧 `eo-doc/` + 项目管理侧）。**所有其它 eo-* skill 都依赖它**，没跑过会直接报错。
+
+init 会问一个关键问题——项目管理侧（roadmap / backlog / 决策 / 教训）放哪：**local 模式**（缺省推荐，放仓库内 `.eo-project/` 且随仓库提交，协作者 clone 即得完整项目记忆）或 **vault 模式**（放 Obsidian vault，跨项目统一浏览）。init 成功还会顺手把项目登记进 `~/.eo/projects.json`（多项目看板靠它；失败不阻塞，稍后 `eo-board --register` 补上）。
 
 协作场景：`.eo-project.json` 提交进仓库承载团队共享字段；机器相关字段（`project_root` / `mode` 等）放进不提交的 `.eo-project.local.json` 做顶层字段覆盖（协作者 clone 后重跑 `/eo-project-init` 自动引导生成）。local 模式的管理侧（`.eo-project/`：roadmap / backlog / decisions / lessons）缺省随仓库提交——协作者 clone 即得完整项目记忆。
 
@@ -153,6 +156,57 @@ flowchart TD
 | 把若干节点串起来循环推进到收敛 | `/eo-loop` | 总控调度：圈状态机线段 → 派发到可插拔基底（子 agent / codex / orca）→ 每 ≤30min 主动观测并出进度报告；互不干扰的并行组（同层批 / 可并行 change）多 worker 并行推进 |
 
 不在表里的 skill（`eo-change-review`）是可选增强，详见 [GUIDE](docs/GUIDE.md)。
+
+---
+
+## 看板与投影：两个 CLI
+
+### eo-board —— 只读看板（绝不写项目文件）
+
+```bash
+# 单项目（项目目录里）
+eo-board            # 终端摘要：change 各状态分列 + backlog + 警告
+eo-board --html     # 自包含 HTML 快照，自动开浏览器
+eo-board --serve    # 本地实时看板 http://127.0.0.1:7333（3 秒热刷新，带缓存）
+
+# 多项目（任意目录）
+eo-board --all                    # 每个注册项目一行：状态计数 + backlog 数 + 数据新鲜度
+eo-board --project <路径|注册名>   # 下钻单项目视图，不用 cd
+eo-board --all --scan ~/projects  # 未注册的项目临时扫进来看（不写注册表）
+
+# 注册表维护（~/.eo/projects.json；init 会自动登记）
+eo-board --register / --unregister
+```
+
+### eo-sync —— 投影同步（看板卡片 / GitHub issue·PR）
+
+change 状态要「投影」出去才看得见（Obsidian 看板卡、GitHub issue/PR），投影统一由 `eo-sync` 执行：
+
+```bash
+eo-sync adapters        # 看有哪些投影目标、哪些已启用
+eo-sync run --dry-run   # 只看计划，不写任何东西
+eo-sync run             # 执行投影（幂等，跑几遍都无副作用）
+eo-sync watch --all     # 常驻：所有注册项目状态一变 10 秒内自动追平（推荐挂一个终端）
+```
+
+基本不用手动跑：`/eo-archive` 归档自动跑一次；平时挂 `watch --all` 全自动（无变化时零成本静默，同一作用域只开一个）。配置在 `.eo-project.json` 的 `sync` 段（init 问答写好；老项目的 `board`/`github` 旧段自动等价映射，无需改）：
+
+```json
+"sync": {
+  "obsidian": { "enabled": true, "stub_dir": "board" },
+  "github":   { "enabled": true, "issue": true, "pr": "auto" }
+}
+```
+
+想接 Notion/飞书？投影是插件化的：PATH 上放一个 `eo-sync-<name>` 可执行 + 配置启用即可，协议见 [docs/sync-adapter-protocol.md](docs/sync-adapter-protocol.md)。
+
+### 常见问题
+
+- **看板卡片怎么不动了？** 状态流转期间不再实时写卡（设计如此：写路径不为呈现层付费）。挂 `eo-sync watch --all` 即秒级跟手；或随时 `eo-sync run`；归档时总会自动同步。
+- **投影删错了？** 投影是派生数据，`eo-sync run` 随时全量重建；孤儿清理只在快照可证完整时执行，扫描异常一律保守跳过。
+- **协作时配置里全是别人的路径？** 重跑 `/eo-project-init`，机器相关字段会写进你自己的 `.eo-project.local.json`（不提交）。
+- **老项目报「project_root 必须是绝对路径」？** v1 配置可能写了软链相对路径（如 `eo-doc/vault`），临时手工改成绝对 vault 路径即可；自动归一化修复在排期中。
+- **删了工具会丢数据吗？** 不会。一切真相都在 markdown 文件里，CLI 只写投影/注册表（`~/.eo/` 下）。
 
 ---
 
