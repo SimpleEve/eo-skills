@@ -7,7 +7,7 @@ status: implementing
 tier: light
 type: enhance
 base_commit: 6998899d55eba93a0e3a0335a4e013780c298796
-test_lock_commit: ~
+test_lock_commit: e2d0601f728ace75259af3389b22e542f7acefb5
 commits: []
 issue: ~
 created: 2026-07-25
@@ -19,7 +19,7 @@ created: 2026-07-25
 
 ## 2. 验收清单
 
-- [ ] AC-1 eo-loop/SKILL.md「派发 prompt 纪律」含分叉上报条款：含形态自由度的节点，须令 worker 把「本应问用户的分叉 + 各自所采假设」以清单随交付上报（锁定：~）
-- [ ] AC-2 eo-loop/SKILL.md「③派发与校验裁决」含总控汇总条款：把分叉清单攒成一次封闭选择转达用户，用户裁决随修订轮回灌（锁定：~）
-- [ ] AC-3 eo-loop/SKILL.md「①圈线段」含举例措辞判据：用户意图含「比如/之类」等举例措辞 = 形态未定稿，先探针对齐再派实施（锁定：~）
-- [ ] AC-4 eo-loop/references/substrates/_template.md 派发节含分叉清单提示位（锁定：~）
+- [x] AC-1 eo-loop/SKILL.md「派发 prompt 纪律」含分叉上报条款：含形态自由度的节点，须令 worker 把「本应问用户的分叉 + 各自所采假设」以清单随交付上报（锁定：tests/test_loop_fork_caliber.py#TestAC1DispatchPromptForkReporting）
+- [x] AC-2 eo-loop/SKILL.md「③派发与校验裁决」含总控汇总条款：把分叉清单攒成一次封闭选择转达用户，用户裁决随修订轮回灌（锁定：tests/test_loop_fork_caliber.py#TestAC2CoordinatorBatchesForksToUser）
+- [x] AC-3 eo-loop/SKILL.md「①圈线段」含举例措辞判据：用户意图含「比如/之类」等举例措辞 = 形态未定稿，先探针对齐再派实施（锁定：tests/test_loop_fork_caliber.py#TestAC3ExampleWordingIsNotFinal）
+- [x] AC-4 eo-loop/references/substrates/_template.md 派发节含分叉清单提示位（锁定：tests/test_loop_fork_caliber.py#TestAC4TemplateDispatchSlot）
