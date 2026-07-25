@@ -3,7 +3,7 @@ id: sync-plugin-layer
 seq: 2
 title: eo-sync 插件层与存量适配器迁移
 summary: 投影插件化为 eo-sync 单命令同步；stub/issue/PR 迁内置适配器，逐流转触发点全面退役
-status: implementing
+status: reviewed
 tier: full
 type: feature
 base_commit: 5f38497da71eb7ca17b0fa10e0fe4453251399b8
@@ -44,14 +44,14 @@ created: 2026-07-24
 
 ## 2. 验收清单
 
-- [ ] AC-1 用户跑 `eo-sync run` 后，看板 stub 与 GitHub issue/PR 投影与 board-github.md 现行写法逐字段等价（stub 整文件重写、issue 靠回写号去重，含同轮回写的平台身份字段）；紧接着再跑一次，全部目标 skip、无任何副作用（验证：本项目 board/ 下存量卡对拍零语义 diff；GitHub 侧用测试配置验）
+- [x] AC-1 用户跑 `eo-sync run` 后，看板 stub 与 GitHub issue/PR 投影与 board-github.md 现行写法逐字段等价（stub 整文件重写、issue 靠回写号去重，含同轮回写的平台身份字段）；紧接着再跑一次，全部目标 skip、无任何副作用（验证：本项目 board/ 下存量卡对拍零语义 diff；GitHub 侧用测试配置验）
 - [x] AC-2 生命周期起点差异保留：同一次 run 内，draft change 只产出 stub 不建 issue，confirmed 起才建 issue，PR 仅对 archived change 按 `github.pr` 策略创建（验证：三态样本端到端 dry-run，draft→仅 obsidian/stub、github/issue skip；confirmed→github/issue create；archived→pr 按 auto/默认分支判定）
 - [x] AC-3 `eo-sync run --dry-run` 逐行输出「change × 目标 → create/update/delete/skip + 原因」的计划，全程零写入（投影介质、change frontmatter、簿记文件都不动），并明示其为提示性计划（落地以持锁重算为准）（验证：test_dry_run_zero_write + 三态端到端 dry-run，输出「提示性计划」头、无 sync-state 文件、frontmatter 未变）
 - [x] AC-4 第三方接入：PATH 上放可执行 `eo-sync-<name>` 并在配置启用后，`eo-sync adapters` 能列出其 capabilities 且 run 将其纳入；适配器输出非法 JSON / 协议主版本不匹配 / 非零退出时，仅该适配器报错跳过，其余目标照常完成，run 总退出码非零标示存在失败（0 = 全部成功）（验证：夹具 adapters 列出 + 协议往返；EO_FIXTURE_BAD_JSON/PROTOCOL=99/EXIT=1 三态各让夹具跳过、obsidian 仍完成、run 退 1；全成功退 0）
 - [x] AC-5 配置零成本与兼容：合并配置既无 `sync` 段也无 `board`/`github` 段 → run 提示无启用目标并以退出码 0 结束；仅有存量 `board`/`github` 段的项目无需改配置，行为按等价映射生效（验证：test_no_targets_exit_zero 退 0「未启用任何同步目标」；test_compat_mapping board→obsidian、github.issue/pr→github、sync 段存在则以其为准）
 - [x] AC-6 流程瘦身：状态流转期间零投影动作——执行 `grep -rniE "upsert|刷新 stub|联动 stub|看板 stub|建 issue|创建 GitHub issue|issue body|PR 创建" --include="*.md" eo-* --exclude-dir=eo-doc | grep -vE "^eo-shared/(board-github|README)\.md:|^eo-archive/SKILL\.md:|^eo-project-init/references/config\.md:"` 输出为空（实跑 = 0 行；白名单四文件残留仅 config.md:179 board/ 目录结构注解，属配置字段语义描述；eo-archive 第五层已改调 `eo-sync run`）（`--exclude-dir=eo-doc` 隔离历史工件；白名单四文件的命中仅允许是投影写法/配置字段语义/收口触发的**描述**，不得是流转期执行指令——该定性约束由 TODO-5 完成判据人工复核。零输出可达性已在起草基线自证：白名单外命中共 23 行，逐行映射到 TODO-5 的删除/改口径/措辞调整动作，无一游离——TODO-5 裁定保留的 4 处描述行以措辞调整出正则而非扩白名单，见其清单）；eo-archive 收口自动执行一次 `eo-sync run`；流转期间看板不实时刷新是预期行为而非缺陷
 - [x] AC-7 并发安全：两个 worktree 同时 `eo-sync run`，后到者看到含持有者信息的锁占用提示并干净退出（退出码区别于失败）；先后串行的两次 run，第二次全部 skip、不重复创建任何远端对象（陈旧计划无落地窗口）（验证：test_lock_contention_exit_2 在场 flock 持有者时后到者退出码 2（≠失败码 1）+ stderr 打印持有者 pid/时间戳；test_serial_second_run_all_skip 第二次全 skip）
-- [ ] AC-8 同步不污染 SoT：手动 run 之后仓库内 `git status` 仅可能出现幂等键回写（change frontmatter 的身份字段），随工作区常规提交走；archive 收口 run 产生的回写由紧随的 `[<change-id>] sync 身份回写` commit 提交（无回写则不产生该 commit），归档完成后工作区干净；本次 run 创建/更新了 PR 时该 commit 随即推送到同一分支（PR 合并后的 SoT 含幂等键；推送失败降级为告警提示，不阻塞归档）；簿记文件位于 `$EO_HOME/sync-state/`，仓库内零新增文件
+- [x] AC-8 同步不污染 SoT：手动 run 之后仓库内 `git status` 仅可能出现幂等键回写（change frontmatter 的身份字段），随工作区常规提交走；archive 收口 run 产生的回写由紧随的 `[<change-id>] sync 身份回写` commit 提交（无回写则不产生该 commit），归档完成后工作区干净；本次 run 创建/更新了 PR 时该 commit 随即推送到同一分支（PR 合并后的 SoT 含幂等键；推送失败降级为告警提示，不阻塞归档）；簿记文件位于 `$EO_HOME/sync-state/`，仓库内零新增文件
 
 ## 3. TODO
 

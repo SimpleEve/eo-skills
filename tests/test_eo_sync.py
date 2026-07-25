@@ -634,6 +634,36 @@ class SyncSegmentSemanticsTests(unittest.TestCase):
 class GithubFixTests(unittest.TestCase):
     """gh 结果如实进簿记与输出；archived issue 关闭幂等。"""
 
+    def test_github_dry_run_plans_without_remote_or_writes(self):
+        """GitHub 目标 dry-run 只给出计划，不触发 gh 或写入任一介质。"""
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            repo = init_repo(root, {"project_name": "p", "mode": "local", "project_root": str(root / "pm"),
+                                    "doc_root": "eo-doc",
+                                    "sync": {"github": {"enabled": True, "issue": True, "pr": "always"}}},
+                             changes=[
+                                 {"cid": "draft", "seq": 1, "status": "draft"},
+                                 {"cid": "confirmed", "seq": 2, "status": "confirmed"},
+                                 {"cid": "archived", "seq": 3, "status": "archived"},
+                             ])
+            changes = sorted(repo.glob("eo-doc/changes/*/change.md"))
+            before = {path: path.read_text(encoding="utf-8") for path in changes}
+
+            r = run_sync(repo, root / "home", "run", "--dry-run")
+
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertIn("draft × github/issue → skip", r.stdout)
+            self.assertIn("confirmed × github/issue → create", r.stdout)
+            self.assertIn("archived × github/issue → create", r.stdout)
+            self.assertIn("archived × github/pr → create", r.stdout)
+            self.assertIn("提示性计划", r.stdout)
+            self.assertFalse((root / "home" / "sync-state").exists())
+            self.assertEqual({path: path.read_text(encoding="utf-8") for path in changes}, before)
+            self.assertEqual(
+                subprocess.run(["git", "status", "--porcelain"], cwd=repo, capture_output=True, text=True).stdout,
+                "",
+            )
+
     def test_gh_unavailable_surfaced_and_bookkeeping_clean(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)

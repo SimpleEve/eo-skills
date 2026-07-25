@@ -6,7 +6,7 @@ created: 2026-07-25
 updated: 2026-07-25
 status: active
 summary: >
-  第 3 轮复审不通过：worktree 枚举瞬时降级仍可误删投影，响应与配置契约尚有两处未闭合。
+  第 4 轮核销通过：P0/P1 已清零，具备置 reviewed 条件；按编排待 eo-test 通过后再实际置位。
 ---
 
 # eo-sync 插件层与存量适配器迁移代码审查报告
@@ -27,11 +27,11 @@ summary: >
 
 | ID | 级别 | 摘要 | 位置 | 状态 | 根因 | 首见/最近轮 | 基线/修复 commit |
 |----|------|------|------|------|------|-------------|------------------|
-| P0-1 | P0 | worktree 枚举瞬时降级仍被误判为完整快照并删除投影 | `cli/eo-sync:593`; `cli/eo-sync:644` | fixed | implementation | 1/3 | `2a6644f` / `a3af2d6` |
+| P0-1 | P0 | worktree 枚举瞬时降级仍被误判为完整快照并删除投影 | `cli/eo-sync:657`; `cli/eo_lib/gitio.py:39` | verified | implementation | 1/4 | `2a6644f` / `a3af2d6` |
 | P1-1 | P1 | `identities` 含非标量 frontmatter，违反协议 v1 快照契约 | `cli/eo-sync:267`; `docs/sync-adapter-protocol.md:133` | verified | implementation | 1/3 | `2a6644f` / `3be8ca2` |
 | P1-2 | P1 | 同状态 worktree 的计划来源与回写落点使用两套选择规则 | `cli/eo-sync:311`; `cli/eo_lib/changes.py:225` | verified | implementation | 1/2 | `2a6644f` / `7167f35` |
-| P1-3 | P1 | apply 响应缺少 `writeback` 仍通过最小 schema 校验 | `cli/eo-sync:484`; `cli/eo-sync:500` | fixed | implementation | 1/3 | `2a6644f` / `a3af2d6` |
-| P1-4 | P1 | `sync: null` 被新增为合法零目标，但公开配置契约仍限定 object | `cli/eo_lib/config.py:51`; `eo-project-init/references/config.md:82` | fixed | implementation | 1/3 | `2a6644f` / `a3af2d6` |
+| P1-3 | P1 | apply 响应缺少 `writeback` 仍通过最小 schema 校验 | `cli/eo-sync:494`; `docs/sync-adapter-protocol.md:118` | verified | implementation | 1/4 | `2a6644f` / `a3af2d6` |
+| P1-4 | P1 | `sync: null` 被新增为合法零目标，但公开配置契约仍限定 object | `cli/eo_lib/config.py:51`; `eo-project-init/references/config.md:82` | verified | implementation | 1/4 | `2a6644f` / `a3af2d6` |
 | P1-5 | P1 | GitHub apply 会提前提交失败簿记并把 PR 失败报告为成功 | `cli/eo-sync-github:240`; `cli/eo-sync-github:260` | verified | implementation | 1/2 | `2a6644f` / `7167f35` |
 | P1-6 | P1 | archived issue 每次 run 都再次计划 close，第二次不能全 skip | `cli/eo-sync-github:133` | verified | implementation | 1/2 | `2a6644f` / `7167f35` |
 | P1-7 | P1 | 逐流转投影退役仍残留执行指令与旧收口语义 | `eo-change/SKILL.md:123`; `eo-implement/SKILL.md:134` | verified | implementation | 1/2 | `2a6644f` / `7167f35` |
@@ -203,15 +203,29 @@ summary: >
 
 本轮结论：不通过（P0 1 条，P1 2 条）。`fix_rounds` 当前为 2；下一次模式二修复会用到第 3 轮额度。`status` 保持 `implementing`，当前不可置 `reviewed`。
 
+## 第 4 轮记录（revision 1 · 2026-07-25）
+
+- 审查基线：`a3af2d6`
+- 核销：P0-1、P1-3、P1-4 → `verified`（修复 commit `a3af2d6`）；其余 P1 保持 `verified`。
+- reopen：无。
+- 新增：无。本轮按核销轮边界只复核三项 `fixed` finding；AC-1/AC-8 仍归 `/eo-test`，未把代码审查回归当成测试验收。
+
+### 已核销证据
+
+1. **P0-1**：`list_worktrees_status()` 由同一次枚举同时返回 worktree 列表与降级信号，`build_scan()` 再把该列表生成的 `resolved`/`snapshots` 与 `complete`/`reasons` 封装为单一结果；非 dry-run 的初扫和身份回写后复扫均在同一把锁内调用它。定向复现使用两个 worktree、让 `c2` 只存在于第二个：分别令两次 `git worktree list --porcelain` 中第 1 次或第 2 次瞬时失败，两轮都没有计划 `c2 → delete` 且 `c2.md` 均保留；权威初扫降级的第 2 种情况同时输出「worktree 枚举降级」与「跳过孤儿投影清理」。过滤、change 解析告警与扫描异常路径也分别以 `snapshot_complete=false` 或在 plan 前失败，不能据缺席执行孤儿删除。
+2. **P1-3**：`_validate_apply_response()` 现将 `writeback` 与 `results`、`bookkeeping` 同列为必填对象；定向调用缺 `writeback` 返回「apply 响应缺少必填字段 writeback」，显式空对象返回通过。夹具 `apply_no_wb` 的真实 run 被隔离并退出 1，协议文档同步明确「无回写也须显式给 `{}`」。
+3. **P1-4**：公开配置表与协议启用节现均声明 `sync` 类型为 `object | null`，并明确 `{}`/`null` 是零目标、仅键缺席才回落存量配置、其它类型报配置错误。定向加载确认 `sync: null` 与 `{}` 都得到零启用，`sync: "foo"` 抛 `ConfigError`，实现与公开契约一致。
+
+### 验证记录
+
+- `python3 -m unittest tests.test_eo_sync tests.test_eo_sync_smoke`：62 tests，全部通过。
+- `python3 -m unittest discover -s tests -p 'test*.py'`：66 tests，全部通过。
+- `git show --check a3af2d6`、`git diff --check 3be8ca2..a3af2d6`：通过。
+
+本轮结论：通过（P0 0 条，P1 0 条）。代码审查已具备置 `reviewed` 条件；依本轮编排暂不改 `change.md`，待 `/eo-test` 核验 AC-1/AC-8 通过后再实际置位。`fix_rounds` 已到 3/3，本轮结论按熔断规则上交用户。
+
 ## 速报
 
-结论：不通过（P0 1 条，P1 2 条）［第 3 轮 · revision 1 · 基线 `3be8ca2`］
+结论：通过（P0 0 条，P1 0 条）［第 4 轮 · revision 1 · 基线 `a3af2d6`］
 
-P0（阻塞）：
-1. 首次 worktree 枚举瞬时失败、锁内复查成功时，退化快照仍会删除另一 worktree 的投影 — `cli/eo-sync:593`
-
-P1（应修）：
-1. apply 缺 `writeback` 仍通过 v1 最小 schema 校验 — `cli/eo-sync:484`
-2. `sync: null` 被代码新增为合法零目标，但公开配置契约仍限定 object — `cli/eo_lib/config.py:51`
-
-下一步：回 `/eo-implement` 模式二使用第 3 轮修复额度；修复提交后重跑 `/eo-review`，P0/P1 清零方可置 `reviewed`。
+下一步：代码审查 P0/P1 已清零，具备置 `reviewed` 条件；先进入 `/eo-test` 核验 AC-1/AC-8，test 通过后再实际置位。`fix_rounds` 已到 3/3，本轮结论上交用户。
