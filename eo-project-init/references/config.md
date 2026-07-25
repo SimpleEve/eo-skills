@@ -74,7 +74,7 @@ mv ~/.eo-skills.json "$EO_HOME/config.json"
 |------|------|------|------|
 | `project_name` | string | ✅ | 项目显示名 |
 | `mode` | `"vault"` \| `"local"` | ✅ | 运行模式 |
-| `project_root` | string（绝对路径） | ✅ | **项目管理侧根**。vault 模式=vault 项目目录；local 模式=`<repo>/.eo-project` |
+| `project_root` | string（绝对路径） | ✅ | **项目管理侧根**。vault 模式=vault 项目目录；local 模式=`<repo>/.eo-project`。写成相对路径时（v1 遗留形态）读取层按 repo root 解析并解软链后放行 + 告警，见下「读取层归一化」 |
 | `doc_root` | string（相对 repo root） | ✅ | **代码侧根**，默认 `"eo-doc"` |
 | `kanban_path` | null | ❌ | **已废弃**（旧手工看板体系退役）。新配置一律 `null`；存量值被所有 skill 忽略。项目级总览 = Bases 聚合各项目 roadmap.md frontmatter |
 | `board.enabled` | bool | ❌（默认 `false`） | **legacy**（新配置不再生成，仅兼容映射消费；首选写 `sync.obsidian.enabled`）。change 看板投影开关（vault 模式才有意义）。开启后 `eo-sync`（obsidian 适配器）把 stub 卡片投影到 `<project_root>/board/`，见 `eo-shared/board-github.md` 与下文 `sync` 段 |
@@ -107,7 +107,8 @@ mv ~/.eo-skills.json "$EO_HOME/config.json"
 **兼容映射**：以**键是否存在**判定（非「值是否非空」）——合并配置**无** `sync` 键时由存量 `board` / `github` 段等价派生启用集（`board.enabled`→`obsidian`、`github.issue`/`pr`→`github`）；`sync` 键**存在**（含空 `{}` 或显式 `null`）则完全以其为准、不与 `board`/`github` 深合并，其中 `{}`/`null` 是用户显式选择的零目标（绝不回落存量段）；`sync` 值为 object 以外的类型 → 配置校验失败（不静默降级）。存量项目无需改配置即按等价映射生效。正式收编已由 change `sync-config-consolidation` 完成：init 新配置只写 `sync` 段，重跑 init（1.5 分支）对仅有旧段的项目提示并代写等价 `sync` 段（旧段保留不删）。协议契约见 [../../docs/sync-adapter-protocol.md](../../docs/sync-adapter-protocol.md)。
 
 **设计约束**：
-- `project_root` 永远是绝对路径。vault 模式不依赖软链——软链只是给用户查看方便，skill 一律走 `project_root`。
+- `project_root` **生成时**永远写绝对路径。vault 模式不依赖软链——软链只是给用户查看方便，skill 一律走 `project_root`。
+- **读取层归一化**（存量兼容）：合并结果的 `project_root` 是相对路径时（v1 遗留常写 `<doc_root>/vault` 这类软链相对路径），读取层按 repo root 解析并解软链，得到已存在的目录即放行并在 stderr 告警一行；解析不到已存在目录则仍按配置校验失败处理（不猜、不静默放行）。下游拿到的 `project_root` 恒为绝对路径，消费方无需感知。重跑 `/eo-project-init` 会把它回写成绝对路径（落点按 local 优先规则）。
 - `.eo-project.json` 本身**提交到仓库**（团队共享配置）；`.eo-project.local.json` **不提交**（`eo-project-init` 默认写入 `.gitignore`）。
 - 必填校验以**合并结果**为准——单个文件不要求自包含。
 

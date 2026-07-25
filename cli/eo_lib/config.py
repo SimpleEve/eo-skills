@@ -40,9 +40,10 @@ def _normalize_project_root(project_root, path):
     绝对路径不走本函数——既有项目的解析结果不因本归一化而改变。"""
     try:
         resolved = (path.parent / project_root).resolve()
-    except OSError:
+        return resolved if resolved.is_dir() else None
+    except (OSError, RuntimeError, ValueError):
+        # 成环软链在 CPython 抛 RuntimeError，含 NUL 的路径抛 ValueError——都不是 OSError
         return None
-    return resolved if resolved.is_dir() else None
 
 
 def _validate_merged(raw, path):
@@ -84,6 +85,12 @@ def load_project_config(path):
     project_root = raw["project_root"]
     if not Path(project_root).is_absolute():
         normalized = _normalize_project_root(project_root, path)
+        if normalized is None:
+            # 校验与取值之间目标消失（同步盘上并非纯理论）——绝不把 None 当路径传给下游
+            raise ConfigError(
+                f"project_root 归一化失败：{project_root!r} 按 repo root {path.parent} 解析不到已存在的目录",
+                path=path,
+            )
         print(f"⚠ project_root 是相对路径 {project_root!r}，已按 repo root 解析为 {normalized}；"
               f"建议重跑 /eo-project-init 固化为绝对路径", file=sys.stderr)
         project_root = str(normalized)

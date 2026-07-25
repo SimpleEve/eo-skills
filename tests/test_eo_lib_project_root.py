@@ -12,6 +12,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLI_DIR = REPO_ROOT / "cli"
@@ -122,6 +123,31 @@ class ProjectRootNormalizationTests(unittest.TestCase):
         with self.assertRaises(ConfigError):
             self._load_expecting_error(path)
 
+    def test_relative_symlink_loop_fails_closed(self):
+        # 成环软链在 CPython 的 resolve() 抛 RuntimeError，不得穿透成裸 traceback
+        loop = self.repo / "eo-doc" / "vault"
+        loop.symlink_to(loop)
+        path = self._write_config("eo-doc/vault")
+        with self.assertRaises(ConfigError):
+            self._load_expecting_error(path)
+
+    def test_target_vanishing_after_validation_fails_closed(self):
+        # 校验通过与取值之间目标消失：绝不把 None 当路径传给下游
+        (self.repo / "eo-doc" / "vault").symlink_to(self.vault)
+        path = self._write_config("eo-doc/vault")
+        import eo_lib.config as config_mod
+
+        real = config_mod._normalize_project_root
+        calls = []
+
+        def flaky(project_root, cfg_path):
+            calls.append(project_root)
+            return real(project_root, cfg_path) if len(calls) == 1 else None
+
+        with mock.patch.object(config_mod, "_normalize_project_root", flaky):
+            with self.assertRaises(ConfigError):
+                self._load_expecting_error(path)
+
     def test_relative_pointing_to_file_fails_closed(self):
         (self.repo / "eo-doc" / "vault").write_text("not a dir", encoding="utf-8")
         path = self._write_config("eo-doc/vault")
@@ -203,7 +229,10 @@ class InitRepairBranchCaliberTests(unittest.TestCase):
 
     def test_repair_branch_keeps_local_first_writeback_rule(self):
         step1 = line_containing(INIT_SKILL, "**配置校验**")
-        self.assertIn("local", step1)
+        fixable = step1.split("project_root", 1)[1]
+        self.assertIn(".eo-project.local.json", fixable)
+        self.assertIn("写 local", fixable)
+        self.assertIn(".eo-project.json", fixable)
 
 
 if __name__ == "__main__":
