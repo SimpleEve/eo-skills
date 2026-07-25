@@ -149,9 +149,11 @@ class WatchIntegrationTests(unittest.TestCase):
         repo, change, stub = self._project("race")
         proc = self._watch("--project", str(repo))
         self._wait_for(lambda: self._stub_has_status(stub, "confirmed"), "initial projection was not created")
-        # The stub write precedes watch_project_tick()'s post-run key recomputation.
-        # A SoT change here must still trigger a later tick rather than being absorbed
-        # into the new baseline without ever reaching the projection.
+        # The write races the tick's post-run key recomputation; whether it lands
+        # inside that window or after, it must reach the projection instead of
+        # being absorbed into the new baseline. The window mechanics themselves
+        # are pinned deterministically by the watch tick unit tests in
+        # test_eo_sync.py; this test only asserts the end-to-end outcome.
         change.write_text(CHANGE.format(status="reviewed"), encoding="utf-8")
         future = time.time() + 2
         os.utime(change, (future, future))
@@ -162,8 +164,7 @@ class WatchIntegrationTests(unittest.TestCase):
             self.fail(f"watch lost a transition during post-sync key recomputation:\n{stderr}")
         time.sleep(1.3)
         _, stderr = self._stop(proc)
-        self.assertEqual(stderr.count("[eo-sync watch] ✓"), 2, stderr)
-        self.assertIn("下一轮复跑确认", stderr)
+        self.assertGreaterEqual(stderr.count("[eo-sync watch] ✓"), 2, stderr)
 
     def test_partial_failure_records_baseline_then_stays_quiet(self):
         repo, _, _ = self._project("failure", sync={"fail": {"enabled": True}})
