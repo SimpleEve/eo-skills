@@ -50,7 +50,7 @@ created: 2026-07-25
 - [x] AC-6 异常路径：stdin 非 TTY 时 `eo-helper` 打印菜单↔命令对照表后直接退出（不挂起等输入）；输入非法编号提示重选；菜单态按 Ctrl+D（EOF）/Ctrl+C 与 `q` 同款干净退出（无 traceback）；在无 `.eo-project.json` 的目录选项目级条目时原样转发、用户看到的是底层 CLI 自己的报错与 init 指引（helper 不自检配置），全局选项（多项目看板/看板自动跟手）照常可用（验证：`echo | eo-helper` 看对照表退出；在 $HOME 下逐项试）
 - [x] AC-7 `sh install.sh` 后 `eo-helper` 在 PATH 可用，安装完成提示以 eo-helper 为主推入口（验证：临时前缀安装后 `command -v eo-helper`）
 - [x] AC-8 README 用 `eo-helper` 一条命令讲完看板与同步入口，原全量 CLI 旗标细节移入 `docs/cli-reference.md` 且 README 给出链接；cli-reference 覆盖 eo-board/eo-sync/eo-helper 三命令全部参数（验证：README 正文 grep 不到 `--scan`/`--interval` 等深层旗标，也 grep 不到「投影」表述——该术语只留在协议与内部文档；对照 `--help` 核 cli-reference 完整性）
-- [ ] AC-9 README 重构后新用户视角通读顺畅——只需记 `eo-helper` 一条命令即可跑通「初始化后看板+同步」日常（人工:通读 README 安装→第一次使用→看板一节 → 过目认可）
+- [x] AC-9 README 重构后新用户视角通读顺畅——只需记 `eo-helper` 一条命令即可跑通「初始化后看板+同步」日常（人工:通读 README 安装→第一次使用→看板一节 → 过目认可）（确认：用户重验依赖节清理后通读通过，原话「通过，直接归档」· 2026-07-26 · 基线 b57a106）
 
 ## 3. TODO
 

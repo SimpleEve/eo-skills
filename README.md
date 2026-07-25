@@ -123,7 +123,7 @@ flowchart TD
     Init --> Rec["/eo-recall<br/>回忆：当时怎么设计的?"]
     Init --> PRec["/eo-project-record<br/>项目记忆：决策 + 教训"]
 
-    Imp -.clear 前快照.-> Hand["/eo-handoff<br/>tmp/eo/handoff/&lt;topic&gt;.md"]:::cross
+    Imp -.clear 前快照.-> Hand["/eo-handoff<br/>tmp/eo/handoff/&lt;topic&gt; .md"]:::cross
 
     classDef entry fill:#fef3c7,stroke:#f59e0b,stroke-width:2px
     classDef cross fill:#dbeafe,stroke:#3b82f6,stroke-dasharray: 3 3

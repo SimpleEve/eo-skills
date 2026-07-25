@@ -670,6 +670,91 @@ class BoardAllAggregateTests(MultiProjectFixture):
             process.stdout.close()
             process.stderr.close()
 
+    def test_all_serve_cli_refreshes_changed_status_on_next_poll(self):
+        alpha = self.make_project("alpha", statuses=("draft",))
+        self.register(alpha)
+        change = alpha / "eo-doc" / "changes" / "01-c1" / "change.md"
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+        env = dict(os.environ)
+        env["EO_HOME"] = str(self.eo_home)
+        process = subprocess.Popen(
+            [sys.executable, str(BOARD_PATH), "--all", "--serve", "--port", str(port), "--no-open"],
+            cwd=self.root, env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        try:
+            deadline = time.monotonic() + 5
+            while True:
+                try:
+                    with urlopen(f"http://127.0.0.1:{port}/", timeout=1) as response:
+                        html = response.read().decode("utf-8")
+                    break
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        self.fail("eo-board --all --serve did not accept requests within five seconds")
+                    time.sleep(0.05)
+            self.assertIn("setInterval(refreshLoop, 3000)", html)
+            self.assertEqual(self.get_all_status(port), "draft")
+            change.write_text(change.read_text(encoding="utf-8").replace("status: draft", "status: reviewed"), encoding="utf-8")
+            timestamp = time.time() + 2
+            os.utime(change, (timestamp, timestamp))
+            time.sleep(3.1)  # 与页面轮询间隔一致后取下一次数据，验证热刷新所依赖的服务端更新。
+            self.assertEqual(self.get_all_status(port), "reviewed")
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+            process.stdout.close()
+            process.stderr.close()
+
+    def get_all_status(self, port):
+        with urlopen(f"http://127.0.0.1:{port}/data.json", timeout=5) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        return next(iter(data["rows"][0]["counts"]))
+
+    def test_all_serve_cli_rereads_registry_after_empty_guidance(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+        env = dict(os.environ)
+        env["EO_HOME"] = str(self.eo_home)
+        process = subprocess.Popen(
+            [sys.executable, str(BOARD_PATH), "--all", "--serve", "--port", str(port), "--no-open"],
+            cwd=self.root, env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        try:
+            deadline = time.monotonic() + 5
+            while True:
+                try:
+                    with urlopen(f"http://127.0.0.1:{port}/", timeout=1) as response:
+                        html = response.read().decode("utf-8")
+                    break
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        self.fail("empty all-project serve did not accept requests within five seconds")
+                    time.sleep(0.05)
+            self.assertIn("注册表为空", html)
+            self.assertIn("--register", html)
+            self.register(self.make_project("beta", statuses=("confirmed",)))
+            with urlopen(f"http://127.0.0.1:{port}/data.json", timeout=5) as response:
+                data = json.loads(response.read().decode("utf-8"))
+            self.assertEqual([(row["label"], row["counts"]) for row in data["rows"]], [("beta", {"confirmed": 1})])
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+            process.stdout.close()
+            process.stderr.close()
+
     # ---------- 参数组合矩阵 ----------
 
     def test_argparse_matrix_rejections(self):
