@@ -8,6 +8,14 @@
 - **启用**（跑哪些）：只有合并配置（`.eo-project.json` + 可选 `.eo-project.local.json`）`sync` 段里 `enabled: true` 的适配器才会被执行。发现 ≠ 执行——这是第三方可执行文件的信任边界。`sync` 段以**键是否存在**判定：缺省（键不在）→ 回落 `board`/`github` 兼容映射；键存在（含空 `{}` 或显式 `null`）→ 段生效、`{}`/`null` 即零启用（绝不回落）；`sync` 为 object 以外类型 → 配置错误。
 - **配置形态**：`"sync": { "<name>": { "enabled": true, ...适配器自定义参数 } }`。`sync` 段存在时完全以其为准；缺席时由存量 `board`/`github` 段等价映射（`board.enabled`→`obsidian`、`github.issue`/`pr`→`github`）。
 
+## 触发点
+
+同步只有三个触发点，对适配器完全透明（三者走同一 `run` 编排、同一协议、同一把锁）：
+
+1. **archive 收口**：`/eo-archive` 归档时自动 `eo-sync run` 一次。
+2. **手动**：任意时刻 `eo-sync run`（`--dry-run` 看提示性计划）。
+3. **watch 自动档**：`eo-sync watch [--interval N] [--all | --project <path>]` 常驻轮询——每轮以 freshness 键短路（键不变零成本跳过），键变才进程内调用 `run` 编排；撞上进行中的手动/archive run（锁占用）跳过本轮下轮追平；`--all` 每轮重读用户级注册表 `${EO_HOME:-$HOME/.eo}/projects.json`。适配器无需感知 watch 的存在，也不得假设两次调用之间的间隔。
+
 ## 调用形态
 
 ```

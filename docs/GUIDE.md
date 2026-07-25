@@ -18,6 +18,7 @@
 - [项目管理 skill](#项目管理-skill)
 - [文档体系（eo-doc-manager）](#文档体系eo-doc-manager)
 - [看板与 GitHub 联动（opt-in）](#看板与-github-联动opt-in)
+- [多项目总览与生态注册表（eo-board --all）](#多项目总览与生态注册表eo-board---all)
 - [Skill 安装结构](#skill-安装结构)
 
 ---
@@ -237,10 +238,32 @@ eo-doc/changes/
 
 ## 投影同步（eo-sync，opt-in）
 
-投影目标（Obsidian 看板卡 / GitHub issue/PR）由 `eo-sync` 单命令统一同步——**逐流转投影已退役**，触发收敛为 archive 收口自动 `eo-sync run` 一次 + 任意时刻手动 `eo-sync run`（`--dry-run` 看计划）。目标经 `.eo-project.json` 的 `sync` 段（或 `board` / `github` 段经兼容映射）逐项目 opt-in，缺省关闭；投影内容见 `eo-shared/board-github.md`（内置适配器实现说明），协议契约见 `docs/sync-adapter-protocol.md`。第三方在 PATH 放一个 `eo-sync-<name>` 可执行并在配置启用即可接入新目标。
+投影目标（Obsidian 看板卡 / GitHub issue/PR）由 `eo-sync` 单命令统一同步——**逐流转投影已退役**，触发点收敛为三个：archive 收口自动 `eo-sync run` 一次、任意时刻手动 `eo-sync run`（`--dry-run` 看计划）、`eo-sync watch` 自动档（下述）。目标经 `.eo-project.json` 的 `sync` 段（或 `board` / `github` 段经兼容映射）逐项目 opt-in，缺省关闭；投影内容见 `eo-shared/board-github.md`（内置适配器实现说明），协议契约见 `docs/sync-adapter-protocol.md`。第三方在 PATH 放一个 `eo-sync-<name>` 可执行并在配置启用即可接入新目标。
 
 - **Obsidian 看板**（vault 模式）：`eo-sync-obsidian` 把 change frontmatter 投影为 `<project_root>/board/` 的卡片（整文件重写、幂等）；呈现层在 Obsidian 用 Bases + Kanban Bases View 配置一次（指南：`eo-project-init/references/board-setup.md`），支持多项目聚合与泳道。开启开关时由 `/eo-project-init` 调 `eo-sync run` 做历史同步。
 - **GitHub**：`eo-sync-github` 投影 change 层一对一 issue（confirmed 起建、编号回写去重、archive 兜底关）；PR 按 `github.pr` 策略（`auto` = 非默认分支自动建，body 含 AC 勾选清单与条件性 `Closes`——AC 全勾才关 issue）。**本地文件是唯一真相源**，严格单向推送，唯一逆向通道是漂移检测告警。
+
+### watch 自动档（eo-sync watch）
+
+`eo-sync watch [--interval N] [--all | --project <path>]`——呈现层自费的 pull 常驻进程，让状态流转在一个轮询间隔（默认 10 秒，下限 1）内自动上板；六个流程 skill 的零投影负担不变（写路径不为呈现层付费）。
+
+- **键短路**：每轮以 eo_lib freshness 键与上一基线比对，键不变零成本跳过（短路轮零输出）；键变才进程内调用既有 `run` 编排，stderr 打一行诊断。首轮无基线视为键已变（启动即追平停摆积压）。
+- **基线口径**：run 退出 0/1 后**重算**键记为基线（吸收身份回写的 mtime 变化，防自触发循环；部分失败同样记基线，不对持续性故障忙循环）；锁占用（退出 2）与异常轮不记基线、下一轮自动重试。
+- **锁**：复用 `run` 的文件锁——撞上手动/archive 的 run 时本轮跳过该项目，不崩溃不等待。
+- **作用域**：缺省 = cwd 所在项目；`--project <path>` 任意目录只追平指定项目；`--all` 每轮重读注册表（watch 期间新注册的项目下一轮即纳入），无需在项目内运行。
+- **故障隔离与告警抑制**：`--all` 下单项目配置缺失/非法只告警并跳过该项目；同一（项目, 错误指纹）常驻期间只告警一次不刷屏，项目恢复（成功完成一次 run）即清除抑制记录、自动重新纳入。
+- **常驻形态**：前台进程，SIGINT/SIGTERM 干净退出；launchd/systemd 守护化留待真实需求。
+
+---
+
+## 多项目总览与生态注册表（eo-board --all）
+
+多项目枚举基于用户级注册表 `${EO_HOME:-$HOME/.eo}/projects.json`（schema v1：`{"version": 1, "projects": [{"name", "path", "registered_at"}]}`），eo-board 与 `eo-sync watch --all` 共用同一张表：
+
+- **登记**：`/eo-project-init` 成功时顺手注册（失败不阻塞 init，输出补注册指引）；`eo-board --register [path]` / `--unregister [path]` 手工维护（缺省 path=当前目录）。去重键 = 规范化 repo identity（git common dir realpath），同一仓库任意 worktree 重复 register 幂等；注册表写入不破 eo-board 只读铁律（铁律管项目仓库文件，注册表是用户级生态文件、仅显式动作写入）。
+- **聚合**：`eo-board --all` 任意目录一屏总览——每注册项目一行（项目名 + draft/confirmed/implementing/reviewed 计数 + archived 总数 + backlog 数 + as-of 新鲜度戳），失效项目行内报错不中断；v1 仅终端形态（`--html`/`--serve` 聚合未做，等真实需求）。
+- **下钻**：`eo-board --project <路径|注册名>` 等价于在该项目目录运行，三形态通用；注册名命中多个项目时报歧义并列候选路径（不静默取第一项）。
+- **扫描兜底**：`eo-board --all --scan <父目录>` 把含 `.eo-project.json` 的一层子目录临时并入本次聚合并提示可注册，**不写注册表**。
 
 ---
 

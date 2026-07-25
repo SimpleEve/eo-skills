@@ -56,7 +56,7 @@ created: 2026-07-25
 - [ ] AC-7 项目无变化时 watch 不执行同步（freshness 键短路，短路轮无输出）；每次实际同步在 stderr 打一行诊断；watch 自身 run 产生的回写不引发下一轮再次同步；run 部分失败（个别适配器出错）的轮次同样记基线——项目无新变化时下一轮回到静默，不对持续性故障忙循环重试（验证：静置数轮确认 stderr 静默；一次流转只出现一次 run 诊断；构造一个必失败适配器观察仅告警一轮后恢复静默）
 - [ ] AC-8 watch 撞上进行中的手动/archive 同步（锁占用）时跳过本轮不崩溃，下一轮自动追平（验证：人为持锁一轮后释放）
 - [ ] AC-9 异常路径：`--all` 在注册表缺失/为空时明确提示如何注册；注册表内路径失效或配置非法时，`eo-board --all` 该行显示错误、`eo-sync watch --all` 告警并跳过该项目，其余项目均不受影响；watch 常驻期间同一故障项目按错误指纹只告警一次（不逐轮刷屏），故障修复后自动重新纳入同步且抑制记录清除（验证：注册一个不存在的路径后各跑一次；watch 下静置数轮确认告警不重复，修复路径后观察该项目恢复追平）
-- [ ] AC-10 `docs/GUIDE.md` 与 `docs/sync-adapter-protocol.md` 载明 watch 触发点与多项目用法，与 §5 裁决一致（验证：读两文档相应小节）
+- [x] AC-10 `docs/GUIDE.md` 与 `docs/sync-adapter-protocol.md` 载明 watch 触发点与多项目用法，与 §5 裁决一致（验证：读两文档相应小节）
 - [ ] AC-11 `eo-sync watch --project <路径>` 可在任意目录运行、只追平该项目；`eo-sync watch --all` 一轮内追平全部有效注册项目，且 watch 运行期间新注册的项目自下一轮起被纳入（验证：两个注册项目下跑 `--all` 观察各自 stub 追平；watch 挂起期间注册第三个项目，观察下一轮被纳入）
 
 ## 3. TODO
@@ -78,7 +78,7 @@ created: 2026-07-25
 
 ### Batch 3（文档口径）
 
-- [ ] TODO-7 文档口径同步：GUIDE.md 增多项目与 watch 用法小节；docs/sync-adapter-protocol.md 触发点段补 watch 自动档（文件：修改: docs/GUIDE.md、docs/sync-adapter-protocol.md；对应 AC-10）
+- [x] TODO-7 文档口径同步：GUIDE.md 增多项目与 watch 用法小节；docs/sync-adapter-protocol.md 触发点段补 watch 自动档（文件：修改: docs/GUIDE.md、docs/sync-adapter-protocol.md；对应 AC-10）
 
 > Batch 2a / 2b 文件集不相交（board+其测试 vs sync+其测试）、互不消费对方产出，仅共同依赖 Batch 1 的注册表模块——可并行。Batch 3 待 2a/2b 合流后串行（文档要引用两边落定的 CLI 形态）。
 
