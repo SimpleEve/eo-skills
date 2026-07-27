@@ -1,0 +1,352 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>变体2 · change 流为主角 — eo board --all</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗂️</text></svg>">
+<style>
+  /* token 真相源：ref-agg.html / ref-rabbit.html（沿用，不新增色） */
+  :root {
+    --bg: #F2F4F7; --surface: #FFFFFF; --surface2: #F7F9FB;
+    --ink: #1B2432; --muted: #647084; --faint: #8B96A8; --line: #E2E6ED;
+    --accent: #B4530A; --accent-soft: #F6E8DC;
+    --st-draft: #6B7A90;     --st-draft-soft: #ECEFF4;
+    --st-confirmed: #A87508; --st-confirmed-soft: #F7EEDA;
+    --st-implementing: #2563B0; --st-implementing-soft: #E4EEF9;
+    --st-reviewed: #0E8A74;  --st-reviewed-soft: #E0F2EE;
+    --st-archived: #8A93A1;  --st-archived-soft: #EEF0F3;
+    --st-backlog: #4E7A5A;   --st-backlog-soft: #E7F0E9;
+    --warn: #B0451E;         --warn-soft: #F9E9E2;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10141B; --surface: #171C25; --surface2: #1D2330;
+      --ink: #E6EAF1; --muted: #93A0B4; --faint: #6E7A8E; --line: #242B38;
+      --accent: #E08A3C; --accent-soft: #3A2717;
+      --st-draft: #97A6BC;     --st-draft-soft: #222938;
+      --st-confirmed: #D9A83E; --st-confirmed-soft: #33290F;
+      --st-implementing: #6CA5E8; --st-implementing-soft: #1A2A40;
+      --st-reviewed: #4CBFA6;  --st-reviewed-soft: #12312A;
+      --st-archived: #7C8798;  --st-archived-soft: #20262F;
+      --st-backlog: #7FAF8C;   --st-backlog-soft: #1D2B22;
+      --warn: #E37D53;         --warn-soft: #3A2018;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #F2F4F7; --surface: #FFFFFF; --surface2: #F7F9FB;
+    --ink: #1B2432; --muted: #647084; --faint: #8B96A8; --line: #E2E6ED;
+    --accent: #B4530A; --accent-soft: #F6E8DC;
+    --st-draft: #6B7A90;     --st-draft-soft: #ECEFF4;
+    --st-confirmed: #A87508; --st-confirmed-soft: #F7EEDA;
+    --st-implementing: #2563B0; --st-implementing-soft: #E4EEF9;
+    --st-reviewed: #0E8A74;  --st-reviewed-soft: #E0F2EE;
+    --st-archived: #8A93A1;  --st-archived-soft: #EEF0F3;
+    --st-backlog: #4E7A5A;   --st-backlog-soft: #E7F0E9;
+    --warn: #B0451E;         --warn-soft: #F9E9E2;
+  }
+  :root[data-theme="dark"] {
+    --bg: #10141B; --surface: #171C25; --surface2: #1D2330;
+    --ink: #E6EAF1; --muted: #93A0B4; --faint: #6E7A8E; --line: #242B38;
+    --accent: #E08A3C; --accent-soft: #3A2717;
+    --st-draft: #97A6BC;     --st-draft-soft: #222938;
+    --st-confirmed: #D9A83E; --st-confirmed-soft: #33290F;
+    --st-implementing: #6CA5E8; --st-implementing-soft: #1A2A40;
+    --st-reviewed: #4CBFA6;  --st-reviewed-soft: #12312A;
+    --st-archived: #7C8798;  --st-archived-soft: #20262F;
+    --st-backlog: #7FAF8C;   --st-backlog-soft: #1D2B22;
+    --warn: #E37D53;         --warn-soft: #3A2018;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--sans); font-size: 14px; line-height: 1.55;
+  }
+  a { color: inherit; text-decoration: none; }
+  button { font: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px 64px; }
+
+  /* ── 顶栏（沿用 ref-agg 手法） ── */
+  .topbar { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; padding: 20px 0 0; }
+  .wordmark { font-family: var(--mono); font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+  .wordmark .tail { color: var(--accent); }
+  .topmeta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: var(--mono); font-size: 11px; padding: 2px 8px;
+    border: 1px solid var(--line); border-radius: 4px; color: var(--muted);
+    background: var(--surface);
+  }
+  .chip b { color: var(--ink); font-weight: 600; }
+  .chip.variant { background: var(--accent-soft); border-color: transparent; color: var(--accent); font-weight: 600; }
+  .chip.serve-live { color: var(--st-implementing); border-color: var(--st-implementing); }
+  .chip.theme-btn { cursor: pointer; padding: 6px 12px; min-height: 32px; }
+  .chip.theme-btn:hover { color: var(--ink); border-color: var(--faint); }
+  .gen { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--faint); }
+
+  /* ── 项目摘要栏：横排紧凑条卡，可点下钻 ── */
+  .strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-top: 16px; }
+  .proj {
+    position: relative; display: block; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 8px; padding: 11px 14px 10px;
+    transition: border-color 0.15s ease;
+  }
+  .proj:hover { border-color: var(--accent); }
+  .proj::after {
+    content: "›"; position: absolute; top: 9px; right: 12px;
+    font-family: var(--mono); font-size: 13px; color: var(--faint);
+    opacity: 0; transition: opacity 0.15s ease;
+  }
+  .proj:hover::after { opacity: 1; }
+  .proj-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .proj-name { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+  .pill { font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 1px 8px; border-radius: 999px; letter-spacing: 0.04em; }
+  .pill.live { background: var(--st-reviewed-soft); color: var(--st-reviewed); }
+  .pill.quiet { background: var(--st-archived-soft); color: var(--st-archived); }
+  .as-of { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; padding-right: 12px; }
+  .proj-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .counts { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
+  .count {
+    display: inline-flex; align-items: baseline; gap: 4px;
+    font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 5px;
+  }
+  .count b { font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .count.zero { opacity: 0.45; }
+  .proj-path { font-family: var(--mono); font-size: 10px; color: var(--faint); margin-top: 7px; overflow-wrap: anywhere; }
+  /* 静默项目：栏内降饱和，hover 复原（= 可点暗示） */
+  .proj.silent .proj-name { color: var(--muted); }
+  .proj.silent .counts, .proj.silent .proj-meta { filter: saturate(0.15); opacity: 0.72; transition: filter 0.15s ease, opacity 0.15s ease; }
+  .proj.silent:hover .counts, .proj.silent:hover .proj-meta { filter: none; opacity: 1; }
+
+  /* ── 主体：跨项目 change 流（收件箱） ── */
+  .list { margin-top: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .list-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 9px 14px; background: var(--surface2); }
+  .list-title { font-size: 13px; font-weight: 700; letter-spacing: 0.01em; }
+  .list-title b { font-family: var(--mono); font-size: 14px; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .chip.blocker-sum { color: var(--warn); border-color: var(--warn); background: var(--warn-soft); }
+  .chip.blocker-sum b { color: var(--warn); }
+  .list-note { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+
+  .row {
+    display: grid; grid-template-areas: "proj main prog when";
+    grid-template-columns: 104px minmax(0, 1fr) 216px 72px;
+    gap: 4px 14px; padding: 10px 14px; border-top: 1px solid var(--line);
+    align-items: start; cursor: pointer; transition: background-color 0.12s ease;
+  }
+  .row:hover { background: var(--surface2); }
+  .row.dim { opacity: 0.6; }
+  .row.dim:hover { opacity: 1; }
+
+  .r-proj { grid-area: proj; display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); padding-top: 3px; min-width: 0; }
+  .r-proj .sw { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+
+  .r-main { grid-area: main; min-width: 0; }
+  .r-line1 { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; }
+  .cid { font-family: var(--mono); font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .st-pill { font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 1px 8px; border-radius: 999px; letter-spacing: 0.04em; flex: none; }
+  .tt { font-family: var(--mono); font-size: 10px; color: var(--faint); flex: none; }
+  .tt b { font-weight: 600; color: var(--muted); }
+  .tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--mono); font-size: 10px; padding: 1px 6px;
+    border-radius: 4px; background: var(--surface2); border: 1px solid var(--line); color: var(--muted);
+  }
+  .tag.warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); font-weight: 600; }
+  .summary { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .r-prog { grid-area: prog; display: flex; flex-direction: column; gap: 5px; padding-top: 4px; }
+  .prog-row { display: flex; align-items: center; gap: 7px; }
+  .prog-lbl { font-family: var(--mono); font-size: 9.5px; color: var(--faint); width: 32px; flex: none; letter-spacing: 0.05em; }
+  .bar { flex: 1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 2px; }
+  .bar.todo > i { background: var(--st-implementing); }
+  .bar.ac > i { background: var(--st-reviewed); }
+  .prog-num { font-family: var(--mono); font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; width: 38px; flex: none; text-align: right; }
+
+  .r-when { grid-area: when; font-family: var(--mono); font-size: 10.5px; color: var(--faint); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-top: 5px; }
+
+  .divider {
+    padding: 4px 14px; border-top: 1px solid var(--line); background: var(--surface2);
+    font-family: var(--mono); font-size: 10px; color: var(--faint); letter-spacing: 0.05em;
+  }
+
+  .foot-hint { margin-top: 22px; font-family: var(--mono); font-size: 11px; color: var(--faint); line-height: 1.9; }
+
+  /* ── 响应式 ── */
+  @media (max-width: 1023px) {
+    .row { grid-template-columns: 96px minmax(0, 1fr) 184px 64px; }
+  }
+  @media (max-width: 799px) {
+    .row {
+      grid-template-areas: "proj when" "main main" "prog prog";
+      grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px;
+    }
+    .r-when { padding-top: 3px; }
+    .r-prog { flex-direction: row; gap: 14px; max-width: 520px; padding-top: 0; }
+    .prog-row { flex: 1; min-width: 0; }
+    .list-note { margin-left: 0; width: 100%; }
+  }
+  @media (max-width: 479px) {
+    .wrap { padding: 0 14px 48px; }
+    .r-prog { flex-direction: column; gap: 5px; max-width: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .row, .proj, .proj::after, .proj.silent .counts, .proj.silent .proj-meta { transition: none; }
+  }
+</style>
+
+<div class="wrap">
+  <header class="topbar">
+    <div class="wordmark">eo<span class="tail"> board --all</span></div>
+    <div class="topmeta">
+      <span class="chip variant">变体 2 · change 流为主角</span>
+      <span class="chip">注册 <b>2</b> 项目</span>
+      <span class="chip">/Users/debugeve/.eo/projects.json</span>
+      <span class="chip serve-live">● 自动刷新中</span>
+      <button class="chip theme-btn" id="themeBtn" type="button" aria-label="切换明暗主题">◐ 主题</button>
+    </div>
+    <div class="gen">生成于 2026-07-26 09:32 · 只读投影，随时可重建</div>
+  </header>
+
+  <!-- 项目摘要栏：项目退居归属标签，下钻入口保留在这里 -->
+  <nav class="strip" aria-label="项目摘要">
+    <a class="proj" href="#" title="→ /p/兔村游戏">
+      <div class="proj-head">
+        <span class="proj-name">兔村游戏</span>
+        <span class="pill live">● 活跃</span>
+        <span class="as-of">as-of 09:32</span>
+      </div>
+      <div class="proj-meta">⎇ main · 1 worktree</div>
+      <div class="counts">
+        <span class="count zero" style="background: var(--st-draft-soft); color: var(--st-draft)"><b>0</b>草稿</span>
+        <span class="count zero" style="background: var(--st-confirmed-soft); color: var(--st-confirmed)"><b>0</b>已确认</span>
+        <span class="count" style="background: var(--st-implementing-soft); color: var(--st-implementing)"><b>2</b>实施中</span>
+        <span class="count" style="background: var(--st-reviewed-soft); color: var(--st-reviewed)"><b>1</b>审查通过</span>
+        <span class="count" style="background: var(--st-archived-soft); color: var(--st-archived)"><b>11</b>已归档</span>
+        <span class="count" style="background: var(--st-backlog-soft); color: var(--st-backlog)"><b>43</b>backlog</span>
+      </div>
+      <div class="proj-path">/Users/debugeve/projects/Rabbit</div>
+    </a>
+    <a class="proj silent" href="#" title="→ /p/eo-skills">
+      <div class="proj-head">
+        <span class="proj-name">eo-skills</span>
+        <span class="pill quiet">静默 · 最后动静 07-22*</span>
+        <span class="as-of">as-of 09:32</span>
+      </div>
+      <div class="proj-meta">⎇ main · 2 worktrees</div>
+      <div class="counts">
+        <span class="count zero" style="background: var(--st-draft-soft); color: var(--st-draft)"><b>0</b>草稿</span>
+        <span class="count zero" style="background: var(--st-confirmed-soft); color: var(--st-confirmed)"><b>0</b>已确认</span>
+        <span class="count" style="background: var(--st-implementing-soft); color: var(--st-implementing)"><b>1</b>实施中</span>
+        <span class="count zero" style="background: var(--st-reviewed-soft); color: var(--st-reviewed)"><b>0</b>审查通过</span>
+        <span class="count" style="background: var(--st-archived-soft); color: var(--st-archived)"><b>8</b>已归档</span>
+        <span class="count" style="background: var(--st-backlog-soft); color: var(--st-backlog)"><b>1</b>backlog</span>
+      </div>
+      <div class="proj-path">/Users/debugeve/projects/eo-skills</div>
+    </a>
+  </nav>
+
+  <!-- 跨项目 change 流：按最近活动倒序，不含 archived -->
+  <section class="list" aria-label="进行中 change 流">
+    <div class="list-head">
+      <span class="list-title">进行中 change <b>4</b></span>
+      <span class="chip blocker-sum">⛔ blocker <b>1</b></span>
+      <span class="list-note">跨项目 · 最近活动倒序 · 不含 archived（19 归档见项目栏）</span>
+    </div>
+
+    <a class="row" href="#" title="→ /p/兔村游戏 · 锚定 #25 hero-anim-migration">
+      <span class="r-proj"><i class="sw" style="background: var(--accent)"></i>兔村游戏</span>
+      <div class="r-main">
+        <div class="r-line1">
+          <span class="cid">#25 hero-anim-migration</span>
+          <span class="st-pill" style="background: var(--st-reviewed-soft); color: var(--st-reviewed)">审查通过</span>
+          <span class="tt"><b>full</b>·refactor</span>
+          <span class="tag warn">⛔ 人工验收 4 项待勾</span>
+        </div>
+        <div class="summary">Hero 迁到 2D Animation 底座（7 槽 per-node 换装），controller 拆域级（Porter 三态/Hero 三态），Weapon→Handheld 枚举收口</div>
+      </div>
+      <div class="r-prog">
+        <div class="prog-row"><span class="prog-lbl">TODO</span><span class="bar todo"><i style="width: 100%"></i></span><span class="prog-num">7/7</span></div>
+        <div class="prog-row"><span class="prog-lbl">AC</span><span class="bar ac"><i style="width: 43%"></i></span><span class="prog-num">3/7</span></div>
+      </div>
+      <span class="r-when">1 天前</span>
+    </a>
+
+    <a class="row" href="#" title="→ /p/兔村游戏 · 锚定 #24 anim-speed-multiplier">
+      <span class="r-proj"><i class="sw" style="background: var(--accent)"></i>兔村游戏</span>
+      <div class="r-main">
+        <div class="r-line1">
+          <span class="cid">#24 anim-speed-multiplier</span>
+          <span class="st-pill" style="background: var(--st-implementing-soft); color: var(--st-implementing)">实施中</span>
+          <span class="tt"><b>light</b>·enhance</span>
+        </div>
+        <div class="summary">CharacterBase.controller 三状态绑 SpeedMult 参数，运行时可单独调某状态播放速度，位移不受影响</div>
+      </div>
+      <div class="r-prog">
+        <div class="prog-row" title="该 change 无 TODO 分批数据"><span class="prog-lbl">TODO</span><span class="bar todo"><i style="width: 0%"></i></span><span class="prog-num">—</span></div>
+        <div class="prog-row"><span class="prog-lbl">AC</span><span class="bar ac"><i style="width: 100%"></i></span><span class="prog-num">3/3</span></div>
+      </div>
+      <span class="r-when">2 天前</span>
+    </a>
+
+    <div class="divider">以下 3 天内无动静 · 降权显示（承诺不从视野消失）</div>
+
+    <a class="row dim" href="#" title="→ /p/eo-skills · 锚定 #8 eo-helper-entry">
+      <span class="r-proj"><i class="sw" style="background: var(--st-draft)"></i>eo-skills</span>
+      <div class="r-main">
+        <div class="r-line1">
+          <span class="cid">#8 eo-helper-entry</span>
+          <span class="st-pill" style="background: var(--st-implementing-soft); color: var(--st-implementing)">实施中</span>
+          <span class="tt"><b>full</b>·feature</span>
+        </div>
+        <div class="summary">新增 eo-helper 数字菜单唯一入口；eo-board --all 补 --html/--serve；README 命令面收纳</div>
+      </div>
+      <div class="r-prog">
+        <div class="prog-row"><span class="prog-lbl">TODO</span><span class="bar todo"><i style="width: 100%"></i></span><span class="prog-num">7/7</span></div>
+        <div class="prog-row"><span class="prog-lbl">AC</span><span class="bar ac"><i style="width: 100%"></i></span><span class="prog-num">9/9</span></div>
+      </div>
+      <span class="r-when">4 天前*</span>
+    </a>
+
+    <a class="row dim" href="#" title="→ /p/兔村游戏 · 锚定 016-map-unlock-authority">
+      <span class="r-proj"><i class="sw" style="background: var(--accent)"></i>兔村游戏</span>
+      <div class="r-main">
+        <div class="r-line1">
+          <span class="cid">016-map-unlock-authority</span>
+          <span class="st-pill" style="background: var(--st-implementing-soft); color: var(--st-implementing)">实施中</span>
+          <span class="tt"><b>full</b>·feature</span>
+        </div>
+        <div class="summary">地图解锁状态权威化与防作弊收口</div>
+      </div>
+      <div class="r-prog">
+        <div class="prog-row"><span class="prog-lbl">TODO</span><span class="bar todo"><i style="width: 14%"></i></span><span class="prog-num">1/7</span></div>
+        <div class="prog-row"><span class="prog-lbl">AC</span><span class="bar ac"><i style="width: 40%"></i></span><span class="prog-num">4/10</span></div>
+      </div>
+      <span class="r-when">5 天前</span>
+    </a>
+  </section>
+
+  <footer class="foot-hint">
+    * 静默态（eo-skills，最后动静 07-22）为演示假定 ·
+    明细不含 archived，归档计数见项目栏 ·
+    下钻为路由式 /p/&lt;项目&gt;（本稿静态示意，href 占位）
+  </footer>
+</div>
+
+<script>
+(function () {
+  var btn = document.getElementById('themeBtn');
+  var root = document.documentElement;
+  function effective() {
+    var t = root.getAttribute('data-theme');
+    if (t) return t;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  btn.addEventListener('click', function () {
+    var next = effective() === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    btn.textContent = next === 'dark' ? '◐ 暗' : '◐ 明';
+  });
+})();
+</script>
