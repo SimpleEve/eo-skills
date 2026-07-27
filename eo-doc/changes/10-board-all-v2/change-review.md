@@ -22,13 +22,13 @@ summary: >
 
 | ID | 级别 | 摘要 | 位置 | 状态 | 处置（修订方填） |
 |----|------|------|------|------|------------------|
-| P0-1 | P0 | `/p/<注册名>` 不能唯一、完整地标识当前支持的同名注册项目与 `--scan` 未注册项目 | AC-4、§5 路由表、TODO-4/5 | fixed | 用户拍板（2026-07-27）route_key = `/p/<URL 编码可读名>~<repo 标识 hash8>`，钉入 §1 已钉决策（3 条）与 §5「路由标识」；AC-4 改写覆盖同名/`--scan`/失效路由；TODO-4 改 key→config 映射分派并补同名双项目、scan 项目、CJK 名、名不一致正反例判据；TODO-5 快照同 key |
-| P0-2 | P0 | AC-4 的项目条卡/change 行点击没有 TODO 落点，概要卡点击也未映射到 AC-4 | AC-4、TODO-2/3/4 | fixed | TODO-2 补条卡/change 行绑定 route_key 链接、映射 AC-4 并加「两入口命中对应项目 route」分项判据；TODO-3 补 AC-4 映射与概要卡点击分项判据；TODO-4 保留服务端路由半边，各自分项判据齐备 |
-| P0-3 | P0 | 人工 AC-9 没有任何 TODO 覆盖 | AC-9、TODO-2/3 | fixed | TODO-2 补 AC-9 映射（change 流对照 variant-2 可自动核对面）、TODO-3 补 AC-9 映射（概要卡信息面不劣化断言）；两处均注明人工观感留用户验收不代勾 |
-| P1-1 | P1 | “最近活动”缺少可直接实现的逐 change 时间公式，现有 `last_touch` 无法满足未提交编辑后 3 秒内浮顶 | AC-1/2/6、TODO-1/2、§5 活跃判定 | fixed | 采纳：§5 钉 change/project 两级 `activity_at` 公式（带时区秒级，明确不复用日粒度 `last_touch`）；TODO-1 字段改 activity_at 并补「未提交编辑后前移浮顶 + 3 天边界两侧 fixture」判据 |
-| P1-2 | P1 | 已钉的非主 worktree 标记与项目目录没有完整进入 AC 和渲染完成判据 | §1、AC-1/2、TODO-1/2 | fixed | 采纳：AC-1 补非主 worktree `⎇branch@worktree` 行字段、AC-2 补条卡目录字段；TODO-1 项目级数据补目录、TODO-2 判据明写「含 ⎇ 标记 / 含目录」 |
-| P1-3 | P1 | `/p/<项目>` 页面对应的 JSON 端点未钉定，现有单项目模板会绝对请求聚合 `/data.json` | §5 路由表、TODO-4 | fixed | 采纳：§5 钉 `/p/<route_key>/data.json` 单项目端点，渲染函数注入 data URL 替代硬编码 fetch；TODO-4 判据补两项目并发轮询互不串数据、各走各自缓存槽 |
-| P1-4 | P1 | 用户文档、state 与 handbook 仍描述旧聚合页，方案既无 §4 影响面也无更新 TODO | 条件节、§3 | fixed | 采纳：新增 §4 影响面——docs/cli-reference.md、docs/GUIDE.md 本 change 内更新（TODO-6 扩文件与描述，AC-8 扩文档口径一致）；state/eo-board-cli 与 handbook/cli-eo-board 交归档 doc-manager sync，§4 写明所需最终口径 |
+| P0-1 | P0 | `/p/<注册名>` 不能唯一、完整地标识当前支持的同名注册项目与 `--scan` 未注册项目 | AC-4、§5 路由表、TODO-4/5 | verified | 用户拍板（2026-07-27）route_key = `/p/<URL 编码可读名>~<repo 标识 hash8>`，钉入 §1 已钉决策（3 条）与 §5「路由标识」；AC-4 改写覆盖同名/`--scan`/失效路由；TODO-4 改 key→config 映射分派并补同名双项目、scan 项目、CJK 名、名不一致正反例判据；TODO-5 快照同 key |
+| P0-2 | P0 | AC-4 的项目条卡/change 行点击没有 TODO 落点，概要卡点击也未映射到 AC-4 | AC-4、TODO-2/3/4 | verified | TODO-2 补条卡/change 行绑定 route_key 链接、映射 AC-4 并加「两入口命中对应项目 route」分项判据；TODO-3 补 AC-4 映射与概要卡点击分项判据；TODO-4 保留服务端路由半边，各自分项判据齐备 |
+| P0-3 | P0 | 人工 AC-9 没有任何 TODO 覆盖 | AC-9、TODO-2/3 | verified | TODO-2 补 AC-9 映射（change 流对照 variant-2 可自动核对面）、TODO-3 补 AC-9 映射（概要卡信息面不劣化断言）；两处均注明人工观感留用户验收不代勾 |
+| P1-1 | P1 | “最近活动”缺少可直接实现的逐 change 时间公式，现有 `last_touch` 无法满足未提交编辑后 3 秒内浮顶 | AC-1/2/6、TODO-1/2、§5 活跃判定 | verified | 采纳：§5 钉 change/project 两级 `activity_at` 公式（带时区秒级，明确不复用日粒度 `last_touch`）；TODO-1 字段改 activity_at 并补「未提交编辑后前移浮顶 + 3 天边界两侧 fixture」判据 |
+| P1-2 | P1 | 已钉的非主 worktree 标记与项目目录没有完整进入 AC 和渲染完成判据 | §1、AC-1/2、TODO-1/2 | verified | 采纳：AC-1 补非主 worktree `⎇branch@worktree` 行字段、AC-2 补条卡目录字段；TODO-1 项目级数据补目录、TODO-2 判据明写「含 ⎇ 标记 / 含目录」 |
+| P1-3 | P1 | `/p/<项目>` 页面对应的 JSON 端点未钉定，现有单项目模板会绝对请求聚合 `/data.json` | §5 路由表、TODO-4 | verified | 采纳：§5 钉 `/p/<route_key>/data.json` 单项目端点，渲染函数注入 data URL 替代硬编码 fetch；TODO-4 判据补两项目并发轮询互不串数据、各走各自缓存槽 |
+| P1-4 | P1 | 用户文档、state 与 handbook 仍描述旧聚合页，方案既无 §4 影响面也无更新 TODO | 条件节、§3 | verified | 采纳：新增 §4 影响面——docs/cli-reference.md、docs/GUIDE.md 本 change 内更新（TODO-6 扩文件与描述，AC-8 扩文档口径一致）；state/eo-board-cli 与 handbook/cli-eo-board 交归档 doc-manager sync，§4 写明所需最终口径 |
 
 ## P0 - 必须修订（阻塞 implement）
 
@@ -159,22 +159,27 @@ TODO 数：6（理想 3-7 / 硬上限 10）｜ 全文：87 行（软标 200-500 
 | §3 TODO（Batch） | 不通过 | AC-4 点击入口覆盖断裂，AC-9 悬空 |
 | 条件节 §4-§8 | 警告 | §5 与 §8 已触发且 defer 仅 1 条；连带文档触发 §4 但缺失 |
 
+## 复审记录（第 2 轮 · 全量 · 2026-07-27）
+
+- 模式：自动升级全量。命中三条机械信号：AC-1/2/4/8 发生语义性改写；§1 新增 route_key、`--scan` 下钻与返回语义三条已钉设计判断；TODO-1～TODO-6 全部修订，超过 1/3。
+- 核销 P0：P0-1 verified（§1/§5 已改为可读名~路径 hash8 的 route_key，注册与 `--scan` 共用；AC-4 及 TODO-4/5 覆盖同名、未注册、CJK、名不一致与失效 key）；P0-2 verified（TODO-2/3/4 分别覆盖条卡+change 行、概要卡、服务端路由并都映射 AC-4）；P0-3 verified（TODO-2/3 均映射 AC-9，自动可核面与人工勾选权分离）。
+- 核销 P1：P1-1 verified（§5 钉两级 `activity_at` 公式、时区/精度与不复用 `last_touch`，TODO-1 补未提交编辑浮顶和 3 天边界）；P1-2 verified（AC-1/2 与 TODO-1/2 已补 worktree 标记和目录）；P1-3 verified（单项目端点钉为 `/p/<route_key>/data.json`，TODO-4 补并发不串数据与缓存槽证据）；P1-4 verified（§4 明确用户文档随 TODO-6 更新，state/handbook 归档时由 doc-manager sync 更新并给出最终口径）。
+- 全量复核：9 条 AC 均可验证且含异常/边界；映射闭合为 AC-1→TODO-1/2、AC-2→TODO-1/2、AC-3→TODO-2/3、AC-4→TODO-2/3/4、AC-5→TODO-5、AC-6→TODO-1/4、AC-7/8→TODO-6、AC-9→TODO-2/3。多 TODO 共担同一 AC 时均有分项完成判据，无占位符。
+- 粒度与前提：TODO 6 条、全文 98 行，三个纯数字 Batch 串行且依赖自洽；当前注册与 scan 两类聚合 source 均提供项目 path，可按 §5 canonicalize 后生成所选 route_key，既有 `render_html`、每项目缓存槽、freshness 的 refs/change/backlog mtime 输入均可承接 §5 方案。相关既有输入域聚焦回归 3/3 通过。
+- 新增 finding：无。新分叉：无；route_key、单项目数据端点、`activity_at` 公式及文档切分均已获用户拍板，本轮不再另作假设。
+- 未决：无。P0=0，结论：通过。
+
 ## 速报
 
-结论：不通过（P0 3 条）［第 1 轮 · 全量］
+结论：通过（P0 0 条）［第 2 轮 · 全量］
 
 P0（阻塞 implement）：
-1. `/p/<注册名>` 无法唯一覆盖同名注册项目和 `--scan` 未注册项目 — change.md AC-4、§5
-2. AC-4 的项目条卡/change 行点击无 TODO 落点，概要卡点击映射错误 — change.md §3 TODO-2/3/4
-3. 人工 AC-9 没有任何 TODO 覆盖 — change.md AC-9、§3
+1. 无未决 P0。
 
 P1（移交起草方裁决，不阻塞循环）：
-4. 逐 change 最近活动公式需钉定，不能直接复用现有日粒度 `last_touch` — change.md AC-1/6、§5
-5. 非主 worktree 标记与项目目录应补入 AC/渲染判据 — change.md §1、AC-1/2、TODO-2
-6. `/p/<项目>` 的单项目 JSON 端点需明确，避免误取聚合 `/data.json` — change.md §5、TODO-4
-7. 连带用户文档、state 与 handbook 需在 §4/TODO 明确处置 — change.md 条件节、§3
+2. 无未决 P1；P1-1～P1-4 均已核销 verified。
 
 P2（可后置）：
-8. 无新增 P2。
+3. 无。
 
-下一步：回 `/eo-change eo-doc/changes/10-board-all-v2/change.md` 逐条处置：修复的在台账标注改动落点，不认同的标 wont-fix 附理由；然后再跑 `/eo-change-review` 复审（默认增量，锚变动自动升全量），循环到 **P0=0**。当前第 1/3 轮。🚫 不要跳过复审直接 implement，不要跑 /eo-review（代码还没写）。
+下一步 `/eo-implement eo-doc/changes/10-board-all-v2/change.md`（status 若仍为 draft，先回 /eo-change 对话确认）。未决 P1 已入台账，由起草方裁决：采纳的回 /eo-change 顺手修（不触发复审），不采纳的标 wont-fix 附理由。注意：`/eo-review` 是代码审查，要在 implement 之后，现在还不轮到它。
