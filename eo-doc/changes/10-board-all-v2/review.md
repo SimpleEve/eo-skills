@@ -24,9 +24,15 @@ summary: >
 
 | ID | 级别 | 摘要 | 位置 | 状态 | 根因 | 首见/最近轮 | 基线/修复 commit |
 |----|------|------|------|------|------|-------------|------------------|
-| P1-1 | P1 | 永久测试注释把硬编码基线解释为“本 change 的 base_commit”，违反流程溯源不进代码注释的纪律 | `tests/test_eo_board_cache.py:28` | open | implementation | 1/1 | `21165f8` / ~ |
-| P2-1 | P2 | Node 视图助手只执行聚合首页脚本，未自动挂载共享的 `EO_PROJECT` 泳道组件 | `tests/test_eo_board_cache.py:432` | open | implementation | 1/1 | `21165f8` / ~ |
-| P2-2 | P2 | 404 测试分支未显式关闭 `HTTPError` 响应，聚焦测试会输出 `ResourceWarning` | `tests/test_eo_board_cache.py:858` | open | implementation | 1/1 | `21165f8` / ~ |
+| P1-1 | P1 | 永久测试注释把硬编码基线解释为“本 change 的 base_commit”，违反流程溯源不进代码注释的纪律 | `tests/test_eo_board_cache.py:28` | fixed | implementation | 1/1 | `21165f8` / `043e692` |
+| P2-1 | P2 | Node 视图助手只执行聚合首页脚本，未自动挂载共享的 `EO_PROJECT` 泳道组件 | `tests/test_eo_board_cache.py:432` | fixed | implementation | 1/1 | `21165f8` / `043e692` |
+| P2-2 | P2 | 404 测试分支未显式关闭 `HTTPError` 响应，聚焦测试会输出 `ResourceWarning` | `tests/test_eo_board_cache.py:858` | fixed | implementation | 1/1 | `21165f8` / `043e692` |
+
+### 轮 1 修复说明（eo-implement 回填）
+
+- **P1-1**：`BASE_COMMIT_REVISION` 注释改为只描述永久契约（「聚合终端输出的兼容基线：此版本之后各版本须逐字节保持一致」）；同时把仍带流程语境的用例名 `..._against_the_change_base_commit` 改为 `..._against_the_compat_baseline`。常量本身保留。
+- **P2-1**：新增 `NODE_MOUNT_RUNNER` 最小 DOM 垫片，真正执行 `PROJECT_JS` 的 `mount()`，断言落在共享泳道组件写出的看板骨架上，两条用例分别覆盖聚合快照 `#/p/<route_key>` 路由（含首页让位、样式表互斥、返回入口）与单项目 `--html` 页启动脚本（无返回入口）。三次变异验证均被捕获：聚合路由不再进项目视图 → FAIL；共享骨架 script id 改名 → ERROR；`buildBoard` 掏空 → FAIL×2。
+- **P2-2**：`fetch_status()` 用 `with e:` 包住读取，显式释放 `HTTPError` 响应。**未能在本机复现**该 `ResourceWarning`（`-W always::ResourceWarning` 与 `catch_warnings` + `gc.collect()` 两种方式均无告警，疑与 CPython 版本/时序有关）；修复本身无条件正确，故照改。
 
 ## 审查总结（首轮快照）
 
