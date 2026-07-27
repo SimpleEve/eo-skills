@@ -262,7 +262,8 @@ eo-doc/changes/
 
 - **登记**：`/eo-project-init` 成功时顺手注册（失败不阻塞 init，输出补注册指引）；`eo-board --register [path]` / `--unregister [path]` 手工维护（缺省 path=当前目录）。去重键 = 规范化 repo identity（git common dir realpath），同一仓库任意 worktree 重复 register 幂等；注册表写入不破 eo-board 只读铁律（铁律管项目仓库文件，注册表是用户级生态文件、仅显式动作写入）。
 - **聚合**：`eo-board --all` 任意目录一屏总览——每注册项目一行（项目名 + draft/confirmed/implementing/reviewed 计数 + archived 总数 + backlog 数 + as-of 新鲜度戳），失效/非法条目行内报错不中断；三形态齐备——终端行、`--all --html` 一页快照、`--all --serve` 实时一页看板（每次请求重读注册表，serve 挂起期间新注册项目无需重启即出现；复用每项目缓存槽与单飞，仅绑 127.0.0.1、3 秒轮询热刷新）。
-- **下钻**：`eo-board --project <路径|注册名>` 等价于在该项目目录运行，三形态通用；注册名命中多个项目时报歧义并列候选路径（不静默取第一项）。
+- **一页看板双视图**：`--all --html` / `--all --serve` 的首页默认是跨项目「进行中 change 流」（非 archived change 按最近活动倒序，行内可见状态 / tier·type / summary / TODO·AC 进度 / 非主 worktree 标记 / 质量门 blocker / 最近动静；3 天无动静降权区隔但不消失），顶部卡区可切回概要卡视图，视图态记在 URL hash 刷新不丢。
+- **下钻**：聚合页里点项目条卡、change 行或概要卡直达该项目泳道页（`--serve` 走 `/p/<route_key>`，`--html` 走同一套 key 的 `#/p/<route_key>`，泳道数据内嵌单文件），页头「← 返回首页」回默认视图，浏览器返回键按历史恢复；`--scan` 临时并入的未注册项目同样可点。命令行等价入口 `eo-board --project <路径|注册名>`，注册名命中多个项目时报歧义并列候选路径（不静默取第一项）。
 - **扫描兜底**：`eo-board --all --scan <父目录>` 把含 `.eo-project.json` 的一层子目录临时并入本次聚合并提示可注册，**不写注册表**。
 
 ---

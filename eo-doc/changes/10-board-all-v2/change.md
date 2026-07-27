@@ -54,8 +54,8 @@ created: 2026-07-27
 - [ ] AC-4 项目条卡、change 行、概要卡点击均进入该项目泳道页，内容与单项目 `--serve` 一致；同名注册项目与 `--scan` 临时并入的未注册项目各自直达正确泳道页（路由稳定键区分，显示名不承担唯一性）；泳道页带「返回首页」入口回默认 change 流视图，浏览器返回键按历史恢复进入前视图；访问未知或失效路由时用户看到含回首页链接的指引页而非崩溃
 - [ ] AC-5 用户跑 `eo-board --all --html [-o PATH]` 得到单个自包含文件：默认 change 流视图，可切概要卡视图，可进各项目泳道视图（hash 路由），全程零网络请求；`-o` 与缺省路径语义不变
 - [x] AC-6 serve 挂起时改动某项目一个 change 文件，3 秒轮询内该 change 行浮到流顶且动静徽标刷新；数据无变化的重复请求命中缓存，同项目并发请求只触发一次重扫（验证：`build_data` 调用计数断言——稳定键重复请求计数不增、同槽并发只增 1，沿用 change #8 AC-2 口径）
-- [ ] AC-7 注册表为空时显示注册指引页；坏路径条目在其条卡/概要卡行内显示错误，其 change 不进流，其余项目不受影响不中断
-- [ ] AC-8 终端 `eo-board --all` 输出不变；argparse 组合矩阵回归（`--all --project` 仍拒绝、`-o` 限 `--html`、`--port` 限 `--serve` 等正反例与 change #8 钉定一致）；用户文档（docs/cli-reference.md、docs/GUIDE.md）聚合页描述与新行为一致（双视图、可点下钻、`--scan` 项目并入）
+- [x] AC-7 注册表为空时显示注册指引页；坏路径条目在其条卡/概要卡行内显示错误，其 change 不进流，其余项目不受影响不中断
+- [x] AC-8 终端 `eo-board --all` 输出不变；argparse 组合矩阵回归（`--all --project` 仍拒绝、`-o` 限 `--html`、`--port` 限 `--serve` 等正反例与 change #8 钉定一致）；用户文档（docs/cli-reference.md、docs/GUIDE.md）聚合页描述与新行为一致（双视图、可点下钻、`--scan` 项目并入）
 - [ ] AC-9 首页两视图布局与密度过目：change 流视图对照定稿 design/variant-2.html、概要卡视图对照现状不劣化（人工:挂 `--all --serve` 切换两视图并下钻一次过目）
 
 ## 3. TODO
@@ -73,7 +73,7 @@ created: 2026-07-27
 
 ### Batch 3（回归收口）
 
-- [ ] TODO-6 异常路径、组合矩阵与文档收口：空注册表指引、坏条目行内隔离（不进流、不炸其他项目）、argparse 正反例、终端 `--all` 输出回归、零新第三方依赖与 127.0.0.1 绑定静态核对；用户文档聚合页段落更新至双视图/可点下钻/`--scan` 并入新口径（文件：修改: tests/test_eo_board_cache.py、docs/cli-reference.md、docs/GUIDE.md；对应 AC-7、AC-8）
+- [x] TODO-6 异常路径、组合矩阵与文档收口：空注册表指引、坏条目行内隔离（不进流、不炸其他项目）、argparse 正反例、终端 `--all` 输出回归、零新第三方依赖与 127.0.0.1 绑定静态核对；用户文档聚合页段落更新至双视图/可点下钻/`--scan` 并入新口径（文件：修改: tests/test_eo_board_cache.py、docs/cli-reference.md、docs/GUIDE.md；对应 AC-7、AC-8）
 
 ## 4. 影响面
 

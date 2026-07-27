@@ -1,3 +1,4 @@
+import ast
 import importlib.machinery
 import importlib.util
 import json
@@ -24,6 +25,7 @@ CLI_DIR = REPO_ROOT / "cli"
 BOARD_PATH = CLI_DIR / "eo-board"
 VARIANT_PATH = REPO_ROOT / "eo-doc" / "changes" / "10-board-all-v2" / "design" / "variant-2.html"
 BASELINE_REVISION = "792522d"
+BASE_COMMIT_REVISION = "5a0247f"  # 本 change 的 base_commit：终端聚合输出以此为「不变」基线
 NODE = shutil.which("node")
 
 # 页面渲染在内嵌 JS 里，断言要落到真实产出而不是模板文本：给内嵌脚本一层最小 DOM 垫片，
@@ -1048,6 +1050,86 @@ class BoardAllSnapshotRouteTests(MultiProjectFixture):
             html = board.render_all_html(board.build_all_serve_data(None))
         self.assertNotIn('id="eo-project-css"', html)
         self.assertNotIn("__EO_PROJECT_ASSETS__", html)
+
+
+class BoardAllRegressionTests(MultiProjectFixture):
+    """回归收口：坏条目隔离、终端输出不变、宪法静态核对、用户文档口径。"""
+
+    def env_patch(self):
+        return mock.patch.dict(os.environ, {"EO_HOME": str(self.eo_home)})
+
+    def test_bad_entries_stay_out_of_the_stream_without_breaking_healthy_ones(self):
+        alpha = self.make_project("alpha", statuses=("implementing",))
+        self.register(alpha)
+        registry = json.loads(self.registry_file().read_text(encoding="utf-8"))
+        registry["projects"].append({"name": "ghost", "path": str(self.root / "gone"), "registered_at": "2026-07-25"})
+        registry["projects"].append({"name": "bad", "path": 123})
+        self.registry_file().write_text(json.dumps(registry), encoding="utf-8")
+        board = self.load_board_module()
+        with self.env_patch():
+            agg = board.build_all_data()
+
+        healthy = [r for r in agg["rows"] if not r["error"]]
+        broken = [r for r in agg["rows"] if r["error"]]
+        self.assertEqual([r["label"] for r in healthy], ["alpha"])
+        self.assertEqual(len(broken), 2)
+        self.assertEqual(len(healthy[0]["changes"]), 1)
+        for row in broken:
+            self.assertEqual(row.get("changes", []), [])   # 坏条目不往流里塞行
+            self.assertIsNone(row.get("route_key"))        # 也不可点
+
+        if NODE:
+            content = self.render_snapshot(self.snapshot_html())["content"]
+            self.assertIn("进行中 change <b>1</b>", content)
+            self.assertEqual(content.count('class="row'), 1)
+            self.assertEqual(content.count('class="proj-err"'), 2)
+
+    def test_all_terminal_output_is_unchanged_against_the_change_base_commit(self):
+        self.register(self.make_project("alpha", statuses=("confirmed", "implementing", "archived"), backlog_cards=2))
+        self.register(self.make_project("beta", statuses=("draft",)))
+        baseline_path = self.root / "eo_board_base.py"
+        baseline_path.write_text(
+            run_git(REPO_ROOT, "show", f"{BASE_COMMIT_REVISION}:cli/eo-board").stdout, encoding="utf-8"
+        )
+        baseline = load_module(f"eo_board_base_{id(self)}", baseline_path)
+        board = self.load_board_module()
+
+        def normalized(text):
+            return re.sub(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", "<as-of>", text)
+
+        with self.env_patch():
+            before = baseline.render_all_terminal(baseline.build_all_data())
+            after = board.render_all_terminal(board.build_all_data())
+        self.assertEqual(normalized(after), normalized(before))
+
+    def test_stays_on_stdlib_only_and_binds_loopback_only(self):
+        sources = [BOARD_PATH, *sorted((CLI_DIR / "eo_lib").glob("*.py"))]
+        for source in sources:
+            tree = ast.parse(source.read_text(encoding="utf-8"))
+            imported = set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    imported.update(alias.name.split(".")[0] for alias in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                    imported.add(node.module.split(".")[0])
+            third_party = imported - set(sys.stdlib_module_names) - {"eo_lib"}
+            self.assertEqual(third_party, set(), f"{source.name} 引入了非标准库依赖")
+
+        board_source = BOARD_PATH.read_text(encoding="utf-8")
+        self.assertEqual(board_source.count('ThreadingHTTPServer(("127.0.0.1"'), 2)
+        for forbidden in ("0.0.0.0", "::"):
+            self.assertNotIn(f'"{forbidden}"', board_source)
+
+    def test_user_docs_match_the_new_aggregate_behaviour(self):
+        cli_ref = (REPO_ROOT / "docs" / "cli-reference.md").read_text(encoding="utf-8")
+        guide = (REPO_ROOT / "docs" / "GUIDE.md").read_text(encoding="utf-8")
+        shared = ("change 流", "概要卡", "route_key", "/p/<route_key>", "返回首页", "--scan", "hash")
+        for doc, name, anchors in (
+            (cli_ref, "cli-reference.md", shared + ("#/cards", "`#/`")),
+            (guide, "GUIDE.md", shared),
+        ):
+            for anchor in anchors:
+                self.assertTrue(anchor in doc, f"{name} 缺少「{anchor}」口径")
 
 
 class BoardAllAggregateTests(MultiProjectFixture):
