@@ -25,7 +25,7 @@ CLI_DIR = REPO_ROOT / "cli"
 BOARD_PATH = CLI_DIR / "eo-board"
 VARIANT_PATH = REPO_ROOT / "eo-doc" / "changes" / "10-board-all-v2" / "design" / "variant-2.html"
 BASELINE_REVISION = "792522d"
-BASE_COMMIT_REVISION = "5a0247f"  # 本 change 的 base_commit：终端聚合输出以此为「不变」基线
+BASE_COMMIT_REVISION = "5a0247f"  # 聚合终端输出的兼容基线：此版本之后各版本须逐字节保持一致
 NODE = shutil.which("node")
 
 # 页面渲染在内嵌 JS 里，断言要落到真实产出而不是模板文本：给内嵌脚本一层最小 DOM 垫片，
@@ -45,6 +45,58 @@ globalThis.window = { addEventListener: () => {}, location: globalThis.location 
 globalThis.setInterval = () => 0;
 (0, eval)(script);
 process.stdout.write(JSON.stringify({ topbar: els.topbar.innerHTML, content: els.content.innerHTML }));
+"""
+
+# 泳道组件是共享的：单项目页和聚合快照的 #/p/<key> 都靠它渲染。垫片补到够 mount 跑完，
+# 断言落在它真正写出的看板骨架上，而不是页面里有没有那段脚本文本。
+NODE_MOUNT_RUNNER = r"""
+const fs = require('fs');
+const [projectScript, aggScript, dataJson, projectCss, projectMarkup] =
+  process.argv.slice(2, 7).map((p) => fs.readFileSync(p, 'utf8'));
+
+function stub(name) {
+  return {
+    name, innerHTML: '', textContent: '', style: {}, disabled: false, _q: {},
+    querySelector(sel) { return this._q[sel] || (this._q[sel] = stub(sel)); },
+    querySelectorAll() { return []; },
+    addEventListener() {},
+    classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
+    parentNode: { removeChild() {} },
+  };
+}
+const els = {};
+const el = (id) => els[id] || (els[id] = stub(id));
+el('eo-board-all-data').textContent = dataJson;   // 聚合快照读这个
+el('eo-board-data').textContent = dataJson;       // 单项目页读这个
+el('eo-project-css').textContent = projectCss;
+el('eo-project-markup').textContent = projectMarkup;
+
+globalThis.document = {
+  getElementById: el,
+  createElement: () => stub('created'),
+  head: { appendChild() {} },
+  documentElement: { classList: { add() {}, remove() {}, toggle() {} } },
+  addEventListener() {}, removeEventListener() {},
+};
+globalThis.location = { hash: process.argv[7] || '' };
+globalThis.window = { addEventListener: () => {}, location: globalThis.location };
+globalThis.setInterval = () => 0;
+globalThis.clearInterval = () => {};
+(0, eval)(projectScript);
+globalThis.EO_PROJECT = window.EO_PROJECT;  // 浏览器里 window.X= 就是全局绑定，node 里要补这一步
+(0, eval)(aggScript);
+
+const projRoot = el(process.argv[8] || 'projRoot');
+const pick = (sel) => (projRoot._q[sel] ? projRoot._q[sel].innerHTML : '');
+process.stdout.write(JSON.stringify({
+  mountedMarkup: projRoot.innerHTML,
+  projectTopbar: pick('#p-topbar'),
+  projectStrip: pick('#p-strip'),
+  projectBoard: pick('#p-board'),
+  homeDisplay: el('homeWrap').style.display,
+  aggStyleDisabled: el('aggStyle').disabled,
+  homeContent: el('content').innerHTML,
+}));
 """
 
 
@@ -453,6 +505,49 @@ class MultiProjectFixture(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         return json.loads(proc.stdout)
 
+    def slice_between(self, html, opener, closer="</script>"):
+        start = html.index(opener) + len(opener)
+        return html[start:html.index(closer, start)]
+
+    def mount_project_board(self, html_path, data_id, root_id, hash_=""):
+        """在最小垫片里真正跑一遍挂载路径（单项目页的启动脚本 / 聚合快照的 #/p/<key> 路由），
+        返回共享泳道组件写出的各块 innerHTML。"""
+        html = Path(html_path).read_text(encoding="utf-8")
+        markup_open = 'id="eo-project-markup">'
+        markup_end = html.index("</script>", html.index(markup_open))
+        project_start = html.index("<script>", markup_end) + len("<script>")
+        boot_start = html.rindex("<script>") + len("<script>")
+        css_open = 'id="eo-project-css">'
+
+        files = {
+            "project.js": html[project_start:html.index("</script>", project_start)],
+            "boot.js": html[boot_start:html.index("</script>", boot_start)],
+            "data.json": self.slice_between(html, f'id="{data_id}">'),
+            "project.css": self.slice_between(html, css_open) if css_open in html else "",
+            "project.html": self.slice_between(html, markup_open),
+            "mount-runner.js": NODE_MOUNT_RUNNER,
+        }
+        for name, body in files.items():
+            (self.root / name).write_text(body, encoding="utf-8")
+        proc = subprocess.run(
+            [NODE, str(self.root / "mount-runner.js"),
+             *(str(self.root / n) for n in ("project.js", "boot.js", "data.json", "project.css", "project.html")),
+             hash_, root_id],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        return json.loads(proc.stdout)
+
+    def mount_snapshot_project(self, html_path, route_key):
+        return self.mount_project_board(html_path, "eo-board-all-data", "projRoot", f"#/p/{route_key}")
+
+    def assert_swimlane_rendered(self, mounted, change_title):
+        self.assertIn('id="p-board"', mounted["mountedMarkup"])          # 骨架进了挂载点
+        self.assertEqual(mounted["projectBoard"].count('<section class="col"'), 6)
+        for zh in ("待办池", "草稿", "已确认", "实施中", "审查通过", "已归档"):
+            self.assertIn(zh, mounted["projectBoard"])
+        self.assertIn(f'<div class="card-title">{change_title}</div>', mounted["projectBoard"])
+
 
 class BoardMultiProjectTests(MultiProjectFixture):
     """--all / --project / --scan 多项目聚合与下钻（终端形态）。"""
@@ -859,7 +954,8 @@ class BoardAllRouteTests(MultiProjectFixture):
         try:
             return self.fetch(server, path)
         except HTTPError as e:
-            return e.code, e.read().decode("utf-8")
+            with e:
+                return e.code, e.read().decode("utf-8")
 
     def test_project_route_serves_swimlane_page_with_own_data_endpoint_and_home_link(self):
         alpha = self.make_project("alpha", statuses=("implementing",))
@@ -1034,6 +1130,36 @@ class BoardAllSnapshotRouteTests(MultiProjectFixture):
         self.assertIn('id="eo-project-markup"', html)
         self.assertIn("window.EO_PROJECT", html)
 
+    @unittest.skipUnless(NODE, "缺少 node，无法在无浏览器环境执行挂载路径")
+    def test_snapshot_hash_route_really_mounts_the_shared_project_board(self):
+        alpha = self.make_project("alpha", statuses=("implementing", "archived"), backlog_cards=2)
+        self.register(alpha)
+        board = self.load_board_module()
+        key = board.make_route_key("alpha", alpha)
+
+        mounted = self.mount_snapshot_project(self.snapshot_html(), key)
+        self.assert_swimlane_rendered(mounted, "C1")
+        self.assertEqual(mounted["homeDisplay"], "none")                 # 首页让位
+        self.assertTrue(mounted["aggStyleDisabled"])                     # 两套样式表互斥
+        self.assertEqual(mounted["homeContent"], "")                     # 没有回落到首页渲染
+        self.assertIn('class="card dim"', mounted["projectBoard"])       # 归档卡降权
+        self.assertEqual(mounted["projectBoard"].count('<article class="card'), 4)  # 2 change + 2 backlog
+        self.assertIn("← 返回首页", mounted["projectTopbar"])
+        self.assertIn('href="#/"', mounted["projectTopbar"])
+        self.assertIn("alpha", mounted["projectStrip"])
+
+    @unittest.skipUnless(NODE, "缺少 node，无法在无浏览器环境执行挂载路径")
+    def test_single_project_page_mounts_the_same_shared_board_without_home_link(self):
+        alpha = self.make_project("alpha", statuses=("implementing", "archived"), backlog_cards=1)
+        out = self.root / "single.html"
+        r = self.run_board("--html", "-o", str(out), "--no-open", cwd=alpha)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+        mounted = self.mount_project_board(out, "eo-board-data", "eo-root")
+        self.assert_swimlane_rendered(mounted, "C1")
+        self.assertNotIn("返回首页", mounted["projectTopbar"])  # 单项目页没有聚合首页可回
+        self.assertIn("alpha", mounted["projectStrip"])
+
     def test_snapshot_is_self_contained_with_no_outbound_requests(self):
         self.register(self.make_project("alpha", statuses=("implementing",)))
         html = self.snapshot_html().read_text(encoding="utf-8")
@@ -1084,7 +1210,7 @@ class BoardAllRegressionTests(MultiProjectFixture):
             self.assertEqual(content.count('class="row'), 1)
             self.assertEqual(content.count('class="proj-err"'), 2)
 
-    def test_all_terminal_output_is_unchanged_against_the_change_base_commit(self):
+    def test_all_terminal_output_is_unchanged_against_the_compat_baseline(self):
         self.register(self.make_project("alpha", statuses=("confirmed", "implementing", "archived"), backlog_cards=2))
         self.register(self.make_project("beta", statuses=("draft",)))
         baseline_path = self.root / "eo_board_base.py"
