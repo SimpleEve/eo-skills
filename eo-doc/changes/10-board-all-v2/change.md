@@ -3,7 +3,7 @@ id: board-all-v2
 seq: 10
 title: eo-board --all 聚合页 v2：change 流首页 + 双视图切换 + 路由式下钻
 summary: 聚合首页升级 change 流与概要卡双视图切换，/p/<key> 稳定键路由下钻泳道页（含 --scan 项目），--html 单文件 hash 路由
-status: implementing
+status: reviewed
 tier: full
 type: feature
 base_commit: 5a0247f80534d30acc1ed59e5f629ed0e14e6275

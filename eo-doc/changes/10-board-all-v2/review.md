@@ -6,8 +6,8 @@ created: 2026-07-27
 updated: 2026-07-27
 status: active
 summary: >
-  首轮审查覆盖 5a0247f..21165f8；核心行为与两项实施偏差均成立，
-  当前 P0=0、P1=1、P2=2，需先清理一处流程溯源注释再复审。
+  第 2 轮已核销修复 commit 043e692 的 P1-1/P2-1/P2-2，
+  当前 P0/P1/P2 均为 0，代码审查通过。
 ---
 
 # eo-board --all 聚合页 v2 代码审查报告
@@ -24,9 +24,9 @@ summary: >
 
 | ID | 级别 | 摘要 | 位置 | 状态 | 根因 | 首见/最近轮 | 基线/修复 commit |
 |----|------|------|------|------|------|-------------|------------------|
-| P1-1 | P1 | 永久测试注释把硬编码基线解释为“本 change 的 base_commit”，违反流程溯源不进代码注释的纪律 | `tests/test_eo_board_cache.py:28` | fixed | implementation | 1/1 | `21165f8` / `043e692` |
-| P2-1 | P2 | Node 视图助手只执行聚合首页脚本，未自动挂载共享的 `EO_PROJECT` 泳道组件 | `tests/test_eo_board_cache.py:432` | fixed | implementation | 1/1 | `21165f8` / `043e692` |
-| P2-2 | P2 | 404 测试分支未显式关闭 `HTTPError` 响应，聚焦测试会输出 `ResourceWarning` | `tests/test_eo_board_cache.py:858` | fixed | implementation | 1/1 | `21165f8` / `043e692` |
+| P1-1 | P1 | 永久测试注释把硬编码基线解释为“本 change 的 base_commit”，违反流程溯源不进代码注释的纪律 | `tests/test_eo_board_cache.py:28` | verified | implementation | 1/2 | `21165f8` / `043e692` |
+| P2-1 | P2 | Node 视图助手只执行聚合首页脚本，未自动挂载共享的 `EO_PROJECT` 泳道组件 | `tests/test_eo_board_cache.py:432` | verified | implementation | 1/2 | `21165f8` / `043e692` |
+| P2-2 | P2 | 404 测试分支未显式关闭 `HTTPError` 响应，聚焦测试会输出 `ResourceWarning` | `tests/test_eo_board_cache.py:858` | verified | implementation | 1/2 | `21165f8` / `043e692` |
 
 ### 轮 1 修复说明（eo-implement 回填）
 
@@ -137,9 +137,26 @@ summary: >
 
 无新增形态分叉；D-1、D-2 均按已记录实施偏差核验，不引入新的用户决策点。
 
+## 第 2 轮记录（revision 1 · 2026-07-27）
+
+- 审查基线：`043e692`（`020b1a5` 仅回填 finding 台账，不含实现修复）。
+- 核销：P1-1 verified。基线注释与用例名已改为“终端输出兼容基线”的永久
+  契约语义，不再引用 change/base_commit 流程语境；新增注释均描述测试垫片、
+  路由或渲染不变量，未发现新的流程溯源。
+- 核销：P2-1 verified。`NODE_MOUNT_RUNNER` 会先执行共享 `PROJECT_JS`，再分别
+  执行聚合快照 hash 路由与单项目启动脚本；断言落在组件实际写出的六列泳道、
+  change/backlog 卡、首页让位、样式互斥及返回入口上，不再只是搜索资产文本。
+- 核销：P2-2 verified。`fetch_status()` 以 `with e:` 包住 404 正文读取，离开
+  分支即关闭 `HTTPError` 响应；严格 `ResourceWarning` 策略下的对应定向用例通过。
+- reopen：无。
+- 新增：无（本轮为三条 finding 的定向核销，不扩为全量审查）。
+- 独立验证：严格 `ResourceWarning` 策略下定向执行共享泳道双挂载、未知/失效
+  路由与终端兼容基线 4 项，全部通过（2.208s）；`git diff --check
+  21165f8..043e692` 通过。总控另提供 236 项全绿证据。
+- 本轮结论：通过，P0/P1/P2 均为 0；change 状态已流转 `reviewed`。
+
 ## 速报
 
-结论：有保留通过（P1 1 条）［第 1 轮 · revision 1 · 基线 `21165f8`］
-P1（应修）：P1-1 永久测试注释携带“本 change 的 base_commit”流程溯源 — `tests/test_eo_board_cache.py:28`
-P2（可后置）：P2-1 共享泳道组件缺少自动执行级回归；P2-2 404 测试响应未显式释放
-下一步：回 `/eo-implement` 清理 P1-1 后定向复审；AC-4/5 仍由 `/eo-test` 负责勾选，AC-9 保持人工验收。
+结论：通过［第 2 轮 · revision 1 · 基线 `043e692`］
+下一步：代码审查已通过；进入 `/eo-test` 承接 AC-4/5，AC-9 保持人工验收。
+📋 代码审查通过（`test.md` 尚不存在，正式 `/eo-test` 未完成）；人工验收单保留在 `eo-doc/changes/10-board-all-v2/acceptance.md`。
