@@ -11,4 +11,4 @@
 | 7 | [project-root-normalization](07-project-root-normalization/change.md) | light | enhance | archived | 2026-07-25 | 配置读取时把相对 project_root 按 repo root 解析并解软链，告警放行；解析不到仍报错 |
 | 8 | [eo-helper-entry](08-eo-helper-entry/change.md) | full | feature | archived | 2026-07-25 | 新增 eo-helper 数字菜单唯一入口；eo-board --all 补 --html/--serve；README 命令面收纳 |
 | 9 | [loop-fork-escalation](09-loop-fork-escalation/change.md) | light | enhance | archived | 2026-07-25 | worker 不问用户但形态分叉须清单上报，总控攒成封闭选择转达用户后回灌 |
-| 10 | [board-all-v2](10-board-all-v2/change.md) | full | feature | implementing | 2026-07-27 | 聚合首页升级 change 流与概要卡双视图切换，/p/<key> 稳定键路由下钻泳道页（含 --scan 项目），--html 单文件 hash 路由 |
+| 10 | [board-all-v2](10-board-all-v2/change.md) | full | feature | archived | 2026-07-27 | 聚合首页升级 change 流与概要卡双视图切换，/p/<key> 稳定键路由下钻泳道页（含 --scan 项目），--html 单文件 hash 路由 |

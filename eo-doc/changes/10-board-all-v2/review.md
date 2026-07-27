@@ -6,7 +6,7 @@ created: 2026-07-27
 updated: 2026-07-27
 status: active
 summary: >
-  第 2 轮已核销修复 commit 043e692 的 P1-1/P2-1/P2-2，
+  第 3 轮定向核实 AC-9 的三个 CSS 实施提交，未见行为语义外溢；
   当前 P0/P1/P2 均为 0，代码审查通过。
 ---
 
@@ -155,8 +155,30 @@ summary: >
   21165f8..043e692` 通过。总控另提供 236 项全绿证据。
 - 本轮结论：通过，P0/P1/P2 均为 0；change 状态已流转 `reviewed`。
 
+## 第 3 轮记录（revision 1 · 2026-07-27）
+
+- 审查基线：`560de9a`。`2447cd3`、`8b03438`、`e3180ce` 与 `b31a86a`
+  仅承载验收反馈、实施偏差及状态投影留痕，不含运行时代码修改。
+- 定向范围：AC-9 反馈实施提交 `ff0e3a9`、`5e4e9c7`、`560de9a`；
+  不扩为全量复审。三次提交的运行时改动全部位于 `cli/eo-board` 的 CSS
+  模板：106 处 `font-size` 各增加 0.5px，两处 `.wrap` 分别收敛为首页
+  `1280px` 与泳道页 `min(94vw, 1800px)`，一处 `.drawer` 由
+  `min(460px, 94vw)` 调为 `min(920px, 94vw)`。
+- 行为语义核实：`5c19342..560de9a` 的 109 对运行时增删行可完全归入上述
+  106 对字号、2 对容器宽度、1 对侧边栏宽度，未改 Python/JavaScript、
+  路由、数据、缓存或交互逻辑；serve 与快照仍复用既有模板及样式表切换，
+  未新增形态分支。
+- 核销：无；第 2 轮的 P1-1/P2-1/P2-2 均保持 `verified`。
+- reopen：无。
+- 新增：无。
+- 独立验证：`python3 -m unittest tests.test_eo_board_cache -q` 通过
+  56/56（38.950s）；`python3 -m compileall -q cli tests`、
+  `git diff --check 5c19342..560de9a` 与
+  `git diff --check 560de9a..e3180ce` 均通过。总控提供的全量回归证据为
+  236/236；AC-9 已由用户在基线 `560de9a` 终验通过。
+- 本轮结论：通过，P0/P1/P2 均为 0；change 状态已流转 `reviewed`。
+
 ## 速报
 
-结论：通过［第 2 轮 · revision 1 · 基线 `043e692`］
-下一步：代码审查已通过；进入 `/eo-test` 承接 AC-4/5，AC-9 保持人工验收。
-📋 代码审查通过（`test.md` 尚不存在，正式 `/eo-test` 未完成）；人工验收单保留在 `eo-doc/changes/10-board-all-v2/acceptance.md`。
+结论：通过［第 3 轮 · revision 1 · 基线 `560de9a`］
+下一步：`test.md` 已通过且 AC-9 已由用户终验通过，可进入 `/eo-archive board-all-v2`。

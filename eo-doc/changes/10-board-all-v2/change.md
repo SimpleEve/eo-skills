@@ -3,14 +3,14 @@ id: board-all-v2
 seq: 10
 title: eo-board --all 聚合页 v2：change 流首页 + 双视图切换 + 路由式下钻
 summary: 聚合首页升级 change 流与概要卡双视图切换，/p/<key> 稳定键路由下钻泳道页（含 --scan 项目），--html 单文件 hash 路由
-status: implementing
+status: archived
 tier: full
 type: feature
 base_commit: 5a0247f80534d30acc1ed59e5f629ed0e14e6275
 plan_revision: 1
 fix_rounds: 3
 fix_consumed: ["review#1", "acceptance#AC-9@5c19342", "acceptance#AC-9@ff0e3a9"]
-commits: []
+commits: ["26b724a", "4f3f54a", "3cf9553", "9b076d5", "21165f8", "043e692", "020b1a5", "8e7f123", "5c19342", "ff0e3a9", "2447cd3", "b31a86a", "5e4e9c7", "8b03438", "560de9a", "e3180ce"]
 issue: ~
 pr: ~
 created: 2026-07-27
@@ -56,7 +56,7 @@ created: 2026-07-27
 - [x] AC-6 serve 挂起时改动某项目一个 change 文件，3 秒轮询内该 change 行浮到流顶且动静徽标刷新；数据无变化的重复请求命中缓存，同项目并发请求只触发一次重扫（验证：`build_data` 调用计数断言——稳定键重复请求计数不增、同槽并发只增 1，沿用 change #8 AC-2 口径）
 - [x] AC-7 注册表为空时显示注册指引页；坏路径条目在其条卡/概要卡行内显示错误，其 change 不进流，其余项目不受影响不中断
 - [x] AC-8 终端 `eo-board --all` 输出不变；argparse 组合矩阵回归（`--all --project` 仍拒绝、`-o` 限 `--html`、`--port` 限 `--serve` 等正反例与 change #8 钉定一致）；用户文档（docs/cli-reference.md、docs/GUIDE.md）聚合页描述与新行为一致（双视图、可点下钻、`--scan` 项目并入）
-- [ ] AC-9 首页两视图布局与密度过目：change 流视图对照定稿 design/variant-2.html、概要卡视图对照现状不劣化（人工:挂 `--all --serve` 切换两视图并下钻一次过目）。定稿对照口径限于结构、字段与密度分界；**内容容器宽度与字号档以 2026-07-27 验收反馈为准**——首页两视图（change 流 / 概要卡）`max-width: 1280px` 居中、下钻泳道页 `max-width: min(94vw, 1800px)` 居中、change 详情侧边栏 `min(920px, 94vw)`，字号统一较定稿 +0.5px，`--html` 快照同此规则；上述与定稿的差异不算不符
+- [x] AC-9 首页两视图布局与密度过目：change 流视图对照定稿 design/variant-2.html、概要卡视图对照现状不劣化（人工:挂 `--all --serve` 切换两视图并下钻一次过目）（确认：用户终验「通过」——三档宽度与字号终态一并过目 · 2026-07-27 · 基线 560de9a）。定稿对照口径限于结构、字段与密度分界；**内容容器宽度与字号档以 2026-07-27 验收反馈为准**——首页两视图（change 流 / 概要卡）`max-width: 1280px` 居中、下钻泳道页 `max-width: min(94vw, 1800px)` 居中、change 详情侧边栏 `min(920px, 94vw)`，字号统一较定稿 +0.5px，`--html` 快照同此规则；上述与定稿的差异不算不符
 
 ## 3. TODO
 
