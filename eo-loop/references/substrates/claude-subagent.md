@@ -27,3 +27,4 @@ Claude Code 会话内 Agent 工具原生可用，恒成立。模型按偏好或�
 
 - (2026-07-19) 子 agent 上下文独立：prompt 里不给 change 路径它就会自己猜——路径必给
 - (2026-07-19) 用词锚定：prompt 写「看看 / 检查一下」会弱化执行强度——用节点本义动词（审查 / 实施 / 验证）
+- (2026-07-24) Agent 工具偶发 teammate pane 创建超时（「Timed out waiting for the Orca runtime / tmux split pane handle」，orca status 却显示 ready、CLI 建终端正常）：重试 2 次仍失败即切换基底——orca 终端跑 `claude --model <id> --dangerously-skip-permissions`，走 orca-orchestration 的 task/dispatch 流程，模型钉住不变
