@@ -15,6 +15,7 @@ import threading
 import time
 import unittest
 from unittest import mock
+from urllib.error import HTTPError
 from urllib.request import urlopen
 
 
@@ -433,7 +434,8 @@ class MultiProjectFixture(unittest.TestCase):
         start = html.index(marker) + len(marker)
         end = html.index("</script>", start)
         data_json = html[start:end]
-        script_start = html.index("<script>", end) + len("<script>")
+        # 页面尾部那段才是聚合首页脚本（前面还有内嵌的单项目资产脚本）
+        script_start = html.rindex("<script>") + len("<script>")
         script_end = html.index("</script>", script_start)
 
         runner = self.root / "runner.js"
@@ -779,6 +781,273 @@ class BoardAllHomeViewTests(MultiProjectFixture):
         for anchor in ("strip", "proj", "list", "list-head", "row", "r-proj", "r-main",
                        "r-prog", "r-when", "divider", "st-pill", "bar", "todo", "ac"):
             self.assertIn(anchor, classes(content), anchor)
+
+
+@unittest.skipUnless(NODE, "缺少 node，无法在无浏览器环境渲染内嵌视图")
+class BoardAllCardsViewTests(MultiProjectFixture):
+    """概要卡视图：并入切换框架、卡片可点下钻、信息面不低于改版前。"""
+
+    def test_cards_view_keeps_every_field_of_the_previous_summary_card(self):
+        alpha = self.make_project("alpha", statuses=("confirmed", "implementing"), backlog_cards=3)
+        self.register(alpha)
+        cfg = json.loads((alpha / ".eo-project.json").read_text(encoding="utf-8"))
+        cfg["project_name"] = "alpha-renamed"
+        (alpha / ".eo-project.json").write_text(json.dumps(cfg), encoding="utf-8")
+        parent = self.root / "scan-parent"
+        self.make_project("orphan", statuses=("draft",), parent=parent)
+        data = json.loads(self.registry_file().read_text(encoding="utf-8"))
+        data["projects"].append({"name": "ghost", "path": str(self.root / "gone"), "registered_at": "2026-07-25"})
+        self.registry_file().write_text(json.dumps(data), encoding="utf-8")
+
+        content = self.render_snapshot(self.snapshot_html(scan=parent), "#/cards")["content"]
+        self.assertIn('class="grid"', content)
+        self.assertIn("alpha-renamed", content)                       # 项目名
+        self.assertIn(str(alpha), content)                            # 路径
+        self.assertIn("as-of ", content)                              # 新鲜度戳
+        for _, zh in (("draft", "草稿"), ("confirmed", "已确认"), ("implementing", "实施中"),
+                      ("reviewed", "审查通过"), ("archived", "已归档")):
+            self.assertIn(zh, content)                                # 五状态计数
+        self.assertIn("<b>3</b>backlog", content)                     # backlog 数
+        self.assertIn("注册名 alpha 与项目配置不一致", content)          # 名不一致提示
+        self.assertIn('<span class="pill unreg">未注册</span>', content)  # 未注册徽标
+        self.assertIn("路径失效或缺 .eo-project.json", content)          # 坏条目行内错误
+
+    def test_cards_are_clickable_and_bad_entries_are_not(self):
+        alpha = self.make_project("alpha", statuses=("confirmed",))
+        self.register(alpha)
+        data = json.loads(self.registry_file().read_text(encoding="utf-8"))
+        data["projects"].append({"name": "ghost", "path": str(self.root / "gone"), "registered_at": "2026-07-25"})
+        self.registry_file().write_text(json.dumps(data), encoding="utf-8")
+        board = self.load_board_module()
+        key = board.make_route_key("alpha", alpha)
+
+        content = self.render_snapshot(self.snapshot_html(), "#/cards")["content"]
+        self.assertIn('<a class="proj" href="#/p/' + key + '"', content)
+        self.assertEqual(content.count('<a class="proj"'), 1)          # 坏条目不可点
+        self.assertIn('<div class="proj">', content)
+
+    def test_unknown_project_hash_falls_back_to_guidance_with_home_link(self):
+        self.register(self.make_project("alpha"))
+        content = self.render_snapshot(self.snapshot_html(), "#/p/gone~00000000")["content"]
+        self.assertIn("这份快照里没有该项目的泳道数据", content)
+        self.assertIn('href="#/"', content)
+
+
+class BoardAllRouteTests(MultiProjectFixture):
+    """serve 路由 /p/<route_key>：分派、数据端点、返回入口、未知 key 指引、跨槽缓存。"""
+
+    def env_patch(self):
+        return mock.patch.dict(os.environ, {"EO_HOME": str(self.eo_home)})
+
+    def start(self, board, scan_dir=None):
+        handler = type("RouteHandler", (board.AllBoardRequestHandler,), {"scan_dir": scan_dir})
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(thread.join, 5)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        return server
+
+    def fetch(self, server, path):
+        with urlopen(f"http://127.0.0.1:{server.server_port}{path}", timeout=5) as response:
+            return response.status, response.read().decode("utf-8")
+
+    def fetch_status(self, server, path):
+        try:
+            return self.fetch(server, path)
+        except HTTPError as e:
+            return e.code, e.read().decode("utf-8")
+
+    def test_project_route_serves_swimlane_page_with_own_data_endpoint_and_home_link(self):
+        alpha = self.make_project("alpha", statuses=("implementing",))
+        self.register(alpha)
+        board = self.load_board_module()
+        key = board.make_route_key("alpha", alpha)
+        with self.env_patch():
+            server = self.start(board)
+            status, html = self.fetch(server, f"/p/{key}")
+            _, raw = self.fetch(server, f"/p/{key}/data.json")
+        self.assertEqual(status, 200)
+        self.assertIn("← 返回首页", html)
+        self.assertIn(f"dataUrl: '/p/{key}/data.json'", html)
+        self.assertIn("homeUrl: '/'", html)
+        self.assertIn("setInterval(refreshLoop, 3000)", html)
+        data = json.loads(raw)
+        self.assertEqual(data["project"]["name"], "alpha")
+        self.assertTrue(data["serve"])
+        self.assertEqual([c["id"] for c in data["changes"]], ["c1"])
+
+    def test_same_named_projects_and_renamed_registration_reach_their_own_lane(self):
+        one = self.make_project("同名", statuses=("draft",), parent=self.root / "one")
+        two = self.make_project("同名2", statuses=("reviewed",), parent=self.root / "two")
+        cfg = json.loads((two / ".eo-project.json").read_text(encoding="utf-8"))
+        cfg["project_name"] = "同名"
+        (two / ".eo-project.json").write_text(json.dumps(cfg), encoding="utf-8")
+        self.register(one)
+        self.register(two)
+        board = self.load_board_module()
+        key_one = board.make_route_key("同名", one)
+        key_two = board.make_route_key("同名", two)
+        self.assertNotEqual(key_one, key_two)
+        with self.env_patch():
+            server = self.start(board)
+            first = json.loads(self.fetch(server, f"/p/{key_one}/data.json")[1])
+            second = json.loads(self.fetch(server, f"/p/{key_two}/data.json")[1])
+        self.assertEqual([c["status"] for c in first["changes"]], ["draft"])
+        self.assertEqual([c["status"] for c in second["changes"]], ["reviewed"])
+
+    def test_scan_merged_unregistered_project_is_drillable_too(self):
+        self.register(self.make_project("alpha"))
+        parent = self.root / "scan-parent"
+        orphan = self.make_project("orphan", statuses=("confirmed",), parent=parent)
+        board = self.load_board_module()
+        key = board.make_route_key("orphan", orphan)
+        with self.env_patch():
+            server = self.start(board, scan_dir=str(parent))
+            status, raw = self.fetch(server, f"/p/{key}/data.json")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(raw)["project"]["name"], "orphan")
+
+    def test_unknown_and_stale_routes_return_guidance_page_not_a_crash(self):
+        alpha = self.make_project("alpha")
+        self.register(alpha)
+        board = self.load_board_module()
+        stale = board.make_route_key("alpha", self.root / "moved-away")
+        with self.env_patch():
+            server = self.start(board)
+            for path in (f"/p/{stale}", "/p/", "/p/%E4%B8%8D%E5%AD%98~deadbeef", "/nope"):
+                code, body = self.fetch_status(server, path)
+                self.assertEqual(code, 404, path)
+                self.assertIn('href="/"', body, path)
+                self.assertIn("返回首页", body, path)
+                self.assertIn("alpha", body, path)  # 指引页列出当前可下钻项目
+
+    def test_home_page_links_match_the_routes_the_server_answers(self):
+        alpha = self.make_project("alpha", statuses=("implementing",))
+        beta = self.make_project("beta", statuses=("draft",))
+        self.register(alpha)
+        self.register(beta)
+        board = self.load_board_module()
+        with self.env_patch():
+            server = self.start(board)
+            _, raw = self.fetch(server, "/data.json")
+            keys = [row["route_key"] for row in json.loads(raw)["rows"]]
+            for key in keys:
+                self.assertEqual(self.fetch(server, f"/p/{key}")[0], 200, key)
+        self.assertEqual(len(keys), 2)
+
+    def test_edited_change_becomes_the_freshest_row_on_the_next_poll(self):
+        alpha = self.make_project("alpha", statuses=("implementing",))
+        beta = self.make_project("beta", statuses=("implementing",))
+        self.register(alpha)
+        self.register(beta)
+        self.age_change(alpha, "01-c1", days=4)
+        board = self.load_board_module()
+        with self.env_patch():
+            server = self.start(board)
+            before = json.loads(self.fetch(server, "/data.json")[1])
+            stale = next(c for r in before["rows"] for c in r["changes"] if c["project"] == "alpha")
+            self.assertFalse(stale["active"])
+
+            edited = alpha / "eo-doc" / "changes" / "01-c1" / "change.md"
+            edited.write_text(edited.read_text(encoding="utf-8") + "\n改一笔\n", encoding="utf-8")
+            after = json.loads(self.fetch(server, "/data.json")[1])
+
+        stream = [c for r in after["rows"] for c in r["changes"]]
+        top = max(stream, key=lambda c: c["activity_at"])
+        self.assertEqual(top["project"], "alpha")
+        self.assertTrue(top["active"])
+
+    def test_two_lanes_polled_concurrently_keep_separate_cache_slots(self):
+        self.register(self.make_project("alpha", statuses=("confirmed",)))
+        self.register(self.make_project("beta", statuses=("draft",)))
+        board = self.load_board_module()
+        calls = 0
+        original = board.build_data
+        lock = threading.Lock()
+        overlap = threading.Barrier(2, timeout=15)
+
+        def counted(cfg):
+            nonlocal calls
+            with lock:
+                calls += 1
+            overlap.wait()
+            return original(cfg)
+
+        with self.env_patch():
+            keys = {cfg["project_name"]: key for key, cfg in board.build_route_map().items()}
+            with mock.patch.object(board, "build_data", side_effect=counted):
+                server = self.start(board)
+                seen = {}
+
+                def hit(name):
+                    seen.setdefault(name, []).append(
+                        json.loads(self.fetch(server, f"/p/{keys[name]}/data.json")[1])
+                    )
+
+                threads = [threading.Thread(target=hit, args=(n,)) for n in ("alpha", "beta") for _ in range(3)]
+                for t in threads:
+                    t.start()
+                for t in threads:
+                    t.join(timeout=30)
+                self.assertEqual(calls, 2)  # 同槽 3 路并发单飞，双槽并行各 +1
+                json.loads(self.fetch(server, f"/p/{keys['alpha']}/data.json")[1])
+                self.assertEqual(calls, 2)  # 稳定键重复请求不重扫
+
+        self.assertEqual(len(seen["alpha"]), 3)
+        self.assertEqual(len(seen["beta"]), 3)
+        for name in ("alpha", "beta"):
+            for payload in seen[name]:
+                self.assertEqual(payload["project"]["name"], name)
+
+
+class BoardAllSnapshotRouteTests(MultiProjectFixture):
+    """--all --html 快照：内嵌全量泳道数据、同一套 route_key、零外部请求。"""
+
+    def test_snapshot_embeds_full_board_for_every_project_including_scanned(self):
+        alpha = self.make_project("alpha", statuses=("implementing", "archived"), backlog_cards=1)
+        self.register(alpha)
+        parent = self.root / "scan-parent"
+        orphan = self.make_project("orphan", statuses=("draft",), parent=parent)
+        out = self.root / "all.html"
+        r = self.run_board("--all", "--scan", str(parent), "--html", "-o", str(out), "--no-open")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        html = out.read_text(encoding="utf-8")
+
+        marker = 'id="eo-board-all-data">'
+        start = html.index(marker) + len(marker)
+        agg = json.loads(html[start:html.index("</script>", start)])
+        board = self.load_board_module()
+        by_label = {row["label"]: row for row in agg["rows"]}
+        self.assertEqual(sorted(by_label), ["alpha", "orphan"])
+        self.assertEqual(by_label["alpha"]["route_key"], board.make_route_key("alpha", alpha))
+        self.assertEqual(by_label["orphan"]["route_key"], board.make_route_key("orphan", orphan))
+        for label, path in (("alpha", alpha), ("orphan", orphan)):
+            board_data = by_label[label]["board"]
+            own = board.build_data(board.load_project_config(path / ".eo-project.json"))
+            self.assertEqual([c["id"] for c in board_data["changes"]], [c["id"] for c in own["changes"]])
+            self.assertFalse(board_data["serve"])  # 快照不轮询
+        self.assertIn('id="eo-project-css"', html)
+        self.assertIn('id="eo-project-markup"', html)
+        self.assertIn("window.EO_PROJECT", html)
+
+    def test_snapshot_is_self_contained_with_no_outbound_requests(self):
+        self.register(self.make_project("alpha", statuses=("implementing",)))
+        html = self.snapshot_html().read_text(encoding="utf-8")
+        remote = [u for u in re.findall(r'https?://[^\s"\'<>)]+', html) if "www.w3.org/2000/svg" not in u]
+        self.assertEqual(remote, [])
+        self.assertNotIn("<script src", html)
+        self.assertNotIn('<link rel="stylesheet"', html)
+        self.assertNotIn("__EO_", html)  # 占位符全部替换干净
+
+    def test_serve_home_page_does_not_carry_snapshot_only_project_assets(self):
+        self.register(self.make_project("alpha"))
+        board = self.load_board_module()
+        with mock.patch.dict(os.environ, {"EO_HOME": str(self.eo_home)}):
+            html = board.render_all_html(board.build_all_serve_data(None))
+        self.assertNotIn('id="eo-project-css"', html)
+        self.assertNotIn("__EO_PROJECT_ASSETS__", html)
 
 
 class BoardAllAggregateTests(MultiProjectFixture):

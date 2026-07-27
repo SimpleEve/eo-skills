@@ -50,10 +50,10 @@ created: 2026-07-27
 
 - [x] AC-1 用户跑 `eo-board --all --serve`，首页默认呈现跨项目「进行中 change 流」：全部非 archived change 按最近活动倒序，每行含项目徽标、seq+slug、状态、tier·type、summary（缺失时回退标题）、TODO 进度、AC 进度、门禁 blocker（仅有 blocker 的行出现）、非主 worktree 时 `⎇branch@worktree` 标记、最近动静徽标；3 天无动静的行降权区隔显示（验证：两注册项目下对照各自单项目泳道页核对行字段与排序）
 - [x] AC-2 change 流视图顶部每注册项目一张摘要条卡：名字、目录、主分支、worktree 数、五状态计数、backlog 数、as-of；3 天无动静的项目条卡整体降饱和
-- [ ] AC-3 首页顶部卡区有视图切换位置：change 流 ⇄ 概要卡两视图可切，默认 change 流，切换后刷新页面保持所在视图；概要卡视图信息面不低于现状（计数+backlog+as-of+路径）
+- [x] AC-3 首页顶部卡区有视图切换位置：change 流 ⇄ 概要卡两视图可切，默认 change 流，切换后刷新页面保持所在视图；概要卡视图信息面不低于现状（计数+backlog+as-of+路径）
 - [ ] AC-4 项目条卡、change 行、概要卡点击均进入该项目泳道页，内容与单项目 `--serve` 一致；同名注册项目与 `--scan` 临时并入的未注册项目各自直达正确泳道页（路由稳定键区分，显示名不承担唯一性）；泳道页带「返回首页」入口回默认 change 流视图，浏览器返回键按历史恢复进入前视图；访问未知或失效路由时用户看到含回首页链接的指引页而非崩溃
 - [ ] AC-5 用户跑 `eo-board --all --html [-o PATH]` 得到单个自包含文件：默认 change 流视图，可切概要卡视图，可进各项目泳道视图（hash 路由），全程零网络请求；`-o` 与缺省路径语义不变
-- [ ] AC-6 serve 挂起时改动某项目一个 change 文件，3 秒轮询内该 change 行浮到流顶且动静徽标刷新；数据无变化的重复请求命中缓存，同项目并发请求只触发一次重扫（验证：`build_data` 调用计数断言——稳定键重复请求计数不增、同槽并发只增 1，沿用 change #8 AC-2 口径）
+- [x] AC-6 serve 挂起时改动某项目一个 change 文件，3 秒轮询内该 change 行浮到流顶且动静徽标刷新；数据无变化的重复请求命中缓存，同项目并发请求只触发一次重扫（验证：`build_data` 调用计数断言——稳定键重复请求计数不增、同槽并发只增 1，沿用 change #8 AC-2 口径）
 - [ ] AC-7 注册表为空时显示注册指引页；坏路径条目在其条卡/概要卡行内显示错误，其 change 不进流，其余项目不受影响不中断
 - [ ] AC-8 终端 `eo-board --all` 输出不变；argparse 组合矩阵回归（`--all --project` 仍拒绝、`-o` 限 `--html`、`--port` 限 `--serve` 等正反例与 change #8 钉定一致）；用户文档（docs/cli-reference.md、docs/GUIDE.md）聚合页描述与新行为一致（双视图、可点下钻、`--scan` 项目并入）
 - [ ] AC-9 首页两视图布局与密度过目：change 流视图对照定稿 design/variant-2.html、概要卡视图对照现状不劣化（人工:挂 `--all --serve` 切换两视图并下钻一次过目）
@@ -67,9 +67,9 @@ created: 2026-07-27
 
 ### Batch 2（概要卡视图 + 路由下钻）
 
-- [ ] TODO-3 概要卡视图并入切换框架：现有概要卡模板保留为第二视图，卡片升级为可点下钻（绑定 route_key 链接），视图状态经 hash 记忆（刷新保持）（文件：修改: cli/eo-board、tests/test_eo_board_cache.py；对应 AC-3、AC-4、AC-9；完成判据：AC-3——切换/记忆断言绿；AC-4 分项——概要卡点击命中对应项目 route 断言绿；AC-9 分项——概要卡信息面回归不劣化断言绿，人工观感留待用户验收不代勾）
-- [ ] TODO-4 serve 路由 `/p/<route_key>`：serve 按当前 sources（注册 + `--scan`）重建 key→config 映射并分派 handler，复用单项目泳道渲染与缓存槽，单项目数据端点 `/p/<route_key>/data.json`（渲染函数注入 data URL），泳道页加返回聚合首页入口（仅聚合 serve 下渲染，指向 `/` 默认 change 流视图），未知/失效 key 返回指引页（文件：修改: cli/eo-board、tests/test_eo_board_cache.py；对应 AC-4、AC-6；完成判据：路由分派/返回入口/未知与失效 key 指引断言绿 + 同名双项目、scan 未注册项目、CJK 名、注册名与配置名不一致正反例绿 + 两项目并发轮询互不串数据且各走各自缓存槽、单飞计数断言绿）
-- [ ] TODO-5 `--all --html` 快照 hash 路由：嵌首页双视图数据 + 全部项目完整泳道数据（含 `--scan` 并入项目），前端按 `#/`、`#/cards`、`#/p/<route_key>` 切视图（与 serve 同一套 route_key），零外部请求（文件：修改: cli/eo-board、tests/test_eo_board_cache.py；对应 AC-5）
+- [x] TODO-3 概要卡视图并入切换框架：现有概要卡模板保留为第二视图，卡片升级为可点下钻（绑定 route_key 链接），视图状态经 hash 记忆（刷新保持）（文件：修改: cli/eo-board、tests/test_eo_board_cache.py；对应 AC-3、AC-4、AC-9；完成判据：AC-3——切换/记忆断言绿；AC-4 分项——概要卡点击命中对应项目 route 断言绿；AC-9 分项——概要卡信息面回归不劣化断言绿，人工观感留待用户验收不代勾）
+- [x] TODO-4 serve 路由 `/p/<route_key>`：serve 按当前 sources（注册 + `--scan`）重建 key→config 映射并分派 handler，复用单项目泳道渲染与缓存槽，单项目数据端点 `/p/<route_key>/data.json`（渲染函数注入 data URL），泳道页加返回聚合首页入口（仅聚合 serve 下渲染，指向 `/` 默认 change 流视图），未知/失效 key 返回指引页（文件：修改: cli/eo-board、tests/test_eo_board_cache.py；对应 AC-4、AC-6；完成判据：路由分派/返回入口/未知与失效 key 指引断言绿 + 同名双项目、scan 未注册项目、CJK 名、注册名与配置名不一致正反例绿 + 两项目并发轮询互不串数据且各走各自缓存槽、单飞计数断言绿）
+- [x] TODO-5 `--all --html` 快照 hash 路由：嵌首页双视图数据 + 全部项目完整泳道数据（含 `--scan` 并入项目），前端按 `#/`、`#/cards`、`#/p/<route_key>` 切视图（与 serve 同一套 route_key），零外部请求（文件：修改: cli/eo-board、tests/test_eo_board_cache.py；对应 AC-5）
 
 ### Batch 3（回归收口）
 

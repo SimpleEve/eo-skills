@@ -22,7 +22,7 @@ import threading
 import webbrowser
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, unquote as url_unquote
 
 # 符号链接安装下 __file__ 需先 resolve 才能定位真实仓库内的 cli/ 目录
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -696,9 +696,7 @@ def escape_html_text(s):
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-HTML_TEMPLATE = r"""<title>__EO_BOARD_TITLE__</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗂️</text></svg>">
-<style>
+PROJECT_CSS = r"""
   :root {
     --bg: #F2F4F7; --surface: #FFFFFF; --surface2: #F7F9FB;
     --ink: #1B2432; --muted: #647084; --faint: #8B96A8; --line: #E2E6ED;
@@ -783,6 +781,7 @@ HTML_TEMPLATE = r"""<title>__EO_BOARD_TITLE__</title>
   }
   .chip b { color: var(--ink); font-weight: 600; }
   .chip.serve-live { color: var(--st-implementing); border-color: var(--st-implementing); }
+  a.chip.back:hover { color: var(--ink); border-color: var(--faint); }
   .gen { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--faint); }
 
   .project-strip {
@@ -1000,14 +999,14 @@ HTML_TEMPLATE = r"""<title>__EO_BOARD_TITLE__</title>
   .prov-card .note { font-size: 11.5px; color: var(--faint); margin-top: 10px; line-height: 1.5; }
 
   .empty-hint { color: var(--faint); font-size: 12px; padding: 8px 4px; }
-</style>
+"""
 
-<div class="wrap">
-  <header class="topbar" id="topbar"></header>
-  <section class="project-strip" id="projectStrip"></section>
-  <div id="warnBanner"></div>
+PROJECT_MARKUP = r"""<div class="wrap">
+  <header class="topbar" id="p-topbar"></header>
+  <section class="project-strip" id="p-strip"></section>
+  <div id="p-warn"></div>
 
-  <div class="board-scroll"><main class="board" id="board"></main></div>
+  <div class="board-scroll"><main class="board" id="p-board"></main></div>
 
   <section class="prov">
     <h2>这块板的每一格数据从哪来</h2>
@@ -1047,21 +1046,20 @@ HTML_TEMPLATE = r"""<title>__EO_BOARD_TITLE__</title>
   </section>
 </div>
 
-<div class="backdrop" id="backdrop"></div>
-<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+<div class="backdrop" id="p-backdrop"></div>
+<aside class="drawer" id="p-drawer" role="dialog" aria-modal="true" aria-labelledby="p-title">
   <div class="drawer-head">
     <div class="titles">
-      <div class="drawer-chips" id="drawerChips"></div>
-      <div class="drawer-title" id="drawerTitle"></div>
+      <div class="drawer-chips" id="p-chips"></div>
+      <div class="drawer-title" id="p-title"></div>
     </div>
-    <button class="close-btn" id="closeBtn" aria-label="关闭详情">×</button>
+    <button class="close-btn" id="p-close" aria-label="关闭详情">×</button>
   </div>
-  <div class="drawer-body" id="drawerBody"></div>
-</aside>
+  <div class="drawer-body" id="p-body"></div>
+</aside>"""
 
-<script type="application/json" id="eo-board-data">__EO_BOARD_DATA_JSON__</script>
-<script>
-var DATA = JSON.parse(document.getElementById('eo-board-data').textContent);
+PROJECT_JS = r"""window.EO_PROJECT = (function () {
+var DATA_URL = '/data.json', HOME_URL = '', timer = null, escHandler = null;
 var STATUS = {
   backlog:      { zh: '待办池',  cssVar: '--st-backlog' },
   draft:        { zh: '草稿',    cssVar: '--st-draft' },
@@ -1071,6 +1069,7 @@ var STATUS = {
   archived:     { zh: '已归档',  cssVar: '--st-archived' }
 };
 var STATUS_ORDER = ['backlog', 'draft', 'confirmed', 'implementing', 'reviewed', 'archived'];
+var DATA = null, root = null, drawer = null, backdrop = null;
 var CARD_INDEX = {};
 var openDetailId = null;
 
@@ -1350,9 +1349,10 @@ function backlogCard(d) {
 
 function buildHeader() {
   var p = DATA.project;
-  document.getElementById('topbar').innerHTML =
+  root.querySelector('#p-topbar').innerHTML =
     '<div class="wordmark">eo<span class="tail"> board</span></div>'
     + '<div class="topmeta">'
+    + (HOME_URL ? '<a class="chip back" href="' + esc(HOME_URL) + '">← 返回首页</a>' : '')
     + '<span class="chip">project <b>' + esc(p.name) + '</b><span class="src">.eo-project.json·project_name</span></span>'
     + '<span class="chip">mode <b>' + esc(p.mode) + '</b><span class="src">.eo-project.json·mode</span></span>'
     + '<span class="chip">github.issue <b>' + (p.github_issue ? 'on' : 'off') + '</b></span>'
@@ -1381,13 +1381,13 @@ function buildHeader() {
     + '<div class="stat"><div class="num">' + s.stale_count + '</div><div class="lbl">停滞提醒</div><div class="sub">轻档 &gt;30 天未动</div></div>'
     + '<div class="stat"><div class="num" style="color: var(--warn)">' + s.blocked_count + '</div><div class="lbl">卡点</div><div class="sub">质量门未过</div></div>'
     + '</div>'
-    + '<label class="src-toggle"><input type="checkbox" id="srcToggle"> 标注数据来源</label>';
-  document.getElementById('projectStrip').innerHTML = strip;
-  document.getElementById('srcToggle').addEventListener('change', function (e) {
+    + '<label class="src-toggle"><input type="checkbox" id="p-src-toggle"> 标注数据来源</label>';
+  root.querySelector('#p-strip').innerHTML = strip;
+  root.querySelector('#p-src-toggle').addEventListener('change', function (e) {
     document.documentElement.classList.toggle('show-src', e.target.checked);
   });
 
-  var warnBox = document.getElementById('warnBanner');
+  var warnBox = root.querySelector('#p-warn');
   warnBox.innerHTML = (DATA.warnings && DATA.warnings.length)
     ? '<div class="warn-banner">⚠ ' + DATA.warnings.length + ' 条警告：' + DATA.warnings.map(esc).join(' ｜ ') + '</div>'
     : '';
@@ -1420,12 +1420,10 @@ function buildBoard() {
     if (status === 'reviewed') html += '<div class="col-note">轻档跳过本列：完成门通过即 archived</div>';
     html += '</section>';
   });
-  document.getElementById('board').innerHTML = html;
+  root.querySelector('#p-board').innerHTML = html;
   bindCardEvents();
 }
 
-var drawer = document.getElementById('drawer');
-var backdrop = document.getElementById('backdrop');
 var lastFocus = null;
 
 function openDetail(key, isRefresh) {
@@ -1435,13 +1433,13 @@ function openDetail(key, isRefresh) {
   var chips = d.kind === 'change'
     ? '<span class="seq">#' + esc(d.seq != null ? d.seq : '?') + '</span><span class="tier ' + esc(d.tier) + '">' + esc(d.tier) + '</span><span class="type">' + esc(d.type) + '</span>' + stPill(d.status)
     : stPill('backlog');
-  document.getElementById('drawerChips').innerHTML = chips;
-  document.getElementById('drawerTitle').textContent = d.title;
-  document.getElementById('drawerBody').innerHTML = d.kind === 'change' ? renderChange(d) : renderBacklog(d);
-  if (!isRefresh) document.getElementById('drawerBody').scrollTop = 0;
+  root.querySelector('#p-chips').innerHTML = chips;
+  root.querySelector('#p-title').textContent = d.title;
+  root.querySelector('#p-body').innerHTML = d.kind === 'change' ? renderChange(d) : renderBacklog(d);
+  if (!isRefresh) root.querySelector('#p-body').scrollTop = 0;
   drawer.classList.add('open');
   backdrop.classList.add('open');
-  if (!isRefresh) { lastFocus = document.activeElement; document.getElementById('closeBtn').focus(); }
+  if (!isRefresh) { lastFocus = document.activeElement; root.querySelector('#p-close').focus(); }
 }
 
 function closeDetail() {
@@ -1452,7 +1450,7 @@ function closeDetail() {
 }
 
 function bindCardEvents() {
-  document.querySelectorAll('.card[data-detail]').forEach(function (card) {
+  root.querySelectorAll('.card[data-detail]').forEach(function (card) {
     card.addEventListener('click', function () { openDetail(card.dataset.detail); });
     card.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(card.dataset.detail); }
@@ -1460,14 +1458,7 @@ function bindCardEvents() {
   });
 }
 
-document.getElementById('closeBtn').addEventListener('click', closeDetail);
-backdrop.addEventListener('click', closeDetail);
-document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && drawer.classList.contains('open')) closeDetail(); });
-
-buildHeader();
-buildBoard();
-
-if (DATA.serve) {
+function startPolling() {
   var lastHash = null;
   function hashStr(s) {
     var h = 5381;
@@ -1475,7 +1466,7 @@ if (DATA.serve) {
     return h;
   }
   function refreshLoop() {
-    fetch('/data.json', { cache: 'no-store' }).then(function (r) { return r.text(); }).then(function (text) {
+    fetch(DATA_URL, { cache: 'no-store' }).then(function (r) { return r.text(); }).then(function (text) {
       var h = hashStr(text);
       if (h === lastHash) return;
       lastHash = h;
@@ -1489,15 +1480,64 @@ if (DATA.serve) {
       }
     }).catch(function () { /* 网络抖动：静默跳过这一轮 */ });
   }
-  setInterval(refreshLoop, 3000);
+  timer = setInterval(refreshLoop, 3000);
 }
-</script>
+
+function mount(opts) {
+  root = opts.root;
+  DATA = opts.data;
+  DATA_URL = opts.dataUrl || '/data.json';
+  HOME_URL = opts.homeUrl || '';
+  root.innerHTML = document.getElementById('eo-project-markup').textContent;
+  drawer = root.querySelector('#p-drawer');
+  backdrop = root.querySelector('#p-backdrop');
+  root.querySelector('#p-close').addEventListener('click', closeDetail);
+  backdrop.addEventListener('click', closeDetail);
+  escHandler = function (e) { if (e.key === 'Escape' && drawer.classList.contains('open')) closeDetail(); };
+  document.addEventListener('keydown', escHandler);
+  buildHeader();
+  buildBoard();
+  if (DATA.serve && typeof fetch === 'function') startPolling();
+}
+
+function unmount() {
+  if (timer !== null) { clearInterval(timer); timer = null; }
+  if (escHandler) { document.removeEventListener('keydown', escHandler); escHandler = null; }
+  document.documentElement.classList.remove('show-src');
+  if (root) root.innerHTML = '';
+  root = null; drawer = null; backdrop = null; DATA = null;
+  CARD_INDEX = {}; openDetailId = null; lastFocus = null;
+}
+
+return { mount: mount, unmount: unmount };
+})();
 """
 
+HTML_TEMPLATE = (
+    "<title>__EO_BOARD_TITLE__</title>\n"
+    "<link rel=\"icon\" href=\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>"
+    "<text y='.9em' font-size='90'>🗂️</text></svg>\">\n"
+    "<style>" + PROJECT_CSS + "</style>\n"
+    '<div id="eo-root"></div>\n'
+    '<script type="text/html" id="eo-project-markup">' + PROJECT_MARKUP + "</\u0073cript>\n"
+    '<script type="application/json" id="eo-board-data">__EO_BOARD_DATA_JSON__</\u0073cript>\n'
+    "<\u0073cript>" + PROJECT_JS + "</\u0073cript>\n"
+    "<\u0073cript>\n"
+    "EO_PROJECT.mount({ root: document.getElementById('eo-root'),\n"
+    "  data: JSON.parse(document.getElementById('eo-board-data').textContent),\n"
+    "  dataUrl: '__EO_BOARD_DATA_URL__', homeUrl: '__EO_BOARD_HOME_URL__' });\n"
+    "</\u0073cript>\n"
+)
 
-def render_html(data):
+
+def render_html(data, data_url="/data.json", home_url=None):
+    """单项目泳道页。data_url 让页面知道去哪拉自己的数据（聚合 serve 下是 /p/<key>/data.json）；
+    home_url 非空时页头出现「返回首页」入口。"""
     html = HTML_TEMPLATE.replace("__EO_BOARD_TITLE__", escape_html_text(f"eo board · {data['project']['name']}"))
+    html = html.replace("__EO_BOARD_DATA_URL__", data_url)
+    html = html.replace("__EO_BOARD_HOME_URL__", home_url or "")
     return html.replace("__EO_BOARD_DATA_JSON__", embed_json(data))
+
 
 
 # ============================================================
@@ -1731,6 +1771,40 @@ def collect_sources(scan_dir=None):
     return sources, entries, scanned
 
 
+def build_route_map(scan_dir=None):
+    """当前 sources → {route_key: cfg}。逐请求重建，新注册 / 新 scan 到的项目立即可下钻；
+    配置读不出来的条目不进映射，下钻落到指引页而不是 500。"""
+    mapping = {}
+    for kind, obj in collect_sources(scan_dir)[0]:
+        if kind == "registry":
+            raw = entry_path(obj)
+            if raw is None:
+                continue
+            path = Path(raw)
+        else:
+            path = obj
+        cfg_path = path / ".eo-project.json"
+        if not cfg_path.is_file():
+            continue
+        try:
+            cfg = load_project_config(cfg_path)
+        except ConfigError:
+            continue
+        mapping[make_route_key(cfg["project_name"], path)] = cfg
+    return mapping
+
+
+def lookup_route(routes, key):
+    """先按 key 原样匹配；未命中时按解码后的可读名比对，容忍客户端未编码直接发中文路径。"""
+    if key in routes:
+        return routes[key]
+    decoded = url_unquote(key)
+    for candidate, cfg in routes.items():
+        if url_unquote(candidate) == decoded:
+            return cfg
+    return None
+
+
 def build_all_data(scan_dir=None, get_entry=_fresh_entry, embed_board=False):
     """产出结构化聚合数据（rows/reg_count/scanned_count）。注册表每次调用重读——serve
     逐请求调用即天然纳入新注册项目；--scan 同步逐次重枚举。损坏注册表抛 ConfigError，调用方分流。"""
@@ -1818,7 +1892,7 @@ ALL_HTML_TEMPLATE = r"""<title>eo board · 所有项目</title>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗂️</text></svg>">
-<style>
+<style id="aggStyle">
   :root {
     --bg: #F2F4F7; --surface: #FFFFFF; --surface2: #F7F9FB;
     --ink: #1B2432; --muted: #647084; --faint: #8B96A8; --line: #E2E6ED;
@@ -2040,8 +2114,10 @@ ALL_HTML_TEMPLATE = r"""<title>eo board · 所有项目</title>
   <header class="topbar" id="topbar"></header>
   <div id="content"></div>
 </div>
+<div id="projRoot"></div>
 
 <script type="application/json" id="eo-board-all-data">__EO_BOARD_ALL_DATA_JSON__</script>
+__EO_PROJECT_ASSETS__
 <script>
 var DATA = JSON.parse(document.getElementById('eo-board-all-data').textContent);
 var STATUS_COLS = [
@@ -2210,6 +2286,42 @@ function guidancePanel(title, body) {
     + '<br><a href="#/">← 返回首页</a></div>';
 }
 
+// 快照形态下项目泳道视图与首页共处一个文档：两套样式表互斥启用，同一时刻只挂一个视图
+var projStyleEl = null;
+var projMounted = false;
+
+function enterProject(row) {
+  var homeWrap = document.getElementById('homeWrap');
+  var aggStyle = document.getElementById('aggStyle');
+  if (!projStyleEl) {
+    projStyleEl = document.createElement('style');
+    projStyleEl.textContent = document.getElementById('eo-project-css').textContent;
+    document.head.appendChild(projStyleEl);
+  }
+  if (projMounted) EO_PROJECT.unmount();
+  aggStyle.disabled = true;
+  homeWrap.style.display = 'none';
+  EO_PROJECT.mount({ root: document.getElementById('projRoot'), data: row.board, homeUrl: '#/' });
+  projMounted = true;
+}
+
+function leaveProject() {
+  if (!projMounted) return;
+  EO_PROJECT.unmount();
+  projMounted = false;
+  if (projStyleEl) { projStyleEl.parentNode.removeChild(projStyleEl); projStyleEl = null; }
+  document.getElementById('aggStyle').disabled = false;
+  document.getElementById('homeWrap').style.display = '';
+}
+
+function findRow(key) {
+  var hit = null;
+  (DATA.rows || []).forEach(function (row) {
+    if (row.route_key === key) hit = row;
+  });
+  return hit;
+}
+
 // 视图态经 hash 记忆：#/ = change 流（默认）、#/cards = 概要卡、#/p/<route_key> = 项目泳道（快照形态）
 function currentView() {
   var hash = String(location.hash || '').replace(/^#/, '');
@@ -2238,6 +2350,11 @@ function buildTopbar(view) {
 
 function render() {
   var view = currentView();
+  if (view.name === 'project' && typeof EO_PROJECT !== 'undefined') {
+    var row = findRow(view.key);
+    if (row && row.board) { enterProject(row); return; }
+  }
+  leaveProject();
   buildTopbar(view);
   var h = '';
   if (DATA.error) h += '<div class="warn-banner">⚠ ' + esc(DATA.error) + '</div>';
@@ -2278,15 +2395,25 @@ if (DATA.serve) {
 """
 
 
+PROJECT_ASSETS = (
+    '<script type="text/css" id="eo-project-css">' + PROJECT_CSS + "</script>\n"
+    '<script type="text/html" id="eo-project-markup">' + PROJECT_MARKUP + "</script>\n"
+    "<script>" + PROJECT_JS + "</script>\n"
+)
+
+
 def render_all_html(agg):
-    return ALL_HTML_TEMPLATE.replace("__EO_BOARD_ALL_DATA_JSON__", embed_json(agg))
+    """快照内嵌了各项目泳道数据时才带上单项目视图的样式/骨架/脚本——serve 首页不背这份体量。"""
+    embedded = any(isinstance(r, dict) and r.get("board") for r in (agg.get("rows") or []))
+    html = ALL_HTML_TEMPLATE.replace("__EO_PROJECT_ASSETS__", PROJECT_ASSETS if embedded else "")
+    return html.replace("__EO_BOARD_ALL_DATA_JSON__", embed_json(agg))
 
 
 def cmd_all(args):
     if args.serve:
         return cmd_all_serve(args)
     try:
-        agg = build_all_data(scan_dir=args.scan)
+        agg = build_all_data(scan_dir=args.scan, embed_board=bool(args.html))
     except ConfigError as e:
         die(f"❌ {e}")
     if args.html:
@@ -2338,6 +2465,40 @@ def build_all_serve_data(scan_dir):
     return agg
 
 
+ROUTE_MISS_TEMPLATE = """<title>eo board · 未找到该项目</title>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; background: #F2F4F7; color: #1B2432; line-height: 1.7;
+         font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif; }
+  @media (prefers-color-scheme: dark) { body { background: #10141B; color: #E6EAF1; } }
+  .box { max-width: 760px; margin: 60px auto; padding: 28px 26px; border: 1px dashed #8B96A8; border-radius: 8px; }
+  h1 { font-size: 17px; margin: 0 0 10px; }
+  code { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; }
+  ul { padding-left: 20px; }
+  a { color: #B4530A; }
+</style>
+<div class="box">
+  <h1>没有这个项目：<code>__EO_MISS_KEY__</code></h1>
+  <p>路由标识由项目名与项目根路径共同决定——项目被移出注册表、改名或换了目录，旧链接就会失效。</p>
+  __EO_MISS_LIST__
+  <p><a href="/">← 返回首页</a></p>
+</div>
+"""
+
+
+def render_route_miss(key, routes):
+    if routes:
+        items = "".join(
+            f'<li><a href="/p/{k}">{escape_html_text(cfg["project_name"])}</a></li>'
+            for k, cfg in sorted(routes.items(), key=lambda kv: kv[1]["project_name"])
+        )
+        listing = f"<p>当前可下钻的项目：</p><ul>{items}</ul>"
+    else:
+        listing = "<p>当前聚合里一个项目都没有——先 <code>eo-board --register</code> 注册，或用 <code>--scan</code> 并入。</p>"
+    html = ROUTE_MISS_TEMPLATE.replace("__EO_MISS_KEY__", escape_html_text(key))
+    return html.replace("__EO_MISS_LIST__", listing)
+
+
 class AllBoardRequestHandler(http.server.BaseHTTPRequestHandler):
     scan_dir = None
 
@@ -2351,6 +2512,31 @@ class AllBoardRequestHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body_bytes)
 
+    def _routes(self):
+        try:
+            return build_route_map(self.scan_dir)
+        except ConfigError:
+            return {}
+
+    def _send_route_miss(self, key):
+        self._send(404, "text/html; charset=utf-8",
+                   render_route_miss(key, self._routes()).encode("utf-8"), message="Not Found")
+
+    def _send_project(self, tail):
+        want_json = tail.endswith("/data.json")
+        key = tail[: -len("/data.json")] if want_json else tail.rstrip("/")
+        cfg = lookup_route(self._routes(), key)
+        if cfg is None:
+            self._send_route_miss(key)
+            return
+        data = get_board_data_cached(cfg)
+        if want_json:
+            self._send(200, "application/json; charset=utf-8",
+                       json.dumps(data, ensure_ascii=False).encode("utf-8"))
+            return
+        html = render_html(data, data_url=f"/p/{key}/data.json", home_url="/")
+        self._send(200, "text/html; charset=utf-8", html.encode("utf-8"))
+
     def do_GET(self):
         path = self.path.split("?", 1)[0]
         if path == "/":
@@ -2359,12 +2545,13 @@ class AllBoardRequestHandler(http.server.BaseHTTPRequestHandler):
         elif path == "/data.json":
             data = build_all_serve_data(self.scan_dir)
             self._send(200, "application/json; charset=utf-8", json.dumps(data, ensure_ascii=False).encode("utf-8"))
+        elif path.startswith("/p/"):
+            self._send_project(path[len("/p/"):])
         elif path == "/favicon.ico":
             self.send_response(204)
             self.end_headers()
         else:
-            body = f"未找到：{path}".encode("utf-8")
-            self._send(404, "text/plain; charset=utf-8", body, message="Not Found")
+            self._send_route_miss(path)
 
 
 def cmd_all_serve(args):
