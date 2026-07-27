@@ -12,6 +12,7 @@
 
 import argparse
 import concurrent.futures
+import hashlib
 import http.server
 import json
 import re
@@ -19,8 +20,9 @@ import sys
 import tempfile
 import threading
 import webbrowser
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from urllib.parse import quote
 
 # 符号链接安装下 __file__ 需先 resolve 才能定位真实仓库内的 cli/ 目录
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -43,10 +45,12 @@ from eo_lib import (
     run_git,
     scan_all_changes,
     split_frontmatter,
+    tree_max_mtime,
     unregister_project,
 )
 
 STALE_DAYS_THRESHOLD = 30
+ACTIVE_WINDOW_DAYS = 3
 
 BOARD_STATUS_ORDER = ["backlog"] + CHANGE_STATUS_ORDER
 STATUS_ZH = {
@@ -62,6 +66,53 @@ STATUS_ZH = {
 def die(msg):
     print(msg, file=sys.stderr)
     sys.exit(1)
+
+
+# ============================================================
+# 活跃度时间戳与路由稳定键
+# ============================================================
+
+def iso_seconds(ts):
+    """epoch 秒 → 带本地时区偏移的秒级 ISO 8601。"""
+    return datetime.fromtimestamp(ts).astimezone().replace(microsecond=0).isoformat()
+
+
+def parse_iso(value):
+    """解析 ISO 8601（git %cI 或本函数产出）；无时区的按本地时区补齐，不可解析返回 None。"""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+    return dt if dt.tzinfo else dt.astimezone()
+
+
+def max_activity(*values):
+    """取最新的时间戳，统一归一到本地时区秒级表示；全部不可解析返回 None。"""
+    best = None
+    for v in values:
+        dt = parse_iso(v)
+        if dt is not None and (best is None or dt > best):
+            best = dt
+    return iso_seconds(best.timestamp()) if best is not None else None
+
+
+def is_recent(activity_at, now=None):
+    dt = parse_iso(activity_at)
+    if dt is None:
+        return False
+    now = now or datetime.now().astimezone()
+    return (now - dt) <= timedelta(days=ACTIVE_WINDOW_DAYS)
+
+
+def make_route_key(display_name, project_dir):
+    """`/p/<URL 编码可读名>~<项目根 canonical 路径 hash8>` 的 key 部分。
+
+    显示名不承担唯一性：同名项目、注册名与配置名不一致、CJK 名均由 hash8 区分。
+    """
+    digest = hashlib.sha256(str(Path(project_dir).resolve()).encode("utf-8")).hexdigest()[:8]
+    return f"{quote(str(display_name), safe='')}~{digest}"
 
 
 def probe_change_artifacts(rec, doc_root):
@@ -81,15 +132,22 @@ def compute_change_git_stats(rec, doc_root, main_worktree_path):
     rec["commit_count"] = len([l for l in out.splitlines() if l.strip()])
 
     rel_dir = str(Path(doc_root) / "changes" / rec["dirname"])
+    dir_path = Path(wt_path) / rel_dir
     last_out = run_git(["log", "--all", "-1", "--format=%cI", "--", rel_dir], cwd=wt_path).strip()
     if last_out:
         rec["last_touch"] = last_out[:10]
     else:
-        dir_path = Path(wt_path) / rel_dir
         mtimes = [p.stat().st_mtime for p in dir_path.rglob("*") if p.is_file()] if dir_path.is_dir() else []
         rec["last_touch"] = (
             datetime.fromtimestamp(max(mtimes)).strftime("%Y-%m-%d") if mtimes else rec.get("created")
         )
+
+    # last_touch 是日粒度且有 commit 历史时忽略未提交编辑；排序/活跃判定另用秒级 activity_at
+    tree_mtime = tree_max_mtime(dir_path)
+    rec["activity_at"] = max_activity(
+        last_out or None,
+        iso_seconds(tree_mtime) if tree_mtime else None,
+    ) or max_activity(rec.get("created"))
 
     rec["stale"], rec["stale_days"] = False, None
     if rec["tier"] == "light" and rec["status"] != "archived" and rec.get("last_touch"):
@@ -462,6 +520,19 @@ def read_roadmap(project_root, warnings):
 # 汇总入口
 # ============================================================
 
+def compute_project_activity(cfg, worktrees, project_root):
+    """项目级最近动静 = max(各 worktree HEAD commit 时间, changes/backlog 数据源 max-mtime)。"""
+    stamps = []
+    for wt in worktrees:
+        stamps.append(run_git(["log", "-1", "--format=%cI"], cwd=wt["path"]).strip() or None)
+        mtime = tree_max_mtime(Path(wt["path"]) / cfg["doc_root"] / "changes")
+        stamps.append(iso_seconds(mtime) if mtime else None)
+    if project_root:
+        mtime = tree_max_mtime(Path(project_root) / "backlog")
+        stamps.append(iso_seconds(mtime) if mtime else None)
+    return max_activity(*stamps)
+
+
 def build_data(cfg):
     warnings = []
     anchor = cfg["repo_root"]
@@ -490,6 +561,7 @@ def build_data(cfg):
 
     return {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "activity_at": compute_project_activity(cfg, worktrees, project_root),
         "serve": False,
         "project": {
             "name": cfg["project_name"],
@@ -1564,7 +1636,35 @@ def _fresh_entry(cfg):
     return build_data(cfg), datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _aggregate_row(kind, obj, get_entry=_fresh_entry):
+def _stream_change(rec, project_label, route_key):
+    """change 流的一行：行内可见字段全部前置，前端不再回查 change 全量记录。"""
+    ac_done, ac_total = count_ac(rec["ac"])
+    todo_done, todo_total = count_todo(rec["todo"]) if rec["todo"] is not None else (None, None)
+    return {
+        "id": rec["id"],
+        "dirname": rec["dirname"],
+        "seq": rec["seq"],
+        "title": rec["title"],
+        "status": rec["status"],
+        "tier": rec["tier"],
+        "type": rec["type"],
+        "summary": rec["summary"] or rec["title"],
+        "ac_done": ac_done,
+        "ac_total": ac_total,
+        "todo_done": todo_done,
+        "todo_total": todo_total,
+        "blocker": rec.get("blocker"),
+        "branch": rec.get("branch"),
+        "worktree_name": rec.get("worktree_name"),
+        "is_default_worktree": bool(rec.get("is_default_worktree", True)),
+        "activity_at": rec.get("activity_at"),
+        "active": is_recent(rec.get("activity_at")),
+        "project": project_label,
+        "route_key": route_key,
+    }
+
+
+def _aggregate_row(kind, obj, get_entry=_fresh_entry, embed_board=False):
     """聚合单项目行数据。kind: "registry"（注册条目）| "scan"（扫描兜底纳入）。
     get_entry(cfg) -> (data, as_of)：单次运行直连 build_data，serve 走缓存槽（as-of 保持构建时刻）。
     出错只落到本行 error，不中断其余项目。"""
@@ -1594,19 +1694,31 @@ def _aggregate_row(kind, obj, get_entry=_fresh_entry):
     for c in data["changes"]:
         counts[c["status"]] = counts.get(c["status"], 0) + 1
     reg_name = obj.get("name") if kind == "registry" else None
+    label = cfg["project_name"]
+    key = make_route_key(label, path)
+    main_wt = data["worktrees"][0] if data["worktrees"] else {}
     row.update({
-        "label": cfg["project_name"],
+        "label": label,
+        "route_key": key,
         "counts": counts,
         "backlog": len(data["backlog"]),
         "as_of": as_of,
         "name_mismatch": reg_name if (reg_name and reg_name != cfg["project_name"]) else None,
+        "main_branch": main_wt.get("branch"),
+        "worktree_count": data["scanned_worktrees"],
+        "activity_at": data["activity_at"],
+        "active": is_recent(data["activity_at"]),
+        "changes": [
+            _stream_change(c, label, key) for c in data["changes"] if c["status"] != "archived"
+        ],
     })
+    if embed_board:
+        row["board"] = data
     return row
 
 
-def build_all_data(scan_dir=None, get_entry=_fresh_entry):
-    """产出结构化聚合数据（rows/reg_count/scanned_count）。注册表每次调用重读——serve
-    逐请求调用即天然纳入新注册项目；--scan 同步逐次重枚举。损坏注册表抛 ConfigError，调用方分流。"""
+def collect_sources(scan_dir=None):
+    """当前聚合来源（注册条目 + --scan 兜底并入），返回 (sources, entries, scanned)。"""
     reg = load_registry()
     entries = list(reg.get("projects") or [])
     scanned = []
@@ -1616,11 +1728,18 @@ def build_all_data(scan_dir=None, get_entry=_fresh_entry):
             raise ConfigError(f"--scan 目录不存在：{parent}")
         scanned = _scan_parent_dir(parent, entries)
     sources = [("registry", e) for e in entries] + [("scan", p) for p in scanned]
+    return sources, entries, scanned
+
+
+def build_all_data(scan_dir=None, get_entry=_fresh_entry, embed_board=False):
+    """产出结构化聚合数据（rows/reg_count/scanned_count）。注册表每次调用重读——serve
+    逐请求调用即天然纳入新注册项目；--scan 同步逐次重枚举。损坏注册表抛 ConfigError，调用方分流。"""
+    sources, entries, scanned = collect_sources(scan_dir)
 
     def _safe_row(source):
         kind, obj = source
         try:
-            return _aggregate_row(kind, obj, get_entry)
+            return _aggregate_row(kind, obj, get_entry, embed_board=embed_board)
         except Exception as e:
             # 单条目兜底：任何未预期异常都只坏本行，绝不终止整体聚合
             return {"label": f"{obj!r}"[:48], "path": "?", "registered": kind == "registry",
@@ -1696,6 +1815,8 @@ def render_all_terminal(agg):
 
 
 ALL_HTML_TEMPLATE = r"""<title>eo board · 所有项目</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗂️</text></svg>">
 <style>
   :root {
@@ -1756,6 +1877,8 @@ ALL_HTML_TEMPLATE = r"""<title>eo board · 所有项目</title>
     margin: 0; background: var(--bg); color: var(--ink);
     font-family: var(--sans); font-size: 14px; line-height: 1.55;
   }
+  a { color: inherit; text-decoration: none; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px 64px; }
 
   .topbar { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; padding: 20px 0 0; }
@@ -1772,32 +1895,112 @@ ALL_HTML_TEMPLATE = r"""<title>eo board · 所有项目</title>
   .chip.serve-live { color: var(--st-implementing); border-color: var(--st-implementing); }
   .gen { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--faint); }
 
+  .viewswitch {
+    display: inline-flex; border: 1px solid var(--line); border-radius: 6px;
+    overflow: hidden; background: var(--surface);
+  }
+  .vs-btn {
+    font-family: var(--mono); font-size: 11px; padding: 3px 11px; color: var(--muted);
+    border-right: 1px solid var(--line); white-space: nowrap;
+  }
+  .vs-btn:last-child { border-right: 0; }
+  .vs-btn:hover { color: var(--ink); }
+  .vs-btn[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+
   .warn-banner {
     margin-top: 16px; background: var(--warn-soft); border: 1px solid var(--warn);
     color: var(--warn); border-radius: 8px; padding: 10px 14px; font-size: 12.5px; line-height: 1.7;
     overflow-wrap: anywhere;
   }
 
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; margin-top: 20px; }
+  .strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-top: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; margin-top: 16px; }
   .proj {
-    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
-    padding: 14px 16px 13px; display: flex; flex-direction: column; gap: 10px;
+    position: relative; display: block; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 8px; padding: 11px 14px 10px;
+    transition: border-color 0.15s ease;
   }
+  a.proj:hover { border-color: var(--accent); }
+  a.proj::after {
+    content: "›"; position: absolute; top: 9px; right: 12px;
+    font-family: var(--mono); font-size: 13px; color: var(--faint);
+    opacity: 0; transition: opacity 0.15s ease;
+  }
+  a.proj:hover::after { opacity: 1; }
   .proj-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .proj-name { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
-  .pill { font-family: var(--mono); font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 999px; }
+  .pill { font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 1px 8px; border-radius: 999px; letter-spacing: 0.04em; }
+  .pill.live { background: var(--st-reviewed-soft); color: var(--st-reviewed); }
+  .pill.quiet { background: var(--st-archived-soft); color: var(--st-archived); }
   .pill.unreg { background: var(--st-confirmed-soft); color: var(--st-confirmed); }
-  .as-of { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
-  .counts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .as-of { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; padding-right: 12px; }
+  .proj-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .counts { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
   .count {
-    display: inline-flex; align-items: baseline; gap: 5px;
-    font-family: var(--mono); font-size: 11px; padding: 3px 8px; border-radius: 5px;
+    display: inline-flex; align-items: baseline; gap: 4px;
+    font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 5px;
   }
-  .count b { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .count b { font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .count.zero { opacity: 0.45; }
-  .proj-err { font-size: 12.5px; color: var(--warn); background: var(--warn-soft); border-radius: 6px; padding: 8px 10px; line-height: 1.6; overflow-wrap: anywhere; }
-  .proj-note { font-size: 11px; color: var(--st-confirmed); }
-  .proj-path { font-family: var(--mono); font-size: 10.5px; color: var(--faint); overflow-wrap: anywhere; }
+  .proj-err { font-size: 12.5px; color: var(--warn); background: var(--warn-soft); border-radius: 6px; padding: 8px 10px; margin-top: 8px; line-height: 1.6; overflow-wrap: anywhere; }
+  .proj-note { font-size: 11px; color: var(--st-confirmed); margin-top: 6px; }
+  .proj-path { font-family: var(--mono); font-size: 10px; color: var(--faint); margin-top: 7px; overflow-wrap: anywhere; }
+  .proj.silent .proj-name { color: var(--muted); }
+  .proj.silent .counts, .proj.silent .proj-meta { filter: saturate(0.15); opacity: 0.72; transition: filter 0.15s ease, opacity 0.15s ease; }
+  .proj.silent:hover .counts, .proj.silent:hover .proj-meta { filter: none; opacity: 1; }
+
+  .list { margin-top: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .list-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 9px 14px; background: var(--surface2); }
+  .list-title { font-size: 13px; font-weight: 700; letter-spacing: 0.01em; }
+  .list-title b { font-family: var(--mono); font-size: 14px; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .chip.blocker-sum { color: var(--warn); border-color: var(--warn); background: var(--warn-soft); }
+  .chip.blocker-sum b { color: var(--warn); }
+  .list-note { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+
+  .row {
+    display: grid; grid-template-areas: "proj main prog when";
+    grid-template-columns: 104px minmax(0, 1fr) 216px 72px;
+    gap: 4px 14px; padding: 10px 14px; border-top: 1px solid var(--line);
+    align-items: start; cursor: pointer; transition: background-color 0.12s ease;
+  }
+  .row:hover { background: var(--surface2); }
+  .row.dim { opacity: 0.6; }
+  .row.dim:hover { opacity: 1; }
+
+  .r-proj { grid-area: proj; display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); padding-top: 3px; min-width: 0; }
+  .r-proj .sw { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+
+  .r-main { grid-area: main; min-width: 0; }
+  .r-line1 { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; }
+  .cid { font-family: var(--mono); font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .st-pill { font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 1px 8px; border-radius: 999px; letter-spacing: 0.04em; flex: none; }
+  .tt { font-family: var(--mono); font-size: 10px; color: var(--faint); flex: none; }
+  .tt b { font-weight: 600; color: var(--muted); }
+  .tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--mono); font-size: 10px; padding: 1px 6px;
+    border-radius: 4px; background: var(--surface2); border: 1px solid var(--line); color: var(--muted);
+  }
+  .tag.warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); font-weight: 600; }
+  .tag.branch { background: var(--st-implementing-soft); border-color: transparent; color: var(--st-implementing); }
+  .summary { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .r-prog { grid-area: prog; display: flex; flex-direction: column; gap: 5px; padding-top: 4px; }
+  .prog-row { display: flex; align-items: center; gap: 7px; }
+  .prog-lbl { font-family: var(--mono); font-size: 9.5px; color: var(--faint); width: 32px; flex: none; letter-spacing: 0.05em; }
+  .bar { flex: 1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 2px; }
+  .bar.todo > i { background: var(--st-implementing); }
+  .bar.ac > i { background: var(--st-reviewed); }
+  .prog-num { font-family: var(--mono); font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; width: 38px; flex: none; text-align: right; }
+
+  .r-when { grid-area: when; font-family: var(--mono); font-size: 10.5px; color: var(--faint); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-top: 5px; }
+
+  .divider {
+    padding: 4px 14px; border-top: 1px solid var(--line); background: var(--surface2);
+    font-family: var(--mono); font-size: 10px; color: var(--faint); letter-spacing: 0.05em;
+  }
+  .list-empty { padding: 18px 14px; color: var(--faint); font-size: 12.5px; border-top: 1px solid var(--line); }
 
   .empty-panel {
     margin-top: 24px; background: var(--surface); border: 1px dashed var(--line); border-radius: 8px;
@@ -1808,10 +2011,32 @@ ALL_HTML_TEMPLATE = r"""<title>eo board · 所有项目</title>
     font-family: var(--mono); font-size: 12px; background: var(--surface2);
     border: 1px solid var(--line); border-radius: 3px; padding: 0 5px;
   }
-  .foot-hint { margin-top: 22px; font-family: var(--mono); font-size: 11px; color: var(--faint); }
+  .empty-panel a { color: var(--accent); text-decoration: underline; }
+  .foot-hint { margin-top: 22px; font-family: var(--mono); font-size: 11px; color: var(--faint); line-height: 1.9; }
+
+  @media (max-width: 1023px) {
+    .row { grid-template-columns: 96px minmax(0, 1fr) 184px 64px; }
+  }
+  @media (max-width: 799px) {
+    .row {
+      grid-template-areas: "proj when" "main main" "prog prog";
+      grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px;
+    }
+    .r-when { padding-top: 3px; }
+    .r-prog { flex-direction: row; gap: 14px; max-width: 520px; padding-top: 0; }
+    .prog-row { flex: 1; min-width: 0; }
+    .list-note { margin-left: 0; width: 100%; }
+  }
+  @media (max-width: 479px) {
+    .wrap { padding: 0 14px 48px; }
+    .r-prog { flex-direction: column; gap: 5px; max-width: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .row, .proj, a.proj::after, .proj.silent .counts, .proj.silent .proj-meta { transition: none; }
+  }
 </style>
 
-<div class="wrap">
+<div class="wrap" id="homeWrap">
   <header class="topbar" id="topbar"></header>
   <div id="content"></div>
 </div>
@@ -1823,6 +2048,11 @@ var STATUS_COLS = [
   ['draft', '草稿'], ['confirmed', '已确认'], ['implementing', '实施中'],
   ['reviewed', '审查通过'], ['archived', '已归档']
 ];
+var STATUS_ZH = {
+  draft: '草稿', confirmed: '已确认', implementing: '实施中',
+  reviewed: '审查通过', archived: '已归档'
+};
+var SWATCHES = ['--accent', '--st-implementing', '--st-reviewed', '--st-confirmed', '--st-backlog', '--st-draft'];
 
 function esc(s) {
   return String(s === null || s === undefined ? '' : s).replace(/[&<>"]/g, function (c) {
@@ -1830,14 +2060,51 @@ function esc(s) {
   });
 }
 
+function stamp(iso) {
+  var t = iso ? new Date(iso).getTime() : NaN;
+  return isNaN(t) ? null : t;
+}
+
+// 相对时间只用于「最近动静」徽标；精确戳走 title 属性
+function relTime(iso) {
+  var t = stamp(iso);
+  if (t === null) return '—';
+  var mins = Math.floor((Date.now() - t) / 60000);
+  if (mins < 1) return '刚刚';
+  if (mins < 60) return mins + ' 分钟前';
+  var hours = Math.floor(mins / 60);
+  if (hours < 24) return hours + ' 小时前';
+  return Math.floor(hours / 24) + ' 天前';
+}
+
+function projectHref(row) {
+  if (!row.route_key) return null;
+  return (DATA.serve ? '/p/' : '#/p/') + row.route_key;
+}
+
+function swatchOf(key) {
+  var keys = DATA.rows.map(function (r) { return r.route_key || r.path; });
+  return SWATCHES[Math.max(0, keys.indexOf(key)) % SWATCHES.length];
+}
+
 function projCard(row) {
-  var h = '<article class="proj"><div class="proj-head"><span class="proj-name">' + esc(row.label) + '</span>';
+  var href = projectHref(row);
+  var cls = 'proj' + (row.active === false ? ' silent' : '');
+  var h = '';
+  h += '<div class="proj-head"><span class="proj-name">' + esc(row.label) + '</span>';
   if (!row.registered) h += '<span class="pill unreg">未注册</span>';
+  if (!row.error) {
+    h += row.active
+      ? '<span class="pill live">● 活跃</span>'
+      : '<span class="pill quiet">静默 · 最后动静 ' + esc(relTime(row.activity_at)) + '</span>';
+  }
   if (row.as_of) h += '<span class="as-of">as-of ' + esc(row.as_of) + '</span>';
   h += '</div>';
   if (row.error) {
     h += '<div class="proj-err">✗ ' + esc(row.error) + '</div>';
   } else {
+    h += '<div class="proj-meta">⎇ ' + esc(row.main_branch || '?') + ' · '
+      + row.worktree_count + ' worktree</div>';
     h += '<div class="counts">';
     STATUS_COLS.forEach(function (col) {
       var n = (row.counts && row.counts[col[0]]) || 0;
@@ -1847,38 +2114,146 @@ function projCard(row) {
     h += '</div>';
     if (row.name_mismatch) h += '<div class="proj-note">⚠ 注册名 ' + esc(row.name_mismatch) + ' 与项目配置不一致，已按配置显示</div>';
   }
-  h += '<div class="proj-path">' + esc(row.path) + '</div></article>';
+  h += '<div class="proj-path">' + esc(row.path) + '</div>';
+  if (!href) return '<div class="' + cls + '">' + h + '</div>';
+  return '<a class="' + cls + '" href="' + esc(href) + '" title="→ 下钻 ' + esc(row.label) + ' 泳道页">' + h + '</a>';
+}
+
+function progRow(label, cls, done, total) {
+  var known = total !== null && total !== undefined && total > 0;
+  var pct = known ? Math.round(done / total * 100) : 0;
+  var num = known ? done + '/' + total : '—';
+  return '<div class="prog-row"><span class="prog-lbl">' + label + '</span>'
+    + '<span class="bar ' + cls + '"><i style="width: ' + pct + '%"></i></span>'
+    + '<span class="prog-num">' + num + '</span></div>';
+}
+
+function changeRow(c) {
+  var href = (DATA.serve ? '/p/' : '#/p/') + c.route_key;
+  var line1 = '<span class="cid">' + (c.seq === null || c.seq === undefined ? '' : '#' + esc(c.seq) + ' ')
+    + esc(c.id) + '</span>'
+    + '<span class="st-pill" style="background: var(--st-' + esc(c.status) + '-soft); color: var(--st-' + esc(c.status) + ')">'
+    + esc(STATUS_ZH[c.status] || c.status) + '</span>'
+    + '<span class="tt"><b>' + esc(c.tier) + '</b>·' + esc(c.type) + '</span>';
+  if (!c.is_default_worktree) {
+    line1 += '<span class="tag branch">⎇ ' + esc(c.branch || '?') + '@' + esc(c.worktree_name || '?') + '</span>';
+  }
+  if (c.blocker) line1 += '<span class="tag warn">⛔ ' + esc(c.blocker) + '</span>';
+  return '<a class="row' + (c.active ? '' : ' dim') + '" href="' + esc(href)
+    + '" title="→ 下钻 ' + esc(c.project) + ' 泳道页">'
+    + '<span class="r-proj"><i class="sw" style="background: var(' + swatchOf(c.route_key) + ')"></i>' + esc(c.project) + '</span>'
+    + '<div class="r-main"><div class="r-line1">' + line1 + '</div>'
+    + '<div class="summary">' + esc(c.summary) + '</div></div>'
+    + '<div class="r-prog">' + progRow('TODO', 'todo', c.todo_done, c.todo_total)
+    + progRow('AC', 'ac', c.ac_done, c.ac_total) + '</div>'
+    + '<span class="r-when" title="' + esc(c.activity_at || '') + '">' + esc(relTime(c.activity_at)) + '</span>'
+    + '</a>';
+}
+
+function collectStream() {
+  var all = [];
+  DATA.rows.forEach(function (row) {
+    (row.changes || []).forEach(function (c) { all.push(c); });
+  });
+  all.sort(function (a, b) {
+    var ta = stamp(a.activity_at), tb = stamp(b.activity_at);
+    if (ta === tb) return String(a.id).localeCompare(String(b.id));
+    if (ta === null) return 1;
+    if (tb === null) return -1;
+    return tb - ta;
+  });
+  return all;
+}
+
+function archivedTotal() {
+  return DATA.rows.reduce(function (n, r) { return n + ((r.counts && r.counts.archived) || 0); }, 0);
+}
+
+function streamView() {
+  var stream = collectStream();
+  var blockers = stream.filter(function (c) { return c.blocker; }).length;
+  var h = '<nav class="strip" aria-label="项目摘要">' + DATA.rows.map(projCard).join('') + '</nav>';
+  h += '<section class="list" aria-label="进行中 change 流"><div class="list-head">'
+    + '<span class="list-title">进行中 change <b>' + stream.length + '</b></span>'
+    + (blockers ? '<span class="chip blocker-sum">⛔ blocker <b>' + blockers + '</b></span>' : '')
+    + '<span class="list-note">跨项目 · 最近活动倒序 · 不含 archived（' + archivedTotal() + ' 归档见项目栏）</span>'
+    + '</div>';
+  if (!stream.length) {
+    h += '<div class="list-empty">没有进行中的 change——新变更走 /eo-change 起草。</div>';
+  }
+  var dividerDone = false;
+  stream.forEach(function (c) {
+    if (!c.active && !dividerDone) {
+      dividerDone = true;
+      h += '<div class="divider">以下 3 天内无动静 · 降权显示（承诺不从视野消失）</div>';
+    }
+    h += changeRow(c);
+  });
+  h += '</section>';
   return h;
 }
 
-function render() {
+function cardsView() {
+  return '<div class="grid">' + DATA.rows.map(projCard).join('') + '</div>';
+}
+
+function emptyPanel() {
+  return '<div class="empty-panel"><h2>注册表为空</h2>'
+    + '在项目目录运行 <code>eo-board --register</code> 注册项目；<br>'
+    + '或用 <code>eo-board --all --scan &lt;父目录&gt;</code> 临时聚合未注册项目（不写注册表）。'
+    + (DATA.serve ? '<br>本页会自动刷新——注册完成后无需重启即可看到项目。' : '')
+    + '</div>';
+}
+
+function guidancePanel(title, body) {
+  return '<div class="empty-panel"><h2>' + esc(title) + '</h2>' + body
+    + '<br><a href="#/">← 返回首页</a></div>';
+}
+
+// 视图态经 hash 记忆：#/ = change 流（默认）、#/cards = 概要卡、#/p/<route_key> = 项目泳道（快照形态）
+function currentView() {
+  var hash = String(location.hash || '').replace(/^#/, '');
+  if (hash.indexOf('/p/') === 0) return { name: 'project', key: hash.slice(3) };
+  if (hash === '/cards') return { name: 'cards' };
+  return { name: 'stream' };
+}
+
+function buildTopbar(view) {
+  function tab(href, label, on) {
+    return '<a class="vs-btn" href="' + href + '"' + (on ? ' aria-current="page"' : '') + '>' + label + '</a>';
+  }
   document.getElementById('topbar').innerHTML =
     '<div class="wordmark">eo<span class="tail"> board --all</span></div>'
     + '<div class="topmeta">'
+    + '<div class="viewswitch" role="navigation" aria-label="首页视图切换">'
+    + tab('#/', 'change 流', view.name !== 'cards') + tab('#/cards', '概要卡', view.name === 'cards')
+    + '</div>'
     + '<span class="chip">注册 <b>' + DATA.reg_count + '</b> 项目</span>'
     + (DATA.scanned_count ? '<span class="chip">扫描并入 <b>' + DATA.scanned_count + '</b></span>' : '')
     + '<span class="chip">' + esc(DATA.registry_path) + '</span>'
     + (DATA.serve ? '<span class="chip serve-live">● 自动刷新中</span>' : '')
     + '</div>'
     + '<div class="gen">生成于 ' + esc(DATA.generated_at) + ' · 只读投影，随时可重建</div>';
+}
 
+function render() {
+  var view = currentView();
+  buildTopbar(view);
   var h = '';
-  if (DATA.error) {
-    h += '<div class="warn-banner">⚠ ' + esc(DATA.error) + '</div>';
-  }
-  if (DATA.rows && DATA.rows.length) {
-    h += '<div class="grid">' + DATA.rows.map(projCard).join('') + '</div>';
-    h += '<div class="foot-hint">下钻：eo-board --project &lt;路径|注册名&gt;</div>';
+  if (DATA.error) h += '<div class="warn-banner">⚠ ' + esc(DATA.error) + '</div>';
+  if (view.name === 'project') {
+    h += guidancePanel('这份快照里没有该项目的泳道数据',
+      '路由 <code>#/p/' + esc(view.key) + '</code> 未命中本快照内嵌的任何项目。');
+  } else if (DATA.rows && DATA.rows.length) {
+    h += view.name === 'cards' ? cardsView() : streamView();
+    h += '<div class="foot-hint">下钻：点项目条卡或 change 行 · 命令行等价 eo-board --project &lt;路径|注册名&gt;</div>';
   } else if (!DATA.error) {
-    h += '<div class="empty-panel"><h2>注册表为空</h2>'
-      + '在项目目录运行 <code>eo-board --register</code> 注册项目；<br>'
-      + '或用 <code>eo-board --all --scan &lt;父目录&gt;</code> 临时聚合未注册项目（不写注册表）。'
-      + (DATA.serve ? '<br>本页会自动刷新——注册完成后无需重启即可看到项目。' : '')
-      + '</div>';
+    h += emptyPanel();
   }
   document.getElementById('content').innerHTML = h;
 }
 
+window.addEventListener('hashchange', render);
 render();
 
 if (DATA.serve) {

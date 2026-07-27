@@ -3,10 +3,10 @@ id: board-all-v2
 seq: 10
 title: eo-board --all 聚合页 v2：change 流首页 + 双视图切换 + 路由式下钻
 summary: 聚合首页升级 change 流与概要卡双视图切换，/p/<key> 稳定键路由下钻泳道页（含 --scan 项目），--html 单文件 hash 路由
-status: confirmed
+status: implementing
 tier: full
 type: feature
-base_commit: ~
+base_commit: 5a0247f80534d30acc1ed59e5f629ed0e14e6275
 plan_revision: 1
 fix_rounds: 0
 fix_consumed: []
@@ -48,8 +48,8 @@ created: 2026-07-27
 
 ## 2. 验收清单
 
-- [ ] AC-1 用户跑 `eo-board --all --serve`，首页默认呈现跨项目「进行中 change 流」：全部非 archived change 按最近活动倒序，每行含项目徽标、seq+slug、状态、tier·type、summary（缺失时回退标题）、TODO 进度、AC 进度、门禁 blocker（仅有 blocker 的行出现）、非主 worktree 时 `⎇branch@worktree` 标记、最近动静徽标；3 天无动静的行降权区隔显示（验证：两注册项目下对照各自单项目泳道页核对行字段与排序）
-- [ ] AC-2 change 流视图顶部每注册项目一张摘要条卡：名字、目录、主分支、worktree 数、五状态计数、backlog 数、as-of；3 天无动静的项目条卡整体降饱和
+- [x] AC-1 用户跑 `eo-board --all --serve`，首页默认呈现跨项目「进行中 change 流」：全部非 archived change 按最近活动倒序，每行含项目徽标、seq+slug、状态、tier·type、summary（缺失时回退标题）、TODO 进度、AC 进度、门禁 blocker（仅有 blocker 的行出现）、非主 worktree 时 `⎇branch@worktree` 标记、最近动静徽标；3 天无动静的行降权区隔显示（验证：两注册项目下对照各自单项目泳道页核对行字段与排序）
+- [x] AC-2 change 流视图顶部每注册项目一张摘要条卡：名字、目录、主分支、worktree 数、五状态计数、backlog 数、as-of；3 天无动静的项目条卡整体降饱和
 - [ ] AC-3 首页顶部卡区有视图切换位置：change 流 ⇄ 概要卡两视图可切，默认 change 流，切换后刷新页面保持所在视图；概要卡视图信息面不低于现状（计数+backlog+as-of+路径）
 - [ ] AC-4 项目条卡、change 行、概要卡点击均进入该项目泳道页，内容与单项目 `--serve` 一致；同名注册项目与 `--scan` 临时并入的未注册项目各自直达正确泳道页（路由稳定键区分，显示名不承担唯一性）；泳道页带「返回首页」入口回默认 change 流视图，浏览器返回键按历史恢复进入前视图；访问未知或失效路由时用户看到含回首页链接的指引页而非崩溃
 - [ ] AC-5 用户跑 `eo-board --all --html [-o PATH]` 得到单个自包含文件：默认 change 流视图，可切概要卡视图，可进各项目泳道视图（hash 路由），全程零网络请求；`-o` 与缺省路径语义不变
@@ -62,8 +62,8 @@ created: 2026-07-27
 
 ### Batch 1（MVP：数据抬升 + change 流视图）
 
-- [ ] TODO-1 聚合数据抬升：`build_all_data` rows 增列——每项目非 archived change 明细（id/seq/title/status/tier/type/summary/TODO 进度/AC 进度/gates blocker/branch/worktree_name/`activity_at`）与项目级主分支/目录/worktree 数/`activity_at`/route_key（activity_at 公式与 route_key 规则见 §5，3 天窗判定活跃）；单次运行与缓存槽两条 getter 路径产出一致（文件：修改: cli/eo-board、tests/test_eo_board_cache.py；对应 AC-1、AC-2、AC-6；完成判据：新增字段单测绿 + 两 getter 路径一致性断言绿 + 有 git 历史的 change 发生未提交编辑后 activity_at 前移并排到流顶 + 3 天边界两侧 fixture 断言绿）
-- [ ] TODO-2 首页壳与 change 流视图：按 design/variant-2.html 落地项目摘要条卡 + 跨项目 change 流 + 3 天降权分界 + blocker/动静徽标，项目条卡与 change 行绑定 route_key 链接下钻，并搭好双视图切换框架（默认 change 流；切换位置在顶部卡区）（文件：修改: cli/eo-board、tests/test_eo_board_cache.py；对应 AC-1、AC-2、AC-3、AC-4、AC-9；完成判据：AC-1/2/3——行字段（含非主 worktree `⎇` 标记）/条卡字段（含目录）/排序/降权/徽标静态断言绿，切换框架就位且默认视图正确；AC-4 分项——条卡与 change 行两个入口链接均命中对应项目 route 断言绿；AC-9 分项——change 流结构对照 variant-2 可自动核对面绿，人工观感留待用户验收不代勾）
+- [x] TODO-1 聚合数据抬升：`build_all_data` rows 增列——每项目非 archived change 明细（id/seq/title/status/tier/type/summary/TODO 进度/AC 进度/gates blocker/branch/worktree_name/`activity_at`）与项目级主分支/目录/worktree 数/`activity_at`/route_key（activity_at 公式与 route_key 规则见 §5，3 天窗判定活跃）；单次运行与缓存槽两条 getter 路径产出一致（文件：修改: cli/eo-board、tests/test_eo_board_cache.py；对应 AC-1、AC-2、AC-6；完成判据：新增字段单测绿 + 两 getter 路径一致性断言绿 + 有 git 历史的 change 发生未提交编辑后 activity_at 前移并排到流顶 + 3 天边界两侧 fixture 断言绿）
+- [x] TODO-2 首页壳与 change 流视图：按 design/variant-2.html 落地项目摘要条卡 + 跨项目 change 流 + 3 天降权分界 + blocker/动静徽标，项目条卡与 change 行绑定 route_key 链接下钻，并搭好双视图切换框架（默认 change 流；切换位置在顶部卡区）（文件：修改: cli/eo-board、tests/test_eo_board_cache.py；对应 AC-1、AC-2、AC-3、AC-4、AC-9；完成判据：AC-1/2/3——行字段（含非主 worktree `⎇` 标记）/条卡字段（含目录）/排序/降权/徽标静态断言绿，切换框架就位且默认视图正确；AC-4 分项——条卡与 change 行两个入口链接均命中对应项目 route 断言绿；AC-9 分项——change 流结构对照 variant-2 可自动核对面绿，人工观感留待用户验收不代勾）
 
 ### Batch 2（概要卡视图 + 路由下钻）
 

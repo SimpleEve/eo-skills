@@ -13,7 +13,8 @@ from pathlib import Path
 from .gitio import run_git, list_worktrees
 
 
-def _tree_max_mtime(root):
+def tree_max_mtime(root):
+    """目录树内最大 mtime（含目录自身），目录不存在返回 None。"""
     if not root.is_dir():
         return None
     latest = root.stat().st_mtime
@@ -44,7 +45,7 @@ def compute_freshness_key(cfg):
         head = run_git(["rev-parse", "HEAD"], cwd=wt["path"]).strip()
         triples.append((wt["path"], wt.get("branch"), head))
         changes_mtimes.append(
-            (wt["path"], _tree_max_mtime(Path(wt["path"]) / cfg["doc_root"] / "changes"))
+            (wt["path"], tree_max_mtime(Path(wt["path"]) / cfg["doc_root"] / "changes"))
         )
 
     refs_digest = hashlib.sha256(
@@ -56,7 +57,7 @@ def compute_freshness_key(cfg):
     else:
         source_roots = [Path(wt["path"]) / ".eo-project" for wt in worktrees]
     sources = [
-        (str(root), _tree_max_mtime(root / "backlog"), _file_mtime(root / "roadmap.md"))
+        (str(root), tree_max_mtime(root / "backlog"), _file_mtime(root / "roadmap.md"))
         for root in source_roots
     ]
 

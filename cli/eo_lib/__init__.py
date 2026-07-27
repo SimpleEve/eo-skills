@@ -4,7 +4,7 @@
 """
 
 from .config import ConfigError, find_project_config, load_project_config
-from .freshness import compute_freshness_key
+from .freshness import compute_freshness_key, tree_max_mtime
 from .gitio import run_git, list_worktrees, list_worktrees_status, repo_identity
 from .registry import (
     registry_path,
@@ -46,6 +46,7 @@ __all__ = [
     "find_project_config",
     "load_project_config",
     "compute_freshness_key",
+    "tree_max_mtime",
     "run_git",
     "list_worktrees",
     "list_worktrees_status",

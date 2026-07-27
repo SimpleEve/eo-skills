@@ -2,8 +2,10 @@ import importlib.machinery
 import importlib.util
 import json
 import os
+import re
+import shutil
 import socket
-from datetime import date
+from datetime import date, datetime, timedelta
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 import subprocess
@@ -19,7 +21,28 @@ from urllib.request import urlopen
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLI_DIR = REPO_ROOT / "cli"
 BOARD_PATH = CLI_DIR / "eo-board"
+VARIANT_PATH = REPO_ROOT / "eo-doc" / "changes" / "10-board-all-v2" / "design" / "variant-2.html"
 BASELINE_REVISION = "792522d"
+NODE = shutil.which("node")
+
+# 页面渲染在内嵌 JS 里，断言要落到真实产出而不是模板文本：给内嵌脚本一层最小 DOM 垫片，
+# 用 node 跑一遍拿回 #topbar / #content 的 innerHTML。
+NODE_RUNNER = r"""
+const fs = require('fs');
+const script = fs.readFileSync(process.argv[2], 'utf8');
+const dataJson = fs.readFileSync(process.argv[3], 'utf8');
+const els = {
+  'eo-board-all-data': { textContent: dataJson },
+  'topbar': { innerHTML: '' },
+  'content': { innerHTML: '' },
+};
+globalThis.document = { getElementById: (id) => els[id] || null };
+globalThis.location = { hash: process.argv[4] || '' };
+globalThis.window = { addEventListener: () => {}, location: globalThis.location };
+globalThis.setInterval = () => 0;
+(0, eval)(script);
+process.stdout.write(JSON.stringify({ topbar: els.topbar.innerHTML, content: els.content.innerHTML }));
+"""
 
 
 def run_git(repo, *args):
@@ -114,7 +137,22 @@ class BoardCacheServeTests(unittest.TestCase):
         timestamp = time.time() + 2
         os.utime(path, (timestamp, timestamp))
 
-    def test_extracted_board_matches_baseline_for_terminal_html_and_serve_data(self):
+    def assert_preserves(self, current, baseline, path="data"):
+        """基线字段逐条仍在且取值不变；新增字段允许（数据层只增不改）。"""
+        if isinstance(baseline, dict):
+            self.assertIsInstance(current, dict, path)
+            for key, value in baseline.items():
+                self.assertIn(key, current, f"{path}.{key} 丢失")
+                self.assert_preserves(current[key], value, f"{path}.{key}")
+        elif isinstance(baseline, list):
+            self.assertIsInstance(current, list, path)
+            self.assertEqual(len(current), len(baseline), path)
+            for i, value in enumerate(baseline):
+                self.assert_preserves(current[i], value, f"{path}[{i}]")
+        else:
+            self.assertEqual(current, baseline, path)
+
+    def test_extracted_board_matches_baseline_for_terminal_and_serve_data(self):
         baseline_source = run_git(REPO_ROOT, "show", f"{BASELINE_REVISION}:cli/eo-board").stdout
         baseline_path = self.root / "eo_board_baseline.py"
         baseline_path.write_text(baseline_source, encoding="utf-8")
@@ -124,15 +162,14 @@ class BoardCacheServeTests(unittest.TestCase):
         baseline_data = baseline.build_data(baseline_cfg)
         current_data = self.board.build_data(self.cfg)
         baseline_data["generated_at"] = current_data["generated_at"]
-        self.assertEqual(current_data, baseline_data)
+        self.assert_preserves(current_data, baseline_data)
         self.assertEqual(self.board.render_terminal(current_data), baseline.render_terminal(baseline_data))
-        self.assertEqual(self.board.render_html(current_data), baseline.render_html(baseline_data))
 
         self.start_server()
         served = self.get_json()
         served["generated_at"] = baseline_data["generated_at"]
         served["serve"] = False
-        self.assertEqual(served, baseline_data)
+        self.assert_preserves(served, baseline_data)
 
     def test_serve_reuses_cached_build_data_for_second_poll(self):
         calls = 0
@@ -332,6 +369,86 @@ class MultiProjectFixture(unittest.TestCase):
     def registry_file(self):
         return self.eo_home / "projects.json"
 
+    def age_change(self, repo, dirname, days):
+        """把某 change 目录的最后 commit 时间与文件 mtime 一起推到 days 天前。"""
+        target = repo / "eo-doc" / "changes" / dirname
+        change_file = target / "change.md"
+        change_file.write_text(change_file.read_text(encoding="utf-8") + "\n<!-- aged -->\n", encoding="utf-8")
+        when = datetime.now().astimezone() - timedelta(days=days)
+        env = dict(os.environ, GIT_AUTHOR_DATE=when.isoformat(), GIT_COMMITTER_DATE=when.isoformat())
+        subprocess.run(["git", "add", "-A"], cwd=repo, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-qm", f"age {dirname}"], cwd=repo, env=env, check=True, capture_output=True)
+        stamp = when.timestamp()
+        for path in [target, *target.rglob("*")]:
+            os.utime(path, (stamp, stamp))
+        return when
+
+    def age_project_sources(self, repo, name, days):
+        """把项目级数据源（changes 树 + 管理侧 backlog/roadmap）mtime 一并推到过去，构造静默项目。"""
+        stamp = (datetime.now().astimezone() - timedelta(days=days)).timestamp()
+        for root in (self.root / f"{name}-pm", repo / "eo-doc"):
+            for path in [root, *root.rglob("*")]:
+                os.utime(path, (stamp, stamp))
+
+    def load_board_module(self):
+        board = load_module(f"eo_board_stream_{id(self)}", BOARD_PATH)
+        board._BOARD_CACHE.clear()
+        board._BOARD_BUILD_LOCKS.clear()
+        return board
+
+    def write_change(self, worktree, dirname, body_id, **fm):
+        target = worktree / "eo-doc" / "changes" / dirname
+        target.mkdir(parents=True, exist_ok=True)
+        fields = {"id": body_id, "seq": 9, "title": f"T-{body_id}", "status": "implementing",
+                  "tier": "full", "type": "feature", "created": "2026-07-25"}
+        fields.update(fm)
+        head = "\n".join(f"{k}: {v}" for k, v in fields.items())
+        (target / "change.md").write_text(
+            f"---\n{head}\n---\n\n# {fields['title']}\n\n"
+            "## 2. 验收清单\n- [x] AC-1 一\n- [ ] AC-2 二\n\n"
+            "## 3. TODO\n\n### Batch 1\n- [x] TODO-1 甲\n- [ ] TODO-2 乙\n",
+            encoding="utf-8",
+        )
+        return target
+
+    def add_acceptance_blocker(self, change_dir, unchecked=2):
+        (change_dir / "acceptance.md").write_text(
+            "# 人工验收单\n\n" + "".join("- [ ] 通过：待勾项\n" for _ in range(unchecked)),
+            encoding="utf-8",
+        )
+
+    def snapshot_html(self, *extra, scan=None):
+        out = self.root / "all.html"
+        args = ["--all", "--html", "-o", str(out), "--no-open", *extra]
+        if scan:
+            args = ["--all", "--scan", str(scan), "--html", "-o", str(out), "--no-open", *extra]
+        r = self.run_board(*args)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return out
+
+    def render_snapshot(self, html_path, hash_=""):
+        """把快照里的内嵌脚本用 node 跑一遍，返回 {topbar, content} 的真实 innerHTML。"""
+        html = Path(html_path).read_text(encoding="utf-8")
+        marker = 'id="eo-board-all-data">'
+        start = html.index(marker) + len(marker)
+        end = html.index("</script>", start)
+        data_json = html[start:end]
+        script_start = html.index("<script>", end) + len("<script>")
+        script_end = html.index("</script>", script_start)
+
+        runner = self.root / "runner.js"
+        runner.write_text(NODE_RUNNER, encoding="utf-8")
+        script_file = self.root / "app.js"
+        script_file.write_text(html[script_start:script_end], encoding="utf-8")
+        data_file = self.root / "data.json"
+        data_file.write_text(data_json, encoding="utf-8")
+        proc = subprocess.run(
+            [NODE, str(runner), str(script_file), str(data_file), hash_],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        return json.loads(proc.stdout)
+
 
 class BoardMultiProjectTests(MultiProjectFixture):
     """--all / --project / --scan 多项目聚合与下钻（终端形态）。"""
@@ -431,6 +548,237 @@ class BoardMultiProjectTests(MultiProjectFixture):
     def test_scan_requires_all(self):
         r = self.run_board("--scan", str(self.root))
         self.assertNotEqual(r.returncode, 0)
+
+
+class BoardAllStreamDataTests(MultiProjectFixture):
+    """聚合数据抬升：route_key、项目级元信息、非 archived change 明细、activity_at 与 3 天活跃窗。"""
+
+    def env_patch(self):
+        return mock.patch.dict(os.environ, {"EO_HOME": str(self.eo_home)})
+
+    def test_rows_carry_route_key_project_meta_and_non_archived_changes(self):
+        alpha = self.make_project("alpha", statuses=("confirmed", "implementing", "archived"), backlog_cards=2)
+        self.register(alpha)
+        board = self.load_board_module()
+        with self.env_patch():
+            agg = board.build_all_data()
+        row = agg["rows"][0]
+        self.assertEqual(row["label"], "alpha")
+        self.assertEqual(row["route_key"], board.make_route_key("alpha", alpha))
+        self.assertEqual(row["main_branch"], "main")
+        self.assertEqual(row["worktree_count"], 1)
+        self.assertEqual(row["path"], str(alpha))
+        self.assertIsNotNone(row["activity_at"])
+        self.assertTrue(row["active"])
+        self.assertEqual([c["status"] for c in row["changes"]], ["confirmed", "implementing"])
+        first = row["changes"][0]
+        self.assertEqual(
+            {first["seq"], first["id"], first["tier"], first["type"], first["project"]},
+            {1, "c1", "full", "feature", "alpha"},
+        )
+        self.assertEqual((first["ac_done"], first["ac_total"]), (0, 1))
+        self.assertEqual((first["todo_done"], first["todo_total"]), (None, None))
+        self.assertEqual(first["route_key"], row["route_key"])
+        self.assertTrue(first["is_default_worktree"])
+        self.assertIsNone(first["blocker"])
+
+    def test_route_key_separates_same_named_projects_and_encodes_cjk(self):
+        one = self.make_project("同名", parent=self.root / "one")
+        two = self.make_project("同名2", parent=self.root / "two")
+        cfg = json.loads((two / ".eo-project.json").read_text(encoding="utf-8"))
+        cfg["project_name"] = "同名"
+        (two / ".eo-project.json").write_text(json.dumps(cfg), encoding="utf-8")
+        self.register(one)
+        self.register(two)
+        board = self.load_board_module()
+        with self.env_patch():
+            agg = board.build_all_data()
+        keys = [r["route_key"] for r in agg["rows"]]
+        self.assertEqual(len(set(keys)), 2)
+        for key in keys:
+            self.assertTrue(key.startswith("%E5%90%8C%E5%90%8D~"), key)
+            self.assertNotIn("/", key)
+
+    def test_uncommitted_edit_moves_change_activity_ahead_of_older_sibling(self):
+        alpha = self.make_project("alpha", statuses=("implementing", "implementing"))
+        self.register(alpha)
+        self.age_change(alpha, "01-c1", days=6)
+        self.age_change(alpha, "02-c2", days=5)
+        board = self.load_board_module()
+        with self.env_patch():
+            before = {c["id"]: c for c in board.build_all_data()["rows"][0]["changes"]}
+        self.assertLess(before["c1"]["activity_at"], before["c2"]["activity_at"])
+        self.assertFalse(before["c1"]["active"])
+
+        edited = alpha / "eo-doc" / "changes" / "01-c1" / "change.md"
+        edited.write_text(edited.read_text(encoding="utf-8") + "\n未提交编辑\n", encoding="utf-8")
+        with self.env_patch():
+            after = board.build_all_data()["rows"][0]["changes"]
+        self.assertEqual(sorted(after, key=lambda c: c["activity_at"], reverse=True)[0]["id"], "c1")
+        by_id = {c["id"]: c for c in after}
+        self.assertTrue(by_id["c1"]["active"])
+        # last_touch 仍是那次旧 commit 的日粒度日期——排序键换成 activity_at 才看得见未提交编辑
+        self.assertLess(by_id["c1"]["activity_at"][:10], date.today().isoformat() + "T")
+
+    def test_active_flag_splits_on_three_day_boundary(self):
+        alpha = self.make_project("alpha", statuses=("implementing", "implementing"))
+        self.register(alpha)
+        self.age_change(alpha, "01-c1", days=2)
+        self.age_change(alpha, "02-c2", days=4)
+        board = self.load_board_module()
+        with self.env_patch():
+            changes = {c["id"]: c for c in board.build_all_data()["rows"][0]["changes"]}
+        self.assertTrue(changes["c1"]["active"])
+        self.assertFalse(changes["c2"]["active"])
+
+    def test_silent_project_row_loses_active_flag(self):
+        quiet = self.make_project("quiet", statuses=("implementing",))
+        self.register(quiet)
+        self.age_change(quiet, "01-c1", days=9)
+        self.age_project_sources(quiet, "quiet", days=9)
+        board = self.load_board_module()
+        with self.env_patch():
+            row = board.build_all_data()["rows"][0]
+        self.assertFalse(row["active"])
+        self.assertFalse(row["changes"][0]["active"])
+
+    def test_stream_entries_match_the_project_own_board_records(self):
+        alpha = self.make_project("alpha", statuses=("implementing", "archived"))
+        self.register(alpha)
+        board = self.load_board_module()
+        with self.env_patch():
+            row = board.build_all_data()["rows"][0]
+        own = board.build_data(board.load_project_config(alpha / ".eo-project.json"))
+        by_id = {c["id"]: c for c in own["changes"]}
+        self.assertEqual([c["id"] for c in row["changes"]], ["c1"])
+        for entry in row["changes"]:
+            rec = by_id[entry["id"]]
+            self.assertEqual(
+                (entry["seq"], entry["status"], entry["tier"], entry["type"], entry["activity_at"],
+                 entry["blocker"], entry["branch"], entry["worktree_name"]),
+                (rec["seq"], rec["status"], rec["tier"], rec["type"], rec["activity_at"],
+                 rec["blocker"], rec["branch"], rec["worktree_name"]),
+            )
+            self.assertEqual((entry["ac_done"], entry["ac_total"]), board.count_ac(rec["ac"]))
+
+    def test_fresh_and_cached_getters_produce_identical_rows(self):
+        self.register(self.make_project("alpha", statuses=("confirmed", "archived"), backlog_cards=1))
+        self.register(self.make_project("beta", statuses=("implementing",)))
+        board = self.load_board_module()
+        with self.env_patch():
+            fresh = board.build_all_data()
+            cached = board.build_all_data(get_entry=board._get_board_entry_cached)
+
+        def comparable(agg):
+            rows = []
+            for row in sorted(agg["rows"], key=lambda r: r["label"]):
+                row = dict(row)
+                row.pop("as_of")
+                rows.append(row)
+            return rows
+
+        self.assertEqual(comparable(fresh), comparable(cached))
+
+
+@unittest.skipUnless(NODE, "缺少 node，无法在无浏览器环境渲染内嵌视图")
+class BoardAllHomeViewTests(MultiProjectFixture):
+    """首页壳：change 流视图字段/排序/降权、项目摘要条卡、双视图切换框架、下钻链接。"""
+
+    def build_scene(self):
+        alpha = self.make_project("alpha", statuses=("implementing", "archived"), backlog_cards=2)
+        # 先做旧，再开侧枝：否则侧枝 ref 上留着那条「现在」的 init commit，
+        # `git log --all -1` 按提交时间取最新，01-c1 永远读不到被做旧的时间
+        self.age_change(alpha, "01-c1", days=5)
+        side = self.root / "alpha-side"
+        run_git(alpha, "worktree", "add", "-q", str(side), "-b", "side")
+        hot = self.write_change(side, "03-hot", "hot", seq=3, summary="侧枝上的热变更")
+        self.add_acceptance_blocker(hot, unchecked=2)
+        beta = self.make_project("beta")
+        self.write_change(beta, "01-bcool", "bcool", seq=2, status="draft", summary="beta 的变更")
+        self.age_change(beta, "01-bcool", days=1)
+        self.register(alpha)
+        self.register(beta)
+        return alpha, beta
+
+    def test_stream_rows_carry_fields_sort_by_activity_and_dim_silent_tail(self):
+        self.build_scene()
+        content = self.render_snapshot(self.snapshot_html())["content"]
+
+        self.assertIn("进行中 change <b>3</b>", content)
+        self.assertIn("跨项目 · 最近活动倒序 · 不含 archived（1 归档见项目栏）", content)
+        self.assertIn('<span class="chip blocker-sum">⛔ blocker <b>1</b></span>', content)
+
+        # 行字段：seq+slug、状态、tier·type、summary、进度、非主 worktree 标记、blocker
+        self.assertIn("#3 hot", content)
+        self.assertIn("实施中", content)
+        self.assertIn("<b>full</b>·feature", content)
+        self.assertIn("侧枝上的热变更", content)
+        self.assertIn('<span class="tag branch">⎇ side@alpha-side</span>', content)
+        self.assertIn('<span class="tag warn">⛔ 人工验收 2 项待勾</span>', content)
+        self.assertIn('<span class="prog-num">1/2</span>', content)
+
+        # 排序：未提交的侧枝变更最新 → 流顶；5 天前的 c1 落到降权分界之后
+        self.assertLess(content.index("#3 hot"), content.index("#2 bcool"))
+        self.assertEqual(content.count('class="divider"'), 1)
+        self.assertLess(content.index("#2 bcool"), content.index('class="divider"'))
+        self.assertLess(content.index('class="divider"'), content.index("#1 c1"))
+        self.assertIn("以下 3 天内无动静", content)
+        self.assertEqual(content.count('class="row dim"'), 1)
+        self.assertEqual(content.count('class="row"'), 2)
+        self.assertNotIn("#2 c2", content)  # archived 不进流
+
+    def test_project_strip_cards_show_meta_and_both_entries_link_to_route(self):
+        alpha, _ = self.build_scene()
+        board = self.load_board_module()
+        key = board.make_route_key("alpha", alpha)
+        content = self.render_snapshot(self.snapshot_html())["content"]
+
+        self.assertIn('<a class="proj" href="#/p/' + key + '"', content)
+        self.assertIn('<a class="row" href="#/p/' + key + '"', content)
+        self.assertIn("⎇ main · 2 worktree", content)
+        self.assertIn(str(alpha), content)  # 条卡带目录
+        self.assertIn("<b>2</b>backlog", content)
+        self.assertIn("as-of ", content)
+        self.assertIn('<span class="pill live">● 活跃</span>', content)
+
+    def test_silent_project_card_is_desaturated_but_still_listed(self):
+        quiet = self.make_project("quiet", statuses=("implementing",))
+        self.register(quiet)
+        self.age_change(quiet, "01-c1", days=8)
+        self.age_project_sources(quiet, "quiet", days=8)
+        content = self.render_snapshot(self.snapshot_html())["content"]
+        self.assertIn('class="proj silent"', content)
+        self.assertIn('<span class="pill quiet">静默 · 最后动静 8 天前</span>', content)
+
+    def test_view_switch_lives_in_topbar_defaults_to_stream_and_remembers_hash(self):
+        self.build_scene()
+        html = self.snapshot_html()
+
+        default = self.render_snapshot(html)
+        self.assertIn('<div class="viewswitch"', default["topbar"])
+        self.assertIn('<a class="vs-btn" href="#/" aria-current="page">change 流</a>', default["topbar"])
+        self.assertIn('<a class="vs-btn" href="#/cards">概要卡</a>', default["topbar"])
+        self.assertIn('class="list"', default["content"])
+
+        cards = self.render_snapshot(html, "#/cards")
+        self.assertIn('<a class="vs-btn" href="#/cards" aria-current="page">概要卡</a>', cards["topbar"])
+        self.assertIn('class="grid"', cards["content"])
+        self.assertNotIn('class="list"', cards["content"])
+
+    def test_stream_markup_stays_within_variant2_class_vocabulary(self):
+        self.build_scene()
+        content = self.render_snapshot(self.snapshot_html())["content"]
+
+        def classes(text):
+            return {t for attr in re.findall(r'class="([^"]*)"', text) for t in attr.split()}
+
+        variant = classes(VARIANT_PATH.read_text(encoding="utf-8"))
+        # 定稿稿没有的边界态：未注册徽标、坏条目错误行、空流提示、分支标签
+        extra = {"unreg", "proj-err", "proj-note", "list-empty", "branch"}
+        self.assertLessEqual(classes(content) - extra, variant)
+        for anchor in ("strip", "proj", "list", "list-head", "row", "r-proj", "r-main",
+                       "r-prog", "r-when", "divider", "st-pill", "bar", "todo", "ac"):
+            self.assertIn(anchor, classes(content), anchor)
 
 
 class BoardAllAggregateTests(MultiProjectFixture):
