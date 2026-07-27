@@ -3,7 +3,7 @@ id: eo-helper-entry
 seq: 8
 title: eo-helper 单一交互入口 + eo-board --all 聚合形态 + 命令面收纳
 summary: 新增 eo-helper 数字菜单唯一入口；eo-board --all 补 --html/--serve；README 命令面收纳
-status: implementing
+status: archived
 tier: full
 type: feature
 base_commit: 6998899d55eba93a0e3a0335a4e013780c298796
