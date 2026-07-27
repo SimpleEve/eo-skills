@@ -767,7 +767,7 @@ PROJECT_CSS = r"""
   a:hover { text-decoration: underline; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  .wrap { padding: 0 24px 64px; }
+  .wrap { max-width: min(94vw, 1800px); margin: 0 auto; padding: 0 24px 64px; }
 
   .topbar { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; padding: 20px 0 0; }
   .wordmark { font-family: var(--mono); font-size: 18.5px; font-weight: 700; letter-spacing: -0.02em; }
@@ -893,7 +893,7 @@ PROJECT_CSS = r"""
   }
   .backdrop.open { opacity: 1; pointer-events: auto; }
   .drawer {
-    position: fixed; top: 0; right: 0; bottom: 0; width: min(460px, 94vw);
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(920px, 94vw);
     background: var(--surface); border-left: 1px solid var(--line); box-shadow: var(--shadow);
     transform: translateX(102%); transition: transform 0.22s ease; z-index: 50;
     display: flex; flex-direction: column;
