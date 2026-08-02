@@ -253,7 +253,7 @@ class BoardCardProgressFixture(unittest.TestCase):
 
 
 class JournalAndFullTextTests(BoardCardProgressFixture):
-    """AC-3 数据层 + AC-2 全文字段。"""
+    """journal 投影与 change 全文字段。"""
 
     def test_journal_entries_loaded_when_present(self):
         self.write_journal(
@@ -304,7 +304,7 @@ class JournalAndFullTextTests(BoardCardProgressFixture):
 
 
 class StageProgressTests(BoardCardProgressFixture):
-    """AC-4/AC-5 数据层：阶段徽标与 ≥3 轮警告。"""
+    """质量门阶段徽标与轮次警告。"""
 
     def test_stage_progress_from_test_gate(self):
         self.write_test_gate(rounds_hint=2, fail=True)
