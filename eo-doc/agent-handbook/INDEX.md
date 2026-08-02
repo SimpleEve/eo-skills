@@ -11,4 +11,4 @@
 
 > 本仓库的「产品本体」是各 `eo-*/SKILL.md`（自描述，不入 handbook）；handbook 只覆盖可执行代码（`cli/`、`tests/`、`install.sh`）。
 >
-> 不挂模块的测试：`tests/test_sot_default_caliber.py` 是 SoT 默认口径（init 缺省推荐 local + 管理侧随仓库提交）的文档静态断言套件，守护 `eo-project-init/SKILL.md`、`references/config.md`、`docs/GUIDE.md`、`README.md` 四文件口径一致。`tests/test_sync_consolidation_caliber.py` 同型，守护 sync 段收编口径（init 停写 board/github 旧段、1.5 迁移、文档 legacy 标注）于 `eo-project-init/SKILL.md`、`references/config.md`、`eo-shared/board-github.md`、`docs/GUIDE.md`，并断言本仓 `.eo-project.json` 狗粮迁移等价与 change 区间 `cli/` 零 diff。
+> 不挂模块的测试：`tests/test_sot_default_caliber.py` 是 SoT 默认口径（init 缺省推荐 local + 管理侧随仓库提交）的文档静态断言套件，守护 `eo-project-init/SKILL.md`、`references/config.md`、`docs/GUIDE.md`、`README.md` 四文件口径一致。`tests/test_sync_consolidation_caliber.py` 同型，守护 sync 段收编口径（init 停写 board/github 旧段、1.5 迁移、文档 legacy 标注）于 `eo-project-init/SKILL.md`、`references/config.md`、`eo-shared/board-github.md`、`docs/GUIDE.md`，并断言本仓 `.eo-project.json` 狗粮迁移等价与 change 区间 `cli/` 零 diff。`tests/test_loop_retest_routing_caliber.py` 守护 Review 修复后的非对称回路、定向/完整复验、Test FAIL 强制回测、统一交付基线与 Archive 证据新鲜度门。
