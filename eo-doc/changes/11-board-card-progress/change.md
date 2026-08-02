@@ -7,7 +7,7 @@ status: implementing
 tier: light
 type: feature
 base_commit: 337f79f88693989355dde6b4306ad46fafe8098f
-test_lock_commit: ~
+test_lock_commit: ffca52248b45d1a42b5a38044fa50bf0b7df1792
 commits: []
 issue: ~
 created: 2026-08-02
