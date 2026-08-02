@@ -21,10 +21,10 @@ summary: >
 
 | ID | 级别 | 摘要 | 位置 | 状态 | 根因 | 首见/最近轮 | 基线/修复 commit |
 |----|------|------|------|------|------|-------------|------------------|
-| P1-1 | P1 | 阶段徽标把历史报告存在性和历史 P0 标题当成当前状态 | `cli/eo-board:464` | open | implementation | 1/1 | `bd4856b` / ~ |
-| P1-2 | P1 | serve 数据刷新会把用户选中的详情 tab 重置为概览 | `cli/eo-board:1711` | open | implementation | 1/1 | `bd4856b` / ~ |
-| P1-3 | P1 | 实施夹带 3 处未映射到 AC/决策的旧卡面行为变化 | `cli/eo-board:1527` | open | implementation | 1/1 | `bd4856b` / ~ |
-| P1-4 | P1 | 测试 docstring 写入 AC 编号流程溯源 | `tests/test_board_card_progress.py:428` | open | implementation | 1/1 | `bd4856b` / ~ |
+| P1-1 | P1 | 阶段徽标把历史报告存在性和历史 P0 标题当成当前状态 | `cli/eo-board:464` | fixed | implementation | 1/1 | `bd4856b` / `1ac1b1d` |
+| P1-2 | P1 | serve 数据刷新会把用户选中的详情 tab 重置为概览 | `cli/eo-board:1711` | fixed | implementation | 1/1 | `bd4856b` / `1ac1b1d` |
+| P1-3 | P1 | 实施夹带 3 处未映射到 AC/决策的旧卡面行为变化 | `cli/eo-board:1527` | wont-fix | implementation | 1/1 | `bd4856b` / —（总控核实：用户工作区既有未提交改动，非本 change 引入，保留不撤） |
+| P1-4 | P1 | 测试 docstring 写入 AC 编号流程溯源 | `tests/test_board_card_progress.py:428` | fixed | implementation | 1/1 | `bd4856b` / `1ac1b1d` |
 | P2-1 | P2 | tab 的 ARIA/键盘语义未形成完整关联 | `cli/eo-board:1422` | open | implementation | 1/1 | `bd4856b` / ~ |
 
 ## 审查总结（首轮快照）

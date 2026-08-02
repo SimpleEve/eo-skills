@@ -130,3 +130,14 @@ implement 落下的锁定文件 `tests/test_board_card_progress.py`（`test_lock
 
 结论：通过（自动化 FAIL 0 项）［第 1 轮 · revision 1 · 基线 `bc4e335`］
 下一步：可进入 `/eo-review`（尚未审码）；AC-1/2/4/5 人工过目仍待用户按 change §2 验收口径勾选。
+
+### 重跑记录 · 2026-08-02（review 轮 1 修复后）
+
+| 验证点 | 命令 | 关键输出 | 结论 |
+| --- | --- | --- | --- |
+| 锁定套件（含 P1 回归） | `python3 -m unittest tests.test_board_card_progress -v` | 16/16 OK | ✅ |
+| 看板缓存回归 | `python3 -m unittest tests.test_eo_board_cache -q` | 56/56 OK | ✅ |
+| 全仓回归 | `python3 -m unittest discover -s tests -q` | `Ran 281 tests in 97.425s` / `OK` | ✅ |
+
+修复 commit：`1ac1b1d`（阶段徽标当前性、tab 热刷新保留、docstring 去溯源、相关回归用例）。P1-3 wont-fix（既有脏改动保留）。P2-1 本轮不修。
+速报：自动化 FAIL 0；AC-1/2/4/5 人工过目仍待用户。
