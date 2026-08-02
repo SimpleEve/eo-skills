@@ -66,7 +66,7 @@
 | eo-review 通过（无 P0/P1） | 速报提示可人工验收（测试状态如实标注：已过 / 未跑 eo-test） |
 | eo-archive（**唯一硬门**） | 从 change.md §2 解析 manual 集合 → 非空则验收单必须存在且**一一对应**（缺项/孤儿/重复 = 校验失败）；核对勾选与异常行（agent 代勾须有确认记录）；验收基线之后存在影响人工项的提交 → 受影响项按未勾；**未勾的 auto-heavy AC 一并过此门**（跳过 eo-test 时它们必然未勾，勾选权归 test 不归 implement）；**归档前把已勾项汇总一句请用户一键确认**（封闭选择，作为跨会话最终复核）；不通过/未勾项 → 三选一（补齐：回 implement 修复或 test 补验 / 显式豁免 / 终止归档） |
 
-「不通过」走回修时：status 由 `reviewed` 置回 `implementing`（implement 执行），修复后重走 test/review，再回硬门。
+「不通过」走回修时：status 由 `reviewed` 置回 `implementing`（implement 执行）。修复提交必须重新 Review；是否重走 Test 按 [conventions.md](conventions.md) §3 的测试证据处置判定——既有证据可沿用则跳过，失效则定向或完整复验。若同时存在未核销 Test FAIL，先回原 tester 复验，不得走沿用分支。
 
 ## 引导走查（可选模式）
 

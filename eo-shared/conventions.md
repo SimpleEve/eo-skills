@@ -90,6 +90,16 @@ implementing ──(eo-change 回炉子流程：方案需实质修订)──▶ 
           重新确认后回 confirmed；`plan_revision` +1
 ```
 
+**修复后的节点路由不等于重放固定流水线**：Test / Review 是证据节点，不是 `status`。首轮可按风险选择先 Test 或先 Review；一旦进入反馈循环，按反馈来源与证据新鲜度分流：
+
+- **Review 反馈**：`eo-review → eo-implement → 原 reviewer 增量复审`。仍有 P0/P1 就继续修，不在代码审查尚未收敛时反复启动 Test；复审通过后，原 reviewer 再审计最近一次通过的 Test 基线 `T` 到当前实施基线 `H` 的完整差异，并在最新 review 轮写 `测试证据处置：沿用 / 复验`
+  - `沿用`：`T` 是 `H` 的祖先，`T..H` 可完整审计，既有 Test 无阻塞项，且修复未改变受测外部行为、AC / 验证口径、测试断言 / fixture / mock / 配置 / 环境组合 / 关键依赖，也未弄脏 auto-heavy AC；跳过 eo-test
+  - `复验`：任一沿用条件不成立，或处置缺失、含糊、基线关系无法证明；派回原 tester。影响能映射到有限 AC、用例及依赖闭包时定向复验；跨共享路径 / 契约 / 状态机 / schema / 并发 / 权限安全 / 外部集成 / 环境矩阵 / 测试基础设施，或范围无法圈定时完整复验
+- **Test 反馈**：存在未核销 Test FAIL 时固定走 `eo-test → eo-implement → 原 tester 复验`，不得被 Review 的证据沿用分支绕过；复验通过后，若产生过新的实施提交，再由原 reviewer 增量审查该提交，恢复 Review 基线新鲜度
+- **权限边界**：Implement 只提供修复 commit、finding / FAIL 映射、同层验证和受影响 AC 候选；它的“预计无测试影响”只是 reviewer 的输入，不能自行批准跳过独立 Test。Loop 只校验并消费 review/test 的结构化处置，不亲自看 diff 作语义判定
+
+无需为该路由新增 frontmatter 状态：Review 通过仍可置 `reviewed`；其后 Test 若失败再按既有回退边置回 `implementing`，Test 通过则保持 `reviewed`。
+
 **修复循环与回炉字段**（全档 change.md frontmatter；轻档不使用——轻档熔断 = 两次以上跑偏即扩档，扩档确认后从零起算）：
 
 | 字段 | 类型/缺省 | 写入者 | 语义 |

@@ -87,10 +87,13 @@ description: |
 1. **读取反馈（读取协议）**：同会话反馈已在上下文 → **不重读报告文件**；跨会话 → 只读报告的台账 + 末尾速报，按 `open` 项的最近轮**定点读**对应轮次详情节，不通读全文
 2. 按 P0 > P1 > P2 逐一修复；修复代码**注释零溯源**——finding/AC/TODO 标记与「为何正确」的辩护不进注释（[../eo-shared/conventions.md](../eo-shared/conventions.md) §2.6）
 3. **双向取证，取最低成本层**：每个缺陷**先复现失败、修后在同层验通过**——「改完看起来对了」不算证据。复现在**能复现它的最低成本层**做：纯逻辑用单测 / `node -e` 等价复刻（秒级），接口契约用一次请求，**确属集成 / UI 态才起环境**。不要每改一行就重新 build + 起环境
-4. 涉及的 **auto-light AC 就地重验**；**auto-heavy 的复验归 /eo-test**（收口时一次跑完，不在修复循环里反复起环境）；被本次修复弄脏的**已勾** AC 按 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)「勾变脏即取消」处理；修复改变了人工项的入口/行为 → 按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)「失效与重置」更新对应验收项（步骤刷新、取消勾选并注明原因、刷新验收基线）
+4. 涉及的 **auto-light AC 就地重验**；**auto-heavy 的复验归 /eo-test**（收口时一次跑完，不在修复循环里反复起环境）；被本次修复弄脏的**已勾** AC 按 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)「勾变脏即取消」处理；修复改变了人工项的入口/行为 → 按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)「失效与重置」更新对应验收项（步骤刷新、取消勾选并注明原因、刷新验收基线）。同时整理给复审方的**测试影响候选**：最近一次通过的 Test 基线（若有）、本轮修复 commit、受影响 AC / 测试 / fixture / 配置、局部验证证据，以及“预计沿用 / 预计复验”；这是输入，不是免测批准
 5. **回写台账**：每个缺陷修复并同层验通过后，把对应报告台账行置 `fixed` 并填修复 commit——`verified` 由复审方核销，本 skill 不写
 6. 修复提交带 `[<change-id>]` 前缀
-7. 完成后提示重新 `/eo-test` 或 `/eo-review`
+7. **按反馈来源交接，不给含糊二选一**：
+   - 当前存在未核销 Test FAIL（含 Test 与 Review 混合反馈）→ 回**原 tester**复验；测试通过后，只要本轮产生过实施提交，再回**原 reviewer**增量审查
+   - 只有 Review / acceptance 反馈 → 先回**原 reviewer**增量复审；由 reviewer 基于最近通过 Test 基线 `T` 到当前实施基线 `H` 的完整差异签署 `测试证据处置：沿用 / 复验`。Implement 的“预计沿用”不得直接让 Loop 跳过 Test
+   - 交付速报固定列：`反馈来源`、`修复 commit`、`受影响 AC / 测试`、`局部验证`、`测试影响候选`、`下一节点`
 8. 修复不开新 change；发现根源是方案/需求问题 → 停下告知用户，转 /eo-change **回炉子流程**（实质修订 + 重新确认；意图不变的口径精化不必全量回炉，就地补 AC 即可）
 
 #### 卡点检查子流程（熔断三选一选 b 时执行）
@@ -145,6 +148,7 @@ spawn 一个**新鲜上下文 subagent**（执行者自述不作数——修了 
 - **重验证不在 implement 跑**：auto-heavy AC（起服务 / 多环境组合 / 点击流）归 /eo-test——implement 不起环境、不跑环境矩阵、不代勾 heavy 项；判不准 light/heavy 按 heavy 处理
 - **批末跑为主，写为例外**：全档批末验证优先用既有绿灯与一次性冒烟作证据，不为过批末门系统性编写测试——回归资产的沉淀归 /eo-test（轻模式的测试锁定不受此限，它是轻档唯一证据门）
 - **修复循环双向取证**：先复现失败再修，且复现取最低成本层——起环境是最后手段，不是默认
+- **测试影响不自证**：Implement 只提交影响候选；Review 来源的修复是否可沿用既有 Test 证据，由原 reviewer 在当前实施基线上签署。存在 Test FAIL 时无条件回原 tester
 - **勾选即时**：TODO/AC 完成立即在 change.md 勾选，不攒批
 - **commit 前缀**：所有实施提交带 `[<change-id>]`（archive 靠它归集区间）
 - **注释纪律**：一切流程溯源标注（change 编号/slug、TODO/AC、finding P0-x/P1-x、FAIL-x、批次号）**严禁**进代码注释（溯源走 commit 前缀）；注释只写代码表达不了的约束、一两行为限，不写「为何正确」的辩护，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §2.6
