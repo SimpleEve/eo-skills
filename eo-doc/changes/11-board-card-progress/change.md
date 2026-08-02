@@ -24,3 +24,6 @@ created: 2026-08-02
 - [ ] AC-3 有 journal（`tmp/eo/loop/<slug>/journal.md`）的 change，动态 tab 显示最近几条窗口报告（含「是否需要你裁决」行）；无 journal 的 change 动态 tab 显示空态提示且其余 tab 不受影响（锁定：tests/test_board_card_progress.py#JournalAndFullTextTests）
 - [ ] AC-4 卡片正面可见当前所处质量门阶段与轮次（如 test ≈2 轮 / review P0×1），无需点开详情（人工:构造/选取 test、review 阶段各一 change → 过目卡面徽标；锁定：tests/test_board_card_progress.py#StageProgressTests）
 - [ ] AC-5 任一质量门轮次 ≥3 的 change，卡片出现警告样式（复用现有 warn 视觉语言），在列中一眼可辨（人工:找一个轮次 ≥3 的 change → 过目警告样式与其余卡片的区分度；锁定：tests/test_board_card_progress.py#test_stage_warn_when_any_gate_rounds_ge_3）
+
+
+独立复核：通过，2026-08-02，基线 5f03ee3
