@@ -1,7 +1,7 @@
 ---
 substrate: claude-subagent
 适用: 总控是 Claude Code，节点执行者也是 Claude（自调自）
-updated: 2026-07-19
+updated: 2026-07-28
 ---
 
 ## 探测
@@ -10,7 +10,8 @@ Claude Code 会话内 Agent 工具原生可用，恒成立。模型按偏好或�
 
 ## 派发
 
-- 一**角色**一后台子 agent（起名如 `impl-<slug>` / `review-<slug>`，便于 SendMessage 寻址），跨轮次复用。首派 prompt 只给四样：加载哪个 eo-* skill、change 目录路径、本轮收敛标准、必要输入（如 review 反馈路径）
+- 一**角色**一后台子 agent（起名如 `impl-<slug>` / `review-<slug>`，便于 SendMessage 寻址），跨轮次复用。首派 prompt 给四样：加载哪个 eo-* skill、change 目录路径、本轮收敛标准、必要输入（如 review 反馈路径）；命中 SKILL.md 的条件式 Execution Guard 时再附其即时控制包，不落独立文件
+- 控制包要求 worker 仅把 A 类选择随交付记录；命中 B / C 类时在变更前停止受影响分支，通过 SendMessage 向总控发结构化求裁决信号（类别、分叉、影响、推荐），等总控回灌裁决后再续原 agent
 - **轮次复用 = SendMessage 发回原 agent**：修复轮、增量复审、打回重做、追问，一律续原上下文，不重开新 agent；重建时机见 SKILL.md 复用纪律
 - 相互独立的节点（如同一基线上的 test 与 review）才并行；并行 >2 个先报预算等点头
 - 并行组 worker（同层批 / 并行收敛组，SKILL.md ③）：spawn 时启用 worktree 隔离（Agent 工具 `isolation: worktree`），一 worker 一现场；合流 checkpoint 按 granularity §6 指派执行
@@ -21,7 +22,7 @@ Claude Code 会话内 Agent 工具原生可用，恒成立。模型按偏好或�
 
 ## 回收
 
-不采信子 agent 的文字汇报——按 SKILL.md ③ 读 change.md frontmatter、review/test 台账、AC 勾选核验状态推进。
+不采信子 agent 的文字汇报——按 SKILL.md ③ 读 change.md frontmatter、review/test 台账、AC 勾选核验状态推进，并核证据角色、当前基线及节点契约要求的独立报告。命中 Unknown B / C 或证据探测失败时按控制包停门；疑似判据弱化或样例硬编码但无独立结论时，按 SKILL.md 的 owner 规则派 eo-review / eo-test，不由总控补做节点工作。
 
 ## 已知陷阱
 

@@ -5,6 +5,7 @@
 | 文件 | 内容 | 主要消费方 |
 |------|------|-----------|
 | [questioning.md](questioning.md) | 提问纪律（预算、决策台账、封闭选择协议、反模式表） | eo-change / eo-brainstorming / eo-design |
+| [goal-contract.md](goal-contract.md) | 七维目标契约的跨阶段语义、Proof 分层、Trade 优先级与 Unknown 权限 | eo-brainstorming / eo-loop |
 | [ac-spec.md](ac-spec.md) | 验收清单（AC）规范：三级验证归属、重验证的环境纪律 | eo-change / eo-implement / eo-test / eo-review / eo-fix |
 | [acceptance.md](acceptance.md) | 人工验收单：模板、软前门/唯一硬门生命周期、引导走查 | eo-implement（产）/ eo-review（提示）/ eo-archive（硬门） |
 | [granularity.md](granularity.md) | 粒度硬指标、trivial 判据、拆分决策表、三档判档表（§5） | eo-change / eo-fix / eo-change-review / eo-brainstorming / eo-implement |

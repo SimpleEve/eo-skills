@@ -1,7 +1,7 @@
 ---
 substrate: orca-orchestration
 适用: 节点要跨 agent 运行（执行者与总控不是同一 agent/模型栈），且需要总控监督
-updated: 2026-07-24
+updated: 2026-07-28
 ---
 
 ## 探测
@@ -18,7 +18,7 @@ updated: 2026-07-24
    ```
 
    后续收发一律显式带 `$COORD`，**禁用隐式身份解析**（省略 `--from`/`--terminal` 时 CLI 按 `$ORCA_TERMINAL_HANDLE` 环境变量解析——那是会话启动时烙死的，Orca 重启后即过期，见陷阱节）
-2. `orca orchestration task-create --spec "<节点目标 + change 路径 + 收敛标准>"`
+2. `orca orchestration task-create --spec "<节点目标 + change 路径 + 收敛标准>"`；命中 SKILL.md 的条件式 Execution Guard 时，把即时控制包一并放进 spec，不额外落盘，并要求 worker 仅随交付记录 A 类、B / C 类在变更前发 `decision_gate` 后暂停
 3. 建 worker 终端：implement / test / review 依赖当前工作区状态，用 `orca terminal create --worktree active --command "<agent 启动命令>"`；自定义模型/effort 写进启动命令（如 `codex --dangerously-bypass-approvals-and-sandbox -m <model> -c model_reasoning_effort="high"`——codex 不带 bypass 会每步卡权限审批）
 4. `orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000` 就绪后 `orca orchestration dispatch --task <id> --to <handle> --from $COORD --inject`
 5. **轮次复用**：`worker_done` 后 worker 停在 agent 提示符，正好接下一轮——同角色新任务 `task-create` 后 `dispatch --to <同一 handle> --inject` 续用同一终端，不重建。模型/effort 是启动参数，复用即锁定该组合；要换模型才重建终端（handle 报 stale 时 `terminal list` 重解析后仍按原终端续用）
@@ -30,7 +30,7 @@ updated: 2026-07-24
 
 ## 回收
 
-`worker_done` 的 payload 只当线索；证据核验一律读 change.md frontmatter 与 review/test 台账。review-only 的 `worker_done` 不授权总控动手修——修复派回 eo-implement 模式二。
+`worker_done` 的 payload 只当线索；证据核验一律读 change.md frontmatter 与 review/test 台账，并按 SKILL.md 核证据角色、基线与节点契约要求的独立报告。review-only 的 `worker_done` 不授权总控动手修——修复派回 eo-implement 模式二；Unknown B / C 或证据探测失败同样只停门。疑似判据违规但无独立结论时，按 SKILL.md 的 owner 规则派 eo-review / eo-test。
 
 ## 已知陷阱
 

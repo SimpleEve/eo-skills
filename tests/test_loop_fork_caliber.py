@@ -1,8 +1,8 @@
-"""eo-loop 分叉上报口径静态断言：worker 不问用户但形态分叉须清单上报。
+"""eo-loop Unknown 上报口径静态断言：仅 A 类可先做后报。
 
 只读两个口径文件（eo-loop/SKILL.md、references/substrates/_template.md），
-断言分叉上报机制的四个落点存在：派发纪律的清单上报条款、③节的总控
-汇总转达条款、①节的举例措辞判据、_template 派发节的提示位。
+断言 A 类交付留痕、B/C 变更前决策门、总控汇总 B 类、举例措辞判据
+和基底求裁决信号提示位。
 """
 
 import unittest
@@ -14,6 +14,11 @@ SKILL = (ROOT / "eo-loop" / "SKILL.md").read_text(encoding="utf-8")
 TEMPLATE = (
     ROOT / "eo-loop" / "references" / "substrates" / "_template.md"
 ).read_text(encoding="utf-8")
+SUBSTRATES = {
+    path.name: path.read_text(encoding="utf-8")
+    for path in (ROOT / "eo-loop" / "references" / "substrates").glob("*.md")
+    if path.name != "_template.md"
+}
 
 
 def section(text, start, end):
@@ -23,33 +28,40 @@ def section(text, start, end):
     return seg.split(end, 1)[0] if end in seg else seg
 
 
-class TestAC1DispatchPromptForkReporting(unittest.TestCase):
-    """派发 prompt 纪律：含形态自由度的节点，worker 分叉+假设清单随交付上报。"""
+class TestAC1DispatchPromptUnknownAuthority(unittest.TestCase):
+    """派发 prompt 纪律：仅 A 随交付，B/C 必须在变更前求裁决。"""
 
     def setUp(self):
         self.sec = section(SKILL, "**派发 prompt 纪律", "**worker 复用纪律")
 
-    def test_fork_reporting_clause_present(self):
-        self.assertIn("形态自由度", self.sec)
-        self.assertIn("本应问用户的分叉", self.sec)
+    def test_only_a_is_reported_with_delivery(self):
+        self.assertIn("仅 A 类", self.sec)
+        self.assertIn("随交付记录", self.sec)
+        self.assertNotIn("本应问用户的分叉 + 各自所采假设", self.sec)
 
-    def test_assumptions_reported_as_list_with_delivery(self):
-        self.assertIn("所采假设", self.sec)
-        self.assertIn("随交付", self.sec)
+    def test_b_and_c_gate_before_mutation(self):
+        self.assertIn("B 类", self.sec)
+        self.assertIn("C 类", self.sec)
+        self.assertGreaterEqual(self.sec.count("变更前"), 2)
+        self.assertIn("求裁决信号", self.sec)
+        self.assertIn("不得用“先采假设、交付后再问”", self.sec)
 
 
-class TestAC2CoordinatorBatchesForksToUser(unittest.TestCase):
-    """③派发与校验裁决：总控攒分叉清单成一次封闭选择转达用户，裁决回灌。"""
+class TestAC2CoordinatorRoutesUnknowns(unittest.TestCase):
+    """③派发与校验裁决：A 留痕、B 合并选择、C 立即上交。"""
 
     def setUp(self):
         self.sec = section(SKILL, "**③ 派发与校验裁决**", "**④ 收敛判定**")
 
     def test_batched_closed_choice_to_user(self):
-        self.assertIn("分叉清单", self.sec)
+        self.assertIn("A 类随交付记录只作透明留痕", self.sec)
+        self.assertIn("B 类", self.sec)
         self.assertIn("封闭选择", self.sec)
+        self.assertIn("C 类立即单独上交", self.sec)
 
     def test_ruling_flows_back_with_revision(self):
         self.assertIn("回灌", self.sec)
+        self.assertIn("change revision", self.sec)
 
 
 class TestAC3ExampleWordingIsNotFinal(unittest.TestCase):
@@ -67,11 +79,25 @@ class TestAC3ExampleWordingIsNotFinal(unittest.TestCase):
 
 
 class TestAC4TemplateDispatchSlot(unittest.TestCase):
-    """_template.md 派发节：分叉清单提示位。"""
+    """_template.md 派发节：基底必须提供 B/C 求裁决信号。"""
 
     def test_template_has_fork_hint(self):
         sec = section(TEMPLATE, "## 派发", "## 等待与观测")
-        self.assertIn("分叉", sec)
+        self.assertIn("仅 A 类可随交付记录", sec)
+        self.assertIn("B / C 类必须在变更前", sec)
+        self.assertIn("求裁决", sec)
+
+    def test_every_runtime_substrate_exposes_decision_gate(self):
+        self.assertGreaterEqual(len(SUBSTRATES), 3)
+        for name, text in SUBSTRATES.items():
+            dispatch = section(text, "## 派发", "## 等待与观测")
+            with self.subTest(substrate=name):
+                self.assertIn("A 类", dispatch)
+                self.assertIn("B / C 类", dispatch)
+                self.assertTrue(
+                    "求裁决" in dispatch or "decision_gate" in dispatch,
+                    f"{name} 未提供 B/C 求裁决信号",
+                )
 
 
 if __name__ == "__main__":
