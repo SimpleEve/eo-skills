@@ -21,11 +21,12 @@ summary: >
 
 | ID | 级别 | 摘要 | 位置 | 状态 | 根因 | 首见/最近轮 | 基线/修复 commit |
 |----|------|------|------|------|------|-------------|------------------|
-| P1-1 | P1 | 阶段徽标把历史报告存在性和历史 P0 标题当成当前状态 | `cli/eo-board:464` | fixed | implementation | 1/1 | `bd4856b` / `1ac1b1d` |
-| P1-2 | P1 | serve 数据刷新会把用户选中的详情 tab 重置为概览 | `cli/eo-board:1711` | fixed | implementation | 1/1 | `bd4856b` / `1ac1b1d` |
-| P1-3 | P1 | 实施夹带 3 处未映射到 AC/决策的旧卡面行为变化 | `cli/eo-board:1527` | wont-fix | implementation | 1/1 | `bd4856b` / —（总控核实：用户工作区既有未提交改动，非本 change 引入，保留不撤） |
-| P1-4 | P1 | 测试 docstring 写入 AC 编号流程溯源 | `tests/test_board_card_progress.py:428` | fixed | implementation | 1/1 | `bd4856b` / `1ac1b1d` |
-| P2-1 | P2 | tab 的 ARIA/键盘语义未形成完整关联 | `cli/eo-board:1422` | open | implementation | 1/1 | `bd4856b` / ~ |
+| P1-1 | P1 | 阶段徽标把历史报告存在性和历史 P0 标题当成当前状态 | `cli/eo-board:464` | verified | implementation | 1/2 | `bd4856b` / `1ac1b1d` |
+| P1-2 | P1 | serve 数据刷新会把用户选中的详情 tab 重置为概览 | `cli/eo-board:1711` | verified | implementation | 1/2 | `bd4856b` / `1ac1b1d` |
+| P1-3 | P1 | 实施夹带 3 处未映射到 AC/决策的旧卡面行为变化 | `cli/eo-board:1527` | waived | implementation | 1/2 | `bd4856b` / —（用户裁决：总控已核实为既有工作区改动，非本 change 引入，保留） |
+| P1-4 | P1 | 测试 docstring 写入 AC 编号流程溯源 | `tests/test_board_card_progress.py:428` | verified | implementation | 1/2 | `bd4856b` / `1ac1b1d` |
+| P1-5 | P1 | 无活动阶段时丢失任一门 ≥3 轮的警告样式 | `cli/eo-board:562` | open | implementation | 2/2 | `1ac1b1d` / ~ |
+| P2-1 | P2 | tab 的 ARIA/键盘语义未形成完整关联 | `cli/eo-board:1487` | open | implementation | 1/2 | `bd4856b` / ~ |
 
 ## 审查总结（首轮快照）
 
@@ -108,14 +109,33 @@ summary: >
 | backlog 详情 | ✅ `renderBacklog` 相对基线逐字一致；但 backlog 卡标题有范围外变化，见 P1-3 |
 | manual AC | ⏳ AC-1/2/4/5 人工过目未由本轮代勾 |
 
+## 第 2 轮记录（revision 1 · 2026-08-02）
+
+- 审查基线：`1ac1b1d`（`51c9cf4` 仅回填台账与测试重跑记录，无业务代码）
+- 核销：P1-1 verified——`derive_stage_progress` 已结合 status、速报结论与台账未决 P0；本仓真实构建中 `sync-plugin-layer` 为 `stage_progress=None`，不再显示历史 `review P0×1`。
+- 核销：P1-2 verified——刷新前读取 `.detail-tab.active`，重建后经 `bindDetailTabs(..., restoreTab)` 恢复；新增 DOM 回归真实点击“动态”后模拟 refresh，前后均为 journal pane。
+- 核销：P1-4 verified——原 `AC-3` docstring 已改为纯领域行为描述，修复 diff 未发现新的流程溯源注释。
+- 裁决：P1-3 waived——按本轮明确输入，总控已核实三处为用户工作区既有改动而非本 change 引入；不再阻塞。
+- 保留：P2-1 open——本轮明确后置，未要求修复，不阻塞结论。
+- reopen：无。
+- 新增：[P1-5] 无活动阶段时丢失任一门 ≥3 轮的警告样式 — `cli/eo-board:562`。
+
+### [P1-5] 警告状态被错误绑定到“当前阶段”是否存在
+
+- **类型**：功能回归
+- **位置**：`cli/eo-board:562`；关联 `cli/eo-board:490`、`cli/eo-board:568`、`cli/eo-board:1600`
+- **描述**：修复将已通过门从“当前阶段”排除是正确的，但 `stage is None` 时直接返回 `None`，使 `max_rounds >= 3` 的 warn 也一起丢失；archived 更在计算轮次前直接返回。`changeCard` 的 `card-warn` 只读取 `stage_progress.warn`，因此警告无法独立保留。
+- **影响**：AC-5 要求“任一质量门轮次 ≥3”的 change 出现警告样式，不以当前门是否未决为条件。当前内存探针中，`status=implementing`、change-review 已通过且 `rounds=3` 返回 `None`；本仓 `board-all-v2`（历史 review 约 4 轮）也从 `warn=true` 变为无 `stage_progress`。
+- **建议**：把历史轮次警告与当前阶段标签解耦；即便不展示已通过/archived 的阶段徽标，仍让卡片获得可独立消费的 `warn` 信号，并补“门已通过但轮次 ≥3”回归。
+
+- 独立验证：`python3 -m unittest tests.test_board_card_progress -v` 为 16/16 通过；`python3 -m unittest -q tests.test_eo_board_cache` 为 56/56 通过；`git diff --check 127045c..HEAD` 通过。现有测试未覆盖“门已通过且轮次 ≥3”组合，故未拦住 P1-5。
+- 本轮结论：仍有 P1 待修；P1-1/2/4 已核销，P1-3 已裁决豁免。
+
 ## 速报
 
-结论：有 P1 待修（P0 0 条，P1 4 条，P2 1 条）［第 1 轮 · revision 1 · 基线 `bd4856b`］
+结论：有 P1 待修（P0 0 条，P1 1 条，P2 1 条）［第 2 轮 · revision 1 · 基线 `1ac1b1d`］
 P1（应修）：
-1. 阶段徽标把历史报告/历史 P0 当成当前状态 — `cli/eo-board:464`
-2. serve 数据刷新会重置活动 tab — `cli/eo-board:1711`
-3. 实施夹带 3 处未映射的旧卡面行为变化 — `cli/eo-board:1527`
-4. 测试 docstring 写入 AC 编号溯源 — `tests/test_board_card_progress.py:428`
+1. 无活动阶段时丢失任一门 ≥3 轮的警告样式 — `cli/eo-board:562`
 P2（可后置）：
-5. tab 的 ARIA/键盘语义不完整 — `cli/eo-board:1422`
-下一步：回 `/eo-implement` 修复 P1 后由同一 reviewer 增量复审；light change 保持 `implementing`，AC-1/2/4/5 manual 仍待用户验收。
+2. tab 的 ARIA/键盘语义不完整 — `cli/eo-board:1487`
+下一步：回 `/eo-implement` 修复 P1-5 后由同一 reviewer 增量复审；light change 保持 `implementing`，AC-1/2/4/5 manual 仍待用户验收。
