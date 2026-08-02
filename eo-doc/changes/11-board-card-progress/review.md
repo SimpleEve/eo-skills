@@ -25,8 +25,8 @@ summary: >
 | P1-2 | P1 | serve 数据刷新会把用户选中的详情 tab 重置为概览 | `cli/eo-board:1711` | verified | implementation | 1/2 | `bd4856b` / `1ac1b1d` |
 | P1-3 | P1 | 实施夹带 3 处未映射到 AC/决策的旧卡面行为变化 | `cli/eo-board:1527` | waived | implementation | 1/2 | `bd4856b` / —（用户裁决：总控已核实为既有工作区改动，非本 change 引入，保留） |
 | P1-4 | P1 | 测试 docstring 写入 AC 编号流程溯源 | `tests/test_board_card_progress.py:428` | verified | implementation | 1/2 | `bd4856b` / `1ac1b1d` |
-| P1-5 | P1 | 无活动阶段时丢失任一门 ≥3 轮的警告样式 | `cli/eo-board:562` | fixed | implementation | 2/2 | `1ac1b1d` / `eba11da` |
-| P2-1 | P2 | tab 的 ARIA/键盘语义未形成完整关联 | `cli/eo-board:1487` | open | implementation | 1/2 | `bd4856b` / ~ |
+| P1-5 | P1 | 无活动阶段时丢失任一门 ≥3 轮的警告样式 | `cli/eo-board:562` | verified | implementation | 2/3 | `1ac1b1d` / `eba11da` |
+| P2-1 | P2 | tab 的 ARIA/键盘语义未形成完整关联 | `cli/eo-board:1498` | open | implementation | 1/3 | `bd4856b` / ~ |
 
 ## 审查总结（首轮快照）
 
@@ -131,11 +131,20 @@ summary: >
 - 独立验证：`python3 -m unittest tests.test_board_card_progress -v` 为 16/16 通过；`python3 -m unittest -q tests.test_eo_board_cache` 为 56/56 通过；`git diff --check 127045c..HEAD` 通过。现有测试未覆盖“门已通过且轮次 ≥3”组合，故未拦住 P1-5。
 - 本轮结论：仍有 P1 待修；P1-1/2/4 已核销，P1-3 已裁决豁免。
 
+## 第 3 轮记录（revision 1 · 2026-08-02）
+
+- 审查基线：`eba11da`（`7eef7bf` 仅回填 P1-5 fixed 状态与测试重跑记录，无业务代码）
+- 核销：P1-5 verified——`_warn_only()` 把 warn 从当前 stage/label 解耦；无活动阶段与 archived 均在 `max_rounds >= 3` 时返回 `{stage: None, label: None, warn: True}`，`changeCard` 独立读取 `sp.warn` 挂 `card-warn`。
+- 交叉复验：本仓真实 `sync-plugin-layer` 与 `board-all-v2` 均为 `stage=None`、`rounds=4`、`warn=true`；Node 渲染出的两张卡都含 `card-warn`，且不含历史 `P0×`，P1-1 当前性语义未回退。
+- 保留：P2-1 open——本轮仍按既定后置，不阻塞通过。
+- reopen：无。
+- 新增：无；`1c6cce2..7eef7bf` 修复增量未发现新的 P0/P1/P2。
+- 独立验证：`python3 -m unittest tests.test_board_card_progress -v` 为 18/18 通过；`python3 -m unittest -q tests.test_eo_board_cache` 为 56/56 通过；`git diff --check 1c6cce2..HEAD` 通过。
+- 本轮结论：通过；台账无 `open`/`fixed` P0/P1，P1-3 为用户裁决 waived，P2-1 后置。
+
 ## 速报
 
-结论：有 P1 待修（P0 0 条，P1 1 条，P2 1 条）［第 2 轮 · revision 1 · 基线 `1ac1b1d`］
-P1（应修）：
-1. 无活动阶段时丢失任一门 ≥3 轮的警告样式 — `cli/eo-board:562`
+结论：通过（P0 0 条，P1 0 条，P2 1 条）［第 3 轮 · revision 1 · 基线 `eba11da`］
 P2（可后置）：
-2. tab 的 ARIA/键盘语义不完整 — `cli/eo-board:1487`
-下一步：回 `/eo-implement` 修复 P1-5 后由同一 reviewer 增量复审；light change 保持 `implementing`，AC-1/2/4/5 manual 仍待用户验收。
+1. tab 的 ARIA/键盘语义不完整 — `cli/eo-board:1498`
+下一步：代码审查已通过；light change 保持 `implementing`，等待 AC-1/2/4/5 manual 用户验收后走轻档完成门/归档收口。
