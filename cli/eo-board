@@ -1364,11 +1364,24 @@ function esc(s) {
 // ── 安全迷你 markdown：白名单转换，且只作用在 esc() 之后的文本上 ──
 // applyInline 的入参必须已经过 esc()；** / ` / []() 本身不在转义字符集里，转义后依旧原样可匹配，
 // 而载荷里夹带的 <script> 等已经变成 &lt;script&gt;，转换只会把它们包进白名单标签，不会变回真标签。
+function safeHref(url) {
+  // 仅放行 http / https / mailto；javascript:、data: 等一律不生成 href
+  var u = String(url || '').trim();
+  if (!u) return null;
+  var m = u.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);
+  if (!m) return null;
+  var scheme = m[1].toLowerCase();
+  if (scheme === 'http' || scheme === 'https' || scheme === 'mailto') return u;
+  return null;
+}
+
 function applyInline(escapedText) {
   var s = escapedText.replace(/`([^`]+)`/g, function (_, code) { return '<code>' + code + '</code>'; });
   s = s.replace(/\*\*([^*]+)\*\*/g, function (_, b) { return '<strong>' + b + '</strong>'; });
   s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (_, t, u) {
-    return '<a href="' + u + '" rel="noopener noreferrer">' + t + '</a>';
+    var href = safeHref(u);
+    if (!href) return t; // 危险/未知协议：只保留可见文本，不生成 <a>
+    return '<a href="' + href + '" rel="noopener noreferrer">' + t + '</a>';
   });
   return s;
 }

@@ -671,6 +671,7 @@ class ProjectJsRenderTests(BoardCardProgressFixture):
             "- [x] done task\n- [ ] open task\n\n"
             "1. first\n2. second\n\n"
             "See [link](https://example.com) and **bold** and `code`.\n\n"
+            "[js](javascript:alert(1)) [data](data:text/html,hi) [mail](mailto:a@b.c)\n\n"
             "<script>evil()</script>\n"
         )
         (self.change_dir / "change.md").write_text(rich, encoding="utf-8")
@@ -714,11 +715,19 @@ class ProjectJsRenderTests(BoardCardProgressFixture):
         self.assertIn('type="checkbox"', out)
         self.assertIn("checked", out)
         self.assertIn("<ol>", out)
-        self.assertIn("<a href=", out)
+        self.assertIn('<a href="https://example.com"', out)
+        self.assertIn('<a href="mailto:a@b.c"', out)
         self.assertIn("<strong>", out)
         self.assertIn("<code>", out)
         self.assertIn("&lt;script&gt;", out)
         self.assertNotRegex(out, r"<script[\s>]")
+        # 危险协议不生成 href（只保留链接文案）
+        self.assertNotRegex(out, r'href=["\']javascript:', re.I)
+        self.assertNotRegex(out, r'href=["\']data:', re.I)
+        self.assertNotIn("javascript:alert", out)
+        self.assertNotIn("data:text/html", out)
+        self.assertIn("js", out)
+        self.assertIn("data", out)
         # 概览侧 frontmatter 含 summary
         payload = {"data": data}
         runner2 = self.root / "detail-runner.js"

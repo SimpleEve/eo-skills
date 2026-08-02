@@ -19,8 +19,8 @@ created: 2026-08-02
 
 ## 2. 验收清单
 
-- [ ] AC-1 card 详情改为 tab 切换（概览｜清单｜质量门｜动态｜全文），点击 tab 直达对应内容、无需长滚动，原抽屉各节内容不丢（人工:`eo-board --serve` 打开任一 change 卡详情，逐 tab 点一遍 → 过目内容齐全）
-- [ ] AC-2 全文 tab 以既有 mdBlock 迷你 markdown 渲染该 change 的 change.md 全文（人工:全文 tab 与 IDE 打开的 change.md 对照 → 正文内容一致、列表/强调等结构可读）
+- [ ] AC-1 card 详情改为 tab 切换（概览｜清单｜质量门｜动态｜全文），点击 tab 直达对应内容、无需长滚动，原抽屉各节内容不丢；概览 tab 展示 change.md 完整 frontmatter 键值（缺失字段不占空行）（人工:`eo-board --serve` 打开任一 change 卡详情，逐 tab 点一遍 → 过目内容齐全且概览含 frontmatter）
+- [ ] AC-2 全文 tab 以 mdBlock 迷你 markdown 渲染该 change 的 change.md 全文（覆盖 ATX 标题/表格/fenced code/列表与 task checkbox/分割线/粗体/行内代码/安全链接；链接仅 http/https/mailto 生成 href）（人工:全文 tab 与 IDE 打开的 change.md 对照 → 正文内容一致、上述结构可读）
 - [ ] AC-3 有 journal（`tmp/eo/loop/<slug>/journal.md`）的 change，动态 tab 显示最近几条窗口报告（条目正文 mdBlock 渲染、含「是否需要你裁决」行可读）；无 journal 的 change 动态 tab 显示空态提示且其余 tab 不受影响（锁定：tests/test_board_card_progress.py#JournalAndFullTextTests）
 - [ ] AC-4 卡片正面可见当前所处质量门阶段与轮次（如 test ≈2 轮 / review P0×1），无需点开详情（人工:构造/选取 test、review 阶段各一 change → 过目卡面徽标；锁定：tests/test_board_card_progress.py#StageProgressTests）
 - [ ] AC-5 任一质量门轮次 ≥3 的 change，卡片出现警告样式（复用现有 warn 视觉语言），在列中一眼可辨（人工:找一个轮次 ≥3 的 change → 过目警告样式与其余卡片的区分度；锁定：tests/test_board_card_progress.py#test_stage_warn_when_any_gate_rounds_ge_3）

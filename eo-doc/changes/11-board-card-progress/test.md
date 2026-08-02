@@ -171,3 +171,13 @@ implement 落下的锁定文件 `tests/test_board_card_progress.py`（`test_lock
 
 概览 frontmatter 键值；mdBlock 标题/表格/代码/checkbox/有序/链接 + XSS 探针；journal 列表不回退。
 速报：自动化 FAIL 0；AC-1/2/4/5 人工过目仍待用户。
+
+### 重跑记录 · 2026-08-02（P1-6/P1-7：链接协议白名单 + AC 同步）
+
+| 验证点 | 命令 | 关键输出 | 结论 |
+| --- | --- | --- | --- |
+| 锁定套件 | `python3 -m unittest tests.test_board_card_progress -q` | 20/20 OK | ✅ |
+| 全仓回归 | `python3 -m unittest discover -s tests -q` | `Ran 285 tests in 88.566s` / `OK` | ✅ |
+
+`safeHref` 仅 http/https/mailto；javascript:/data: 负向锁定；AC-1/2 措辞同步 frontmatter 与 md 扩能。
+速报：自动化 FAIL 0；AC-1/2/4/5 人工过目仍待用户。
