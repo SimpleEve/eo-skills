@@ -480,17 +480,28 @@ def _review_open_p0(rv):
 
 
 def derive_stage_progress(gates, status=None):
-    """从 gates + status 推导卡面「当前」阶段徽标。
+    """从 gates + status 推导卡面阶段徽标 + 轮次警告。
 
-    只展示仍未决的门（速报不通过 / 台账 open / FAIL 未过），不把已通过的历史报告
-    或历史 P0 标题当成当前状态。acceptance 仅在 status=reviewed 时覆盖。
+    阶段标签只展示仍未决的门（速报不通过 / 台账 open / FAIL 未过），不把已通过的
+    历史报告或历史 P0 当成当前状态。acceptance 仅在 status=reviewed 时覆盖。
+
+    警告与阶段解耦：任一门 max rounds ≥ STAGE_WARN_ROUNDS 时始终 warn=True，
+    即使 stage/label 为空（已通过/archived、无当前门），卡片仍可挂 card-warn。
     """
     gates = gates or {}
     status = (status or "").strip()
-    if status == "archived":
-        return None
-
     max_rounds = _max_gate_rounds(gates)
+    warn = max_rounds >= STAGE_WARN_ROUNDS
+
+    def _warn_only():
+        if not warn:
+            return None
+        return {"stage": None, "label": None, "rounds": max_rounds, "warn": True}
+
+    # archived：不贴当前阶段，但保留历史高轮次警告
+    if status == "archived":
+        return _warn_only()
+
     cr = gates.get("change_review") or None
     ts = gates.get("test") or None
     rv = gates.get("review") or None
@@ -560,12 +571,12 @@ def derive_stage_progress(gates, status=None):
             label = f"验收 {done}/{total}"
 
     if stage is None:
-        return None
+        return _warn_only()
     return {
         "stage": stage,
         "label": label,
         "rounds": rounds if stage != "acceptance" else max_rounds,
-        "warn": max_rounds >= STAGE_WARN_ROUNDS,
+        "warn": warn,
     }
 
 

@@ -388,15 +388,16 @@ class BoardCardProgressFixture(unittest.TestCase):
             encoding="utf-8",
         )
 
-    def write_change_review_gate(self, extra_rounds=0):
+    def write_change_review_gate(self, extra_rounds=0, verdict="不通过", open_p0=True):
         # rounds = 1 + 复审记录节数量；标题格式对齐 CHANGE_REVIEW_ROUND_RE
+        st = "open" if open_p0 else "verified"
         body = "---\ncreated: 2026-08-01\n---\n\n# change-review\n\n## Finding 台账\n\n"
         body += "| ID | 级别 | 摘要 | 位置 | 状态 | 根因 | 首见/最近轮 | 基线/修复 commit |\n"
         body += "|----|------|------|------|------|------|-------------|------------------|\n"
-        body += "| P0-1 | P0 | x | a | open | implementation | 1/1 | `abc` |\n\n"
+        body += f"| P0-1 | P0 | x | a | {st} | implementation | 1/1 | `abc` |\n\n"
         for i in range(extra_rounds):
             body += f"## 复审记录（第 {i + 2} 轮 · 增量 · 2026-08-0{i + 2}）\n\n内容\n\n"
-        body += "## 速报\n结论：不通过\n下一步：修\n"
+        body += f"## 速报\n结论：{verdict}\n下一步：修\n"
         (self.change_dir / "change-review.md").write_text(body, encoding="utf-8")
 
 
@@ -509,6 +510,36 @@ class StageProgressTests(BoardCardProgressFixture):
         rec = self.rec()
         sp = rec.get("stage_progress")
         self.assertIsInstance(sp, dict)
+        self.assertTrue(sp.get("warn"), sp)
+        self.assertGreaterEqual(sp.get("rounds") or 0, 3)
+
+    def test_stage_warn_survives_passed_gate_without_active_stage(self):
+        """门已通过、无当前阶段徽标时，轮次 ≥3 仍保留独立 warn。"""
+        self.write_change_review_gate(
+            extra_rounds=2, verdict="通过", open_p0=False,
+        )
+        rec = self.rec()
+        sp = rec.get("stage_progress")
+        self.assertIsInstance(sp, dict, sp)
+        self.assertIsNone(sp.get("stage"), sp)
+        self.assertFalse(sp.get("label"), sp)
+        self.assertTrue(sp.get("warn"), sp)
+        self.assertGreaterEqual(sp.get("rounds") or 0, 3)
+
+    def test_stage_warn_survives_archived_with_high_rounds(self):
+        """archived 不贴阶段，但历史高轮次仍触发警告。"""
+        self.write_change_review_gate(
+            extra_rounds=3, verdict="通过", open_p0=False,
+        )
+        body = (self.change_dir / "change.md").read_text(encoding="utf-8")
+        (self.change_dir / "change.md").write_text(
+            body.replace("status: implementing", "status: archived"),
+            encoding="utf-8",
+        )
+        rec = self.rec()
+        sp = rec.get("stage_progress")
+        self.assertIsInstance(sp, dict, sp)
+        self.assertIsNone(sp.get("stage"), sp)
         self.assertTrue(sp.get("warn"), sp)
         self.assertGreaterEqual(sp.get("rounds") or 0, 3)
 
