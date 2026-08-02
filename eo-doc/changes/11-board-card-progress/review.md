@@ -28,8 +28,8 @@ summary: >
 | P1-5 | P1 | 无活动阶段时丢失任一门 ≥3 轮的警告样式 | `cli/eo-board:562` | verified | implementation | 2/3 | `1ac1b1d` / `eba11da` |
 | P1-6 | P1 | Markdown 链接未限制协议，可生成可点击的 `javascript:` URL | `cli/eo-board:1370` | verified | implementation | 5/6 | `afc13fb` / `643e163` |
 | P1-7 | P1 | 第 2 批用户反馈未同步到 AC 唯一期望来源 | `eo-doc/changes/11-board-card-progress/change.md:22` | verified | requirement | 5/6 | `afc13fb` / `643e163` |
-| P1-8 | P1 | `有保留通过`/`fixed` 未决项被当前状态区块误报为无卡点 | `cli/eo-board:275` | fixed | implementation | 7/7 | `4505efb` / `4c72710` |
-| P1-9 | P1 | 第 3 批动态逆序与质量门当前状态反馈未同步到 AC | `eo-doc/changes/11-board-card-progress/change.md:22` | fixed | requirement | 7/7 | `4505efb` / `4c72710` |
+| P1-8 | P1 | `有保留通过`/`fixed` 未决项被当前状态区块误报为无卡点 | `cli/eo-board:275` | verified | implementation | 7/8 | `4505efb` / `4c72710` |
+| P1-9 | P1 | 第 3 批动态逆序与质量门当前状态反馈未同步到 AC | `eo-doc/changes/11-board-card-progress/change.md:22` | verified | requirement | 7/8 | `4505efb` / `4c72710` |
 | P2-1 | P2 | tab 的 ARIA/键盘语义未形成完整关联 | `cli/eo-board:1498` | open | implementation | 1/3 | `bd4856b` / ~ |
 
 ## 审查总结（首轮快照）
@@ -214,12 +214,19 @@ summary: >
 - 独立验证：`python3 -m unittest tests.test_board_card_progress -v` 为 22/22 通过；`git diff --check 4505efb^ 4505efb` 通过；补充 Python/Node 探针复现 P1-8 并确认 journal 窗口与转义路径。总控提供的全仓结果为 287/287 通过，现有新增测试仅覆盖“不通过 + open P0”，未锁住 P1-8 两个边界。
 - 本轮结论：有 P1 2 条；动态逆序、历史项当前性、空态与未决明细转义核对通过，无 P0。
 
+## 第 8 轮记录（revision 1 · 2026-08-02）
+
+- 审查基线：`4c72710`（`6cc613a` / `959fdab` 仅回填并校正 Finding 修复 commit，无业务代码）。
+- 核销：P1-8 verified——台账解析以 `open`/`fixed` 为未决集合，Python 端将有保留通过的 P1 推导为 `review P1×1` 并合成 `review 未决 · P1×1` blocker，JS 端只把完全通过视为 pass；open/fixed 两组 DOM 探针均显示阶段、卡点和未决标题。
+- 防回退：verified/waived + 完全通过均得到 `open_p1=0`、无 blocker/历史标题/活动 review 阶段；完全通过且历史轮次 ≥3 仍只保留 warn-only，P1-1/P1-5 当前性语义未回归。
+- 核销：P1-9 verified——AC-1 已写明质量门当前状态区块及无卡点空态，AC-3 已写明时间逆序与最新在上；均为第 3 批反馈的可观察口径精化，未改变原意图。
+- reopen：无；新增：无；`4c72710` 修复增量未发现新的 P0/P1/P2。
+- 独立验证：`python3 -m unittest tests.test_board_card_progress -v` 为 26/26 通过；`python3 -m unittest -q tests.test_eo_board_cache` 通过；`git diff --check 4c72710^ 4c72710` 通过；补充四状态 Python/Node 探针覆盖 open/fixed/verified/waived。总控提供的全仓结果为 291/291 通过。
+- 本轮结论：通过；台账无 `open`/`fixed` P0/P1，P1-3 为用户裁决 waived，P2-1 后置。
+
 ## 速报
 
-结论：有保留通过（P1 2 条）［第 7 轮 · revision 1 · 基线 `4505efb`］
-P1（应修）：
-1. `有保留通过`/`fixed` 未决项被当前状态区块误报为无卡点 — `cli/eo-board:275`
-2. 第 3 批动态逆序与质量门当前状态反馈未同步到 AC — `eo-doc/changes/11-board-card-progress/change.md:22`
+结论：通过（P0 0 条，P1 0 条，P2 1 条）［第 8 轮 · revision 1 · 基线 `4c72710`］
 P2（可后置）：
 1. tab 的 ARIA/键盘语义不完整 — `cli/eo-board:1667`
-下一步：回 /eo-implement 修复 P1-8/P1-9 后复审；light change 保持 `implementing`。
+下一步：代码审查已通过；light change 保持 `implementing`，等待 AC-1/2/4/5 manual 用户验收后走轻档完成门/归档收口。
