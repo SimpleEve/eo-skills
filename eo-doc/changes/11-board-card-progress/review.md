@@ -26,8 +26,8 @@ summary: >
 | P1-3 | P1 | 实施夹带 3 处未映射到 AC/决策的旧卡面行为变化 | `cli/eo-board:1527` | waived | implementation | 1/2 | `bd4856b` / —（用户裁决：总控已核实为既有工作区改动，非本 change 引入，保留） |
 | P1-4 | P1 | 测试 docstring 写入 AC 编号流程溯源 | `tests/test_board_card_progress.py:428` | verified | implementation | 1/2 | `bd4856b` / `1ac1b1d` |
 | P1-5 | P1 | 无活动阶段时丢失任一门 ≥3 轮的警告样式 | `cli/eo-board:562` | verified | implementation | 2/3 | `1ac1b1d` / `eba11da` |
-| P1-6 | P1 | Markdown 链接未限制协议，可生成可点击的 `javascript:` URL | `cli/eo-board:1370` | fixed | implementation | 5/5 | `afc13fb` / `643e163` |
-| P1-7 | P1 | 第 2 批用户反馈未同步到 AC 唯一期望来源 | `eo-doc/changes/11-board-card-progress/change.md:22` | fixed | requirement | 5/5 | `afc13fb` / `643e163` |
+| P1-6 | P1 | Markdown 链接未限制协议，可生成可点击的 `javascript:` URL | `cli/eo-board:1370` | verified | implementation | 5/6 | `afc13fb` / `643e163` |
+| P1-7 | P1 | 第 2 批用户反馈未同步到 AC 唯一期望来源 | `eo-doc/changes/11-board-card-progress/change.md:22` | verified | requirement | 5/6 | `afc13fb` / `643e163` |
 | P2-1 | P2 | tab 的 ARIA/键盘语义未形成完整关联 | `cli/eo-board:1498` | open | implementation | 1/3 | `bd4856b` / ~ |
 
 ## 审查总结（首轮快照）
@@ -173,12 +173,19 @@ summary: >
 - 独立验证：`python3 -m unittest tests.test_board_card_progress -v` 为 20/20 通过；双路径/转义/frontmatter/危险协议 Node 探针完成；`git diff --check afc13fb^ afc13fb` 通过。总控提供的全仓结果为 285/285 通过，但现有自动化未覆盖 P1-6 与 P1-7。
 - 本轮结论：有 P1 2 条；其余新增渲染路径、动态回退与 frontmatter 转义核对通过，无 P0。
 
+## 第 6 轮记录（revision 1 · 2026-08-02）
+
+- 审查基线：`643e163`（`015f362` 仅回填 Finding 修复 commit，无业务代码）。
+- 核销：P1-6 verified——`safeHref` 以正向白名单只放行 http/https/mailto；大小写协议正例保留，javascript/data/vbscript、相对/片段/protocol-relative、实体编码、百分号及真实空白变体均不生成 `<a>`，危险协议只剩可见文本，无 href 回退。
+- 测试复验：永久用例同时断言 https/mailto 正例、javascript/data 无 href 且危险 URL 不残留，真实锁住原缺陷；独立规范化探针补验大小写、空白、实体与相对路径边界。
+- 核销：P1-7 verified——AC-1 已写入完整 frontmatter 可观察结果，AC-2 已列明扩展结构和协议白名单；AC-3 继续明确 journal 条目正文走同一 `mdBlock`，期望来源已同步。
+- reopen：无；新增：无；`643e163` 修复增量未发现新的 P0/P1/P2。
+- 独立验证：`python3 -m unittest tests.test_board_card_progress -v` 为 20/20 通过；`git diff --check 643e163^ 643e163` 通过。
+- 本轮结论：通过；台账无 `open`/`fixed` P0/P1，P1-3 为用户裁决 waived，P2-1 后置。
+
 ## 速报
 
-结论：有保留通过（P1 2 条）［第 5 轮 · revision 1 · 基线 `afc13fb`］
-P1（应修）：
-1. Markdown 链接未限制协议，可生成可点击的 `javascript:` URL — `cli/eo-board:1370`
-2. 第 2 批用户反馈未同步到 AC 唯一期望来源 — `eo-doc/changes/11-board-card-progress/change.md:22`
+结论：通过（P0 0 条，P1 0 条，P2 1 条）［第 6 轮 · revision 1 · 基线 `643e163`］
 P2（可后置）：
-1. tab 的 ARIA/键盘语义不完整 — `cli/eo-board:1654`
-下一步：回 `/eo-implement` 修复 P1-6 并同步 P1-7 后复审；light change 保持 `implementing`。
+1. tab 的 ARIA/键盘语义不完整 — `cli/eo-board:1667`
+下一步：代码审查已通过；light change 保持 `implementing`，等待 AC-1/2/4/5 manual 用户验收后走轻档完成门/归档收口。
