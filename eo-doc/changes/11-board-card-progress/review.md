@@ -26,6 +26,8 @@ summary: >
 | P1-3 | P1 | 实施夹带 3 处未映射到 AC/决策的旧卡面行为变化 | `cli/eo-board:1527` | waived | implementation | 1/2 | `bd4856b` / —（用户裁决：总控已核实为既有工作区改动，非本 change 引入，保留） |
 | P1-4 | P1 | 测试 docstring 写入 AC 编号流程溯源 | `tests/test_board_card_progress.py:428` | verified | implementation | 1/2 | `bd4856b` / `1ac1b1d` |
 | P1-5 | P1 | 无活动阶段时丢失任一门 ≥3 轮的警告样式 | `cli/eo-board:562` | verified | implementation | 2/3 | `1ac1b1d` / `eba11da` |
+| P1-6 | P1 | Markdown 链接未限制协议，可生成可点击的 `javascript:` URL | `cli/eo-board:1370` | open | implementation | 5/5 | `afc13fb` / ~ |
+| P1-7 | P1 | 第 2 批用户反馈未同步到 AC 唯一期望来源 | `eo-doc/changes/11-board-card-progress/change.md:22` | open | requirement | 5/5 | `afc13fb` / ~ |
 | P2-1 | P2 | tab 的 ARIA/键盘语义未形成完整关联 | `cli/eo-board:1498` | open | implementation | 1/3 | `bd4856b` / ~ |
 
 ## 审查总结（首轮快照）
@@ -146,12 +148,37 @@ summary: >
 
 - 本轮结论：通过——`e9c8835` 的动态/全文均复用先 `esc()` 后白名单转换的既有 `mdBlock`，无 XSS/转义回退且两路径一致；AC-2/AC-3 仅精化已钉定的迷你 markdown 呈现口径，未改变意图，无新增 P0/P1。
 
+## 第 5 轮记录（revision 1 · 2026-08-02）
+
+- 审查基线：`afc13fb`。
+- 安全核对：`mdBlock` 仍在分支识别前统一 `esc(raw)`；标题、表格单元格、代码块、列表、checkbox 与 hr 未把实体还原成标签，动态/全文对同一输入复用相同渲染结果；frontmatter 的键和值均在拼接前 `esc()`，恶意键值探针未形成真实标签。
+- 新增：[P1-6] 链接 URL 无协议白名单，可生成 `javascript:` href；[P1-7] 完整 frontmatter 与扩展语法反馈未同步到 `change.md` AC 唯一期望来源。
+
+### [P1-6] Markdown 链接允许危险协议
+
+- **类型**：安全漏洞
+- **位置**：`cli/eo-board:1370`；缺口测试 `tests/test_board_card_progress.py:662`
+- **描述**：`applyInline` 把转义后的 URL 直接插入 `href`，只做了 HTML 字符转义，没有限制 URL scheme。独立探针输入 `[run](javascript:document.body.dataset.pwn=1)`，实际得到 `<a href="javascript:document.body.dataset.pwn=1" ...>`；`rel="noopener noreferrer"` 不会阻止同页 `javascript:` 执行。现有 XSS 用例只验证 `<script>` 标签变实体，并以一个 `https:` 正例覆盖链接，未覆盖危险协议。
+- **影响**：change 全文或 journal 条目中的恶意链接可在用户点击后于看板页面上下文执行脚本；虽需点击且服务仅监听本机，仍突破“安全迷你 markdown”的边界。
+- **建议**：对协议做明确白名单并将不允许的目标降级为纯文本；至少补 `javascript:`、`data:` 及大小写变体的负向回归，同时保留 `https:` 与约定内相对链接正例。
+
+### [P1-7] 第 2 批反馈未进入 AC 单一来源
+
+- **类型**：验收覆盖缺口
+- **位置**：`eo-doc/changes/11-board-card-progress/change.md:22`（AC-1~3）
+- **描述**：`afc13fb` 只在 review/test 末尾追加“完整 frontmatter + mdBlock 扩能”记录，`change.md` 未变化；现有 AC-1 只要求五 tab 与原内容不丢，AC-2/3 只写既有 mdBlock、列表/强调与 journal 可读，均不能独立验收 frontmatter 键值和标题/表格/代码块/checkbox/有序列表/hr/链接口径。
+- **影响**：AC 作为期望行为唯一声明无法约束本次用户反馈，后续轻档完成门与回归可能在丢失这些能力时仍判通过。
+- **建议**：就地精化 AC-1 的概览 frontmatter 口径，并在 AC-2/3 写清扩展结构与动态/全文共用渲染器的可观察结果；review/test 重跑记录保留为证据而不替代 AC。
+
+- 独立验证：`python3 -m unittest tests.test_board_card_progress -v` 为 20/20 通过；双路径/转义/frontmatter/危险协议 Node 探针完成；`git diff --check afc13fb^ afc13fb` 通过。总控提供的全仓结果为 285/285 通过，但现有自动化未覆盖 P1-6 与 P1-7。
+- 本轮结论：有 P1 2 条；其余新增渲染路径、动态回退与 frontmatter 转义核对通过，无 P0。
+
 ## 速报
 
-结论：通过（P0 0 条，P1 0 条，P2 1 条）［第 4 轮 · revision 1 · 基线 `e9c8835`］
+结论：有保留通过（P1 2 条）［第 5 轮 · revision 1 · 基线 `afc13fb`］
+P1（应修）：
+1. Markdown 链接未限制协议，可生成可点击的 `javascript:` URL — `cli/eo-board:1370`
+2. 第 2 批用户反馈未同步到 AC 唯一期望来源 — `eo-doc/changes/11-board-card-progress/change.md:22`
 P2（可后置）：
-1. tab 的 ARIA/键盘语义不完整 — `cli/eo-board:1498`
-下一步：代码审查已通过；light change 保持 `implementing`，等待 AC-1/2/4/5 manual 用户验收后走轻档完成门/归档收口。
-
-### 验收反馈就地精化 · 2026-08-02（第 2 批）
-概览 tab 展示完整 frontmatter 键值；`mdBlock` 扩能（#~#### / 表格 / fenced code / 有序无序 / checkbox / hr / 链接）；XSS 仍先 esc 后白名单。见 implement commit。
+1. tab 的 ARIA/键盘语义不完整 — `cli/eo-board:1654`
+下一步：回 `/eo-implement` 修复 P1-6 并同步 P1-7 后复审；light change 保持 `implementing`。
