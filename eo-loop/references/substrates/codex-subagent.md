@@ -24,7 +24,7 @@ Codex 侧无完成自动唤醒时，总控主动轮询**产物**（frontmatter�
 
 ## 回收
 
-同 SKILL.md ③：读 change.md frontmatter 与 review/test 台账核验，不采信文字汇报；同时核证据角色、基线与节点契约要求的独立报告。Unknown B / C、证据探测后仍未知只触发停门；疑似判据违规但无独立结论时，按 SKILL.md 的 owner 规则派 eo-review / eo-test，总控不兼任实施、测试、审查。
+完成消息只用于唤醒总控和定位产物。正常路径按 SKILL.md ③ 读取 frontmatter 当前状态、预期工件指针、当前基线与最新结构化处置后直接路由，不打开完整 diff、不抽查或复做节点内容。只有这些事实缺失 / 冲突、出现可观察越界、计划外判据变化、Unknown B / C 或证据探测后仍未知等客观风险信号时，才针对对应异常升级；需要实质判断就派 eo-review / eo-test，总控不兼任实施、测试、审查。
 
 ## 已知陷阱
 

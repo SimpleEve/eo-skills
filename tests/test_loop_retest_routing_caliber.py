@@ -61,7 +61,7 @@ class TestAC1ReviewFixMayReuseEvidence(unittest.TestCase):
         self.assertIn("测试证据按上方三种方式之一闭合", opening)
 
     def test_matching_test_round_consumes_retest_without_a_loop(self):
-        dispatch = section(LOOP, "**③ 派发与校验裁决**", "**④ 收敛判定**")
+        dispatch = section(LOOP, "**③ 派发、路由与风险升级**", "**④ 收敛判定**")
         test_delivery = line_containing(dispatch, "Test 交付也按当前基线校验")
         self.assertIn("`触发来源：Review 第 R 轮 @ H`", test_delivery)
         self.assertIn("只有后续通过的 Test 轮明确写", test_delivery)
@@ -118,8 +118,8 @@ class TestAC1ReviewFixMayReuseEvidence(unittest.TestCase):
                 self.assertIn(marker, speed)
 
     def test_loop_reuse_targets_latest_passing_test_in_current_revision(self):
-        dispatch = section(LOOP, "**③ 派发与校验裁决**", "**④ 收敛判定**")
-        reuse = line_containing(dispatch, "Review 修复后的免测判定")
+        dispatch = section(LOOP, "**③ 派发、路由与风险升级**", "**④ 收敛判定**")
+        reuse = line_containing(dispatch, "Review 修复后的免测路由")
         self.assertIn("当前 `plan_revision`", reuse)
         self.assertIn("精确对应同一 `test.md` 中当前 revision 最新的通过轮", reuse)
         self.assertIn("Test 结构/定向来源链/范围覆盖校验", reuse)
@@ -224,7 +224,7 @@ class TestAC3FullRetestAndFailClosed(unittest.TestCase):
         self.assertIn("直接升级完整复验", review_retest_line)
 
     def test_missing_or_ambiguous_review_disposition_retests(self):
-        dispatch = section(LOOP, "**③ 派发与校验裁决**", "**④ 收敛判定**")
+        dispatch = section(LOOP, "**③ 派发、路由与风险升级**", "**④ 收敛判定**")
         self.assertIn("字段缺失/含糊都不能放行", dispatch)
         self.assertIn("后一律按 `复验` 路由", dispatch)
         self.assertIn("影响不清即签复验", REVIEW)
@@ -323,7 +323,7 @@ class TestAC5ArchiveEvidenceFreshness(unittest.TestCase):
         gate = section(full_gate, "**Test 证据门", "3. **验收清单全勾")
         self.assertIn("`test.md` 不存在时保持既有语义", gate)
         self.assertIn("未勾 auto-heavy AC 门", gate)
-        dispatch = section(LOOP, "**③ 派发与校验裁决**", "**④ 收敛判定**")
+        dispatch = section(LOOP, "**③ 派发、路由与风险升级**", "**④ 收敛判定**")
         self.assertIn("从未运行 Test 且没有待验 heavy AC", dispatch)
 
 
@@ -351,7 +351,7 @@ class TestUnifiedDeliveryBaseline(unittest.TestCase):
         self.assertIn("`B` 是本轮最终执行锁定的 `H`", report_rule)
 
     def test_test_asset_commit_forces_fresh_review(self):
-        dispatch = section(LOOP, "**③ 派发与校验裁决**", "**④ 收敛判定**")
+        dispatch = section(LOOP, "**③ 派发、路由与风险升级**", "**④ 收敛判定**")
         test_delivery = line_containing(dispatch, "Test 交付也按当前基线校验")
         self.assertIn("测试资产", test_delivery)
         self.assertIn("先以 `[<change-id>]` 提交", test_delivery)
@@ -376,7 +376,7 @@ class TestUnifiedDeliveryBaseline(unittest.TestCase):
         self.assertIn("revision 不等于当前 `plan_revision`", dimension)
         self.assertIn("直接签 `复验`", dimension)
         self.assertIn("不得仅凭 `T == H` 沿用", dimension)
-        dispatch = section(LOOP, "**③ 派发与校验裁决**", "**④ 收敛判定**")
+        dispatch = section(LOOP, "**③ 派发、路由与风险升级**", "**④ 收敛判定**")
         test_delivery = line_containing(dispatch, "Test 交付也按当前基线校验")
         self.assertIn("当前 `plan_revision` 的结构化 Test 轮次", test_delivery)
         for marker in (

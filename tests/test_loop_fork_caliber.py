@@ -48,10 +48,10 @@ class TestAC1DispatchPromptUnknownAuthority(unittest.TestCase):
 
 
 class TestAC2CoordinatorRoutesUnknowns(unittest.TestCase):
-    """③派发与校验裁决：A 留痕、B 合并选择、C 立即上交。"""
+    """③派发、路由与风险升级：A 留痕、B 合并选择、C 立即上交。"""
 
     def setUp(self):
-        self.sec = section(SKILL, "**③ 派发与校验裁决**", "**④ 收敛判定**")
+        self.sec = section(SKILL, "**③ 派发、路由与风险升级**", "**④ 收敛判定**")
 
     def test_batched_closed_choice_to_user(self):
         self.assertIn("A 类随交付记录只作透明留痕", self.sec)

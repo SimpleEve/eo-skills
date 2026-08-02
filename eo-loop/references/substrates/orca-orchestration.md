@@ -30,7 +30,7 @@ updated: 2026-07-28
 
 ## 回收
 
-`worker_done` 的 payload 只当线索；证据核验一律读 change.md frontmatter 与 review/test 台账，并按 SKILL.md 核证据角色、基线与节点契约要求的独立报告。review-only 的 `worker_done` 不授权总控动手修——修复派回 eo-implement 模式二；Unknown B / C 或证据探测失败同样只停门。疑似判据违规但无独立结论时，按 SKILL.md 的 owner 规则派 eo-review / eo-test。
+`worker_done` 只用于唤醒总控和定位产物。正常路径按 SKILL.md ③ 读取 frontmatter 当前状态、预期工件指针、当前基线与最新结构化处置后直接路由，不打开完整 diff、不抽查或复做节点内容。只有这些事实缺失 / 冲突、出现可观察越界、计划外判据变化、Unknown B / C 或证据探测失败等客观风险信号时，才针对对应异常升级；review-only 的 `worker_done` 不授权总控动手修，修复派回 eo-implement 模式二，需要实质判断则按 owner 规则派 eo-review / eo-test。
 
 ## 已知陷阱
 

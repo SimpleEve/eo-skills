@@ -118,29 +118,29 @@ class TestUnknownAuthorityAndTrade(unittest.TestCase):
         self.assertIn("../eo-shared/goal-contract.md", self.guard)
 
 
-class TestCollectionIntegrity(unittest.TestCase):
+class TestRiskTriggeredRouting(unittest.TestCase):
     def setUp(self):
         self.dispatch = section(
-            SKILL, "**③ 派发与校验裁决**", "**④ 收敛判定**"
+            SKILL, "**③ 派发、路由与风险升级**", "**④ 收敛判定**"
         )
 
-    def test_integrity_checks_cover_common_gaming(self):
+    def test_normal_collection_only_consumes_routing_facts(self):
         for marker in (
-            "自检不得冒充",
-            "弱化测试 / judge",
-            "样例硬编码",
-            "吞错",
-            "包装成 PASS",
+            "默认只读取",
+            "路由事实",
+            "不是对 worker 内容再做一轮核查",
+            "不打开完整 diff",
+            "无风险即推进",
         ):
             self.assertIn(marker, self.dispatch)
 
-    def test_rejection_does_not_expand_coordinator_role(self):
+    def test_risk_upgrade_does_not_expand_coordinator_role(self):
+        self.assertIn("可指认的风险信号", self.dispatch)
+        self.assertIn("不扩张为全面核查", self.dispatch)
         self.assertIn("总控不得", self.dispatch)
         for role in ("亲自实施", "执行 eo-test", "兼任 eo-review"):
             self.assertIn(role, self.dispatch)
-        self.assertIn("默认派独立 eo-review 审判据与 diff", self.dispatch)
-        self.assertIn("执行证据时派 eo-test", self.dispatch)
-        self.assertIn("两类同时存在可在同一基线上并行", self.dispatch)
+        self.assertIn("派对应有权节点", self.dispatch)
 
     def test_substrate_template_carries_but_does_not_store_guard(self):
         dispatch = section(TEMPLATE, "## 派发", "## 等待与观测")
