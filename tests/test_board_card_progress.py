@@ -147,6 +147,137 @@ process.stdout.write(JSON.stringify({
 }));
 """
 
+# 刷新保留活动 tab：用可追踪 classList 的轻量 DOM，覆盖 openDetail(isRefresh) 路径。
+NODE_TAB_RESTORE_RUNNER = r"""
+const fs = require('fs');
+const projectJs = fs.readFileSync(process.argv[2], 'utf8');
+const payload = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+const markup = fs.readFileSync(process.argv[4], 'utf8');
+
+function classList(init) {
+  const s = new Set(init || []);
+  return {
+    add(c) { s.add(c); },
+    remove(c) { s.delete(c); },
+    toggle(c, on) {
+      if (on === undefined) { s.has(c) ? s.delete(c) : s.add(c); }
+      else if (on) s.add(c); else s.delete(c);
+    },
+    contains(c) { return s.has(c); },
+  };
+}
+function el(name, attrs) {
+  return {
+    name, attrs: Object.assign({}, attrs || {}), style: {}, disabled: false,
+    textContent: '', _html: '', _listeners: {},
+    classList: classList(),
+    children: [],
+    querySelector(sel) {
+      if (sel === '.detail-tab.active') {
+        const tabs = this.querySelectorAll('.detail-tab');
+        return tabs.find(t => t.classList.contains('active')) || null;
+      }
+      if (sel && sel.startsWith('#')) return this._ids && this._ids[sel.slice(1)] || null;
+      return null;
+    },
+    querySelectorAll(sel) {
+      if (sel === '.detail-tab') return this._tabs || [];
+      if (sel === '.detail-pane') return this._panes || [];
+      if (sel === '.card[data-detail]') return this._cards || [];
+      return [];
+    },
+    addEventListener(type, fn) { this._listeners[type] = fn; },
+    setAttribute(k, v) { this.attrs[k] = v; },
+    getAttribute(k) { return this.attrs[k] != null ? this.attrs[k] : null; },
+    focus() {},
+    get innerHTML() { return this._html; },
+    set innerHTML(v) {
+      this._html = String(v || '');
+      // 重建 tab/pane 节点以模拟真实 DOM 替换
+      const tabIds = [...this._html.matchAll(/data-tab="([^"]+)"/g)].map(m => m[1]);
+      const paneIds = [...this._html.matchAll(/data-pane="([^"]+)"/g)].map(m => m[1]);
+      this._tabs = tabIds.map((id, i) => {
+        const t = el('button', { 'data-tab': id, 'aria-selected': i === 0 ? 'true' : 'false' });
+        t.classList = classList(i === 0 ? ['detail-tab', 'active'] : ['detail-tab']);
+        return t;
+      });
+      this._panes = paneIds.map((id, i) => {
+        const p = el('div', { 'data-pane': id });
+        p.classList = classList(i === 0 ? ['detail-pane', 'active'] : ['detail-pane']);
+        return p;
+      });
+    },
+  };
+}
+
+const els = {};
+const byId = (id) => els[id] || (els[id] = el(id));
+byId('eo-project-markup').textContent = markup;
+byId('eo-project-css').textContent = '';
+
+const root = el('root');
+const pBody = el('p-body');
+const pBoard = el('p-board');
+const pChips = el('p-chips');
+const pTitle = el('p-title');
+const pClose = el('p-close');
+const pDrawer = el('p-drawer');
+const pBackdrop = el('p-backdrop');
+const pTopbar = el('p-topbar');
+const pStrip = el('p-strip');
+const pWarn = el('p-warn');
+const pSrc = el('p-src-toggle');
+root.querySelector = (sel) => ({
+  '#p-drawer': pDrawer, '#p-backdrop': pBackdrop, '#p-body': pBody,
+  '#p-chips': pChips, '#p-title': pTitle, '#p-close': pClose,
+  '#p-board': pBoard, '#p-topbar': pTopbar, '#p-strip': pStrip, '#p-warn': pWarn,
+  '#p-src-toggle': pSrc,
+}[sel] || el(sel));
+root.querySelectorAll = (sel) => sel === '.card[data-detail]' ? (root._cards || []) : [];
+
+globalThis.document = {
+  getElementById: byId,
+  createElement: () => el('created'),
+  head: { appendChild() {} },
+  documentElement: { classList: classList() },
+  addEventListener() {}, removeEventListener() {},
+  activeElement: null,
+};
+globalThis.window = {};
+globalThis.setInterval = () => 0;
+globalThis.clearInterval = () => {};
+(0, eval)(projectJs);
+const api = window.EO_PROJECT;
+api.mount({ root, data: payload.data, dataUrl: '/data.json', homeUrl: '' });
+const m = /data-detail="(ch:[^"]+)"/.exec(pBoard.innerHTML || '');
+const key = m && m[1];
+if (!key || !api.__test) {
+  process.stdout.write(JSON.stringify({ error: 'no key/hooks', board: (pBoard.innerHTML || '').slice(0, 200) }));
+  process.exit(0);
+}
+api.__test.openDetail(key, false);
+// 用户点「动态」
+const journalTab = (pBody._tabs || []).find(t => t.getAttribute('data-tab') === 'journal');
+if (!journalTab) {
+  process.stdout.write(JSON.stringify({ error: 'no journal tab', detail: pBody.innerHTML.slice(0, 200) }));
+  process.exit(0);
+}
+journalTab._listeners.click && journalTab._listeners.click();
+const before = (pBody._tabs || []).find(t => t.classList.contains('active'));
+const beforeId = before && before.getAttribute('data-tab');
+// 模拟 serve 热刷新
+api.__test.openDetail(key, true);
+const after = (pBody._tabs || []).find(t => t.classList.contains('active'));
+const afterId = after && after.getAttribute('data-tab');
+const afterPane = (pBody._panes || []).find(p => p.classList.contains('active'));
+process.stdout.write(JSON.stringify({
+  beforeTab: beforeId,
+  afterTab: afterId,
+  afterPane: afterPane && afterPane.getAttribute('data-pane'),
+  ok: beforeId === 'journal' && afterId === 'journal',
+}));
+"""
+
 
 class BoardCardProgressFixture(unittest.TestCase):
     def setUp(self):
@@ -229,14 +360,31 @@ class BoardCardProgressFixture(unittest.TestCase):
             encoding="utf-8",
         )
 
-    def write_review_gate(self, p0=1, rounds_hint=1):
+    def write_review_gate(self, p0=1, rounds_hint=1, verdict="不通过", open_p0=None):
         created = "2026-08-01"
         updated = "2026-08-02" if rounds_hint >= 2 else "2026-08-01"
         headings = "".join(f"### [P0-{i}] 问题{i}\n\n" for i in range(1, p0 + 1))
+        if open_p0 is None:
+            open_p0 = p0 if verdict == "不通过" else 0
+        rows = ""
+        for i in range(1, p0 + 1):
+            st = "open" if i <= open_p0 else "verified"
+            rows += f"| P0-{i} | P0 | 问题{i} | a | {st} | implementation | 1/1 | `abc` |\n"
         (self.change_dir / "review.md").write_text(
             f"---\ncreated: {created}\nupdated: {updated}\n---\n\n"
-            f"# review\n\n{headings}"
-            "## 速报\n结论：不通过\n下一步：修 P0\n",
+            f"# review\n\n## Finding 台账\n\n"
+            "| ID | 级别 | 摘要 | 位置 | 状态 | 根因 | 首见/最近轮 | 基线/修复 commit |\n"
+            "|----|------|------|------|------|------|-------------|------------------|\n"
+            f"{rows}\n"
+            f"{headings}"
+            f"## 速报\n结论：{verdict}\n下一步：修 P0\n",
+            encoding="utf-8",
+        )
+
+    def write_acceptance(self, unchecked=2):
+        lines = "".join("- [ ] 通过：项\n" for _ in range(unchecked))
+        (self.change_dir / "acceptance.md").write_text(
+            f"# 人工验收单\n\n{lines}",
             encoding="utf-8",
         )
 
@@ -323,6 +471,37 @@ class StageProgressTests(BoardCardProgressFixture):
         self.assertEqual(sp.get("stage"), "review")
         self.assertRegex(sp.get("label") or "", r"review")
         self.assertIn("P0", sp.get("label") or "")
+
+    def test_stage_progress_ignores_historical_p0_when_review_passed(self):
+        """速报已通过时不得把历史 P0 标题当成当前阻塞。"""
+        self.write_review_gate(p0=1, rounds_hint=1, verdict="通过（P0 0 条）", open_p0=0)
+        rec = self.rec()
+        sp = rec.get("stage_progress")
+        if sp is not None:
+            self.assertNotIn("P0", sp.get("label") or "", sp)
+            self.assertNotEqual(sp.get("stage"), "review")
+
+    def test_stage_progress_prefers_failing_test_over_unchecked_acceptance(self):
+        """implementing + 未勾 acceptance 不得盖住失败的 test。"""
+        self.write_test_gate(rounds_hint=2, fail=True)
+        self.write_acceptance(unchecked=2)
+        rec = self.rec()
+        self.assertEqual(rec.get("status"), "implementing")
+        sp = rec.get("stage_progress")
+        self.assertEqual(sp.get("stage"), "test", sp)
+
+    def test_stage_progress_acceptance_only_when_reviewed(self):
+        self.write_acceptance(unchecked=1)
+        # 改 status 为 reviewed
+        body = (self.change_dir / "change.md").read_text(encoding="utf-8")
+        (self.change_dir / "change.md").write_text(
+            body.replace("status: implementing", "status: reviewed"),
+            encoding="utf-8",
+        )
+        rec = self.rec()
+        sp = rec.get("stage_progress")
+        self.assertEqual(sp.get("stage"), "acceptance", sp)
+        self.assertIn("验收", sp.get("label") or "")
 
     def test_stage_warn_when_any_gate_rounds_ge_3(self):
         # change-review：首轮 + 2 条复审记录 = 3 轮
@@ -424,8 +603,47 @@ class ProjectJsRenderTests(BoardCardProgressFixture):
             card,
         )
 
+    def _extract_project_assets(self, html):
+        m_js = re.search(
+            r'<script>\s*(window\.EO_PROJECT[\s\S]*?)</script>',
+            html,
+        )
+        self.assertIsNotNone(m_js)
+        m_markup = re.search(
+            r'id="eo-project-markup">([\s\S]*?)</script>',
+            html,
+        )
+        self.assertIsNotNone(m_markup)
+        return m_js.group(1), m_markup.group(1)
+
+    def test_active_tab_survives_detail_refresh(self):
+        """serve 热刷新重建详情后仍停留在用户选中的 tab（目标不存在回概览）。"""
+        self.write_journal("• 12:00 「窗」\n\n一句定性：没有需要你裁决的事项。\n")
+        data = self.build()
+        html = self.board.render_html(data)
+        project_js, markup = self._extract_project_assets(html)
+        runner = self.root / "tab-restore-runner.js"
+        runner.write_text(NODE_TAB_RESTORE_RUNNER, encoding="utf-8")
+        js_file = self.root / "project.js"
+        js_file.write_text(project_js, encoding="utf-8")
+        data_file = self.root / "payload.json"
+        data_file.write_text(json.dumps({"data": data}), encoding="utf-8")
+        markup_file = self.root / "markup.html"
+        markup_file.write_text(markup, encoding="utf-8")
+        proc = subprocess.run(
+            [NODE, str(runner), str(js_file), str(data_file), str(markup_file)],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        result = json.loads(proc.stdout)
+        self.assertTrue(result.get("ok"), result)
+        self.assertEqual(result.get("beforeTab"), "journal")
+        self.assertEqual(result.get("afterTab"), "journal")
+        self.assertEqual(result.get("afterPane"), "journal")
+
     def test_journal_absent_renders_empty_hint_in_detail(self):
-        """AC-3：无 journal 时动态 pane 出空态提示，且五 tab 仍在。"""
+        """无 journal 时动态 pane 出空态提示，且五 tab 仍在。"""
         data = self.build()
         html = self.board.render_html(data)
         m_js = re.search(

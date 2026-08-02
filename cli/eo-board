@@ -258,6 +258,8 @@ def parse_review_gate(path, worktree_path, rel_path, warnings):
         "p1": len(p1_titles),
         "p2": len(p2_titles),
         "p0_titles": p0_titles[:3],
+        # 卡面阶段只看台账未决；详情抽屉仍可用历史标题计数
+        "open_p0": parse_finding_ledger_open_p0(body),
         "date": fm.get("updated") or fm.get("created"),
     }
 
@@ -440,13 +442,17 @@ def parse_journal_entries(text, limit=JOURNAL_RECENT_LIMIT):
     return entries
 
 
-def derive_stage_progress(gates):
-    """从 gates 推导卡面阶段徽标：当前门 + 轮次 + 任一门 ≥3 警告。
+def _gate_verdict_pass(g):
+    v = (g or {}).get("verdict") or ""
+    return "通过" in v and "不通过" not in v
 
-    管道优先级（后者覆盖前者）：change_review → test → review → acceptance(未勾)。
-    无任何门时返回 None。
-    """
-    gates = gates or {}
+
+def _gate_verdict_fail(g):
+    v = (g or {}).get("verdict") or ""
+    return "不通过" in v
+
+
+def _max_gate_rounds(gates):
     max_rounds = 0
     for key, field in (
         ("change_review", "rounds"),
@@ -457,42 +463,101 @@ def derive_stage_progress(gates):
         r = g.get(field)
         if isinstance(r, int) and r > max_rounds:
             max_rounds = r
+    return max_rounds
+
+
+def _review_open_p0(rv):
+    """未决 P0：优先台账 open；速报已通过时强制 0，避免历史标题冒充当前阻塞。"""
+    if not rv:
+        return 0
+    if _gate_verdict_pass(rv):
+        return 0
+    if "open_p0" in rv and rv.get("open_p0") is not None:
+        return int(rv.get("open_p0") or 0)
+    if _gate_verdict_fail(rv):
+        return int(rv.get("p0") or 0)
+    return 0
+
+
+def derive_stage_progress(gates, status=None):
+    """从 gates + status 推导卡面「当前」阶段徽标。
+
+    只展示仍未决的门（速报不通过 / 台账 open / FAIL 未过），不把已通过的历史报告
+    或历史 P0 标题当成当前状态。acceptance 仅在 status=reviewed 时覆盖。
+    """
+    gates = gates or {}
+    status = (status or "").strip()
+    if status == "archived":
+        return None
+
+    max_rounds = _max_gate_rounds(gates)
+    cr = gates.get("change_review") or None
+    ts = gates.get("test") or None
+    rv = gates.get("review") or None
+    acc = gates.get("acceptance") or None
+
+    cr_open = int((cr or {}).get("open_p0") or 0) if cr else 0
+    rv_open = _review_open_p0(rv)
+
+    cr_active = bool(cr) and (cr_open > 0 or _gate_verdict_fail(cr))
+    ts_active = bool(ts) and (
+        _gate_verdict_fail(ts)
+        or (not _gate_verdict_pass(ts) and int((ts or {}).get("fail_count") or 0) > 0)
+    )
+    rv_active = bool(rv) and (_gate_verdict_fail(rv) or rv_open > 0)
+    # 人工验收只在流程真正进入 reviewed 后才抢占徽标
+    acc_active = bool(acc) and bool(acc.get("unchecked")) and status == "reviewed"
 
     stage = label = None
     rounds = 0
 
-    cr = gates.get("change_review")
-    if cr:
-        rounds = int(cr.get("rounds") or 1)
-        stage = "change_review"
-        label = f"change-review 第{rounds}轮"
-        if cr.get("open_p0"):
-            label += f" P0×{cr['open_p0']}"
-
-    ts = gates.get("test")
-    if ts:
-        rounds = int(ts.get("rounds_approx") or 1)
-        stage = "test"
-        label = f"test ≈{rounds} 轮"
-        if ts.get("fail_count"):
-            label += f" FAIL×{ts['fail_count']}"
-
-    rv = gates.get("review")
-    if rv:
-        rounds = int(rv.get("rounds_approx") or 1)
+    # 未决阻塞优先：后段门 > 前段门；验收仅 reviewed
+    if rv_active:
         stage = "review"
-        if rv.get("p0"):
-            label = f"review P0×{rv['p0']}"
-        else:
-            label = f"review ≈{rounds} 轮"
-
-    acc = gates.get("acceptance")
-    if acc and acc.get("unchecked"):
+        rounds = int(rv.get("rounds_approx") or 1)
+        label = f"review P0×{rv_open}" if rv_open > 0 else f"review ≈{rounds} 轮"
+    elif ts_active:
+        stage = "test"
+        rounds = int(ts.get("rounds_approx") or 1)
+        label = f"test ≈{rounds} 轮"
+        fails = int(ts.get("fail_count") or 0)
+        if fails:
+            label += f" FAIL×{fails}"
+    elif cr_active:
+        stage = "change_review"
+        rounds = int(cr.get("rounds") or 1)
+        label = f"change-review 第{rounds}轮"
+        if cr_open:
+            label += f" P0×{cr_open}"
+    elif acc_active:
         stage = "acceptance"
         total = acc.get("total") or 0
         done = total - (acc.get("unchecked") or 0)
-        rounds = max_rounds or 0
+        rounds = max_rounds
         label = f"验收 {done}/{total}"
+    else:
+        # 无明确阻塞：按 status 给「进行中」门（速报已通过的不展示）
+        if status == "implementing":
+            if rv and not _gate_verdict_pass(rv) and not _gate_verdict_fail(rv):
+                stage, rounds = "review", int(rv.get("rounds_approx") or 1)
+                label = f"review ≈{rounds} 轮"
+            elif ts and not _gate_verdict_pass(ts) and not _gate_verdict_fail(ts):
+                stage, rounds = "test", int(ts.get("rounds_approx") or 1)
+                label = f"test ≈{rounds} 轮"
+            elif cr and not _gate_verdict_pass(cr) and not _gate_verdict_fail(cr):
+                stage, rounds = "change_review", int(cr.get("rounds") or 1)
+                label = f"change-review 第{rounds}轮"
+        elif status in ("draft", "confirmed") and cr and not _gate_verdict_pass(cr):
+            stage, rounds = "change_review", int(cr.get("rounds") or 1)
+            label = f"change-review 第{rounds}轮"
+            if cr_open:
+                label += f" P0×{cr_open}"
+        elif status == "reviewed" and acc and acc.get("unchecked"):
+            stage = "acceptance"
+            total = acc.get("total") or 0
+            done = total - (acc.get("unchecked") or 0)
+            rounds = max_rounds
+            label = f"验收 {done}/{total}"
 
     if stage is None:
         return None
@@ -529,7 +594,7 @@ def attach_card_progress(rec, warnings):
         rec["journal_entries"] = None
         rec["journal_path"] = None
 
-    rec["stage_progress"] = derive_stage_progress(rec.get("gates"))
+    rec["stage_progress"] = derive_stage_progress(rec.get("gates"), rec.get("status"))
 
 
 def compute_monthly_direct_commits(anchor_dir):
@@ -1638,11 +1703,16 @@ function buildBoard() {
 
 var lastFocus = null;
 
-function bindDetailTabs(container) {
+function bindDetailTabs(container, initialTab) {
   var tabs = container.querySelectorAll('.detail-tab');
   var panes = container.querySelectorAll('.detail-pane');
   if (!tabs.length) return;
   function activate(id) {
+    var exists = false;
+    for (var t = 0; t < tabs.length; t++) {
+      if (tabs[t].getAttribute('data-tab') === id) { exists = true; break; }
+    }
+    if (!exists) id = 'overview';
     for (var i = 0; i < tabs.length; i++) {
       var on = tabs[i].getAttribute('data-tab') === id;
       tabs[i].classList.toggle('active', on);
@@ -1657,20 +1727,26 @@ function bindDetailTabs(container) {
       tab.addEventListener('click', function () { activate(tab.getAttribute('data-tab')); });
     })(tabs[k]);
   }
+  if (initialTab) activate(initialTab);
 }
 
 function openDetail(key, isRefresh) {
   var d = CARD_INDEX[key];
   if (!d) return;
+  var body = root.querySelector('#p-body');
+  var restoreTab = null;
+  if (isRefresh && d.kind === 'change' && openDetailId === key) {
+    var cur = body.querySelector('.detail-tab.active');
+    if (cur) restoreTab = cur.getAttribute('data-tab');
+  }
   openDetailId = key;
   var chips = d.kind === 'change'
     ? '<span class="seq">#' + esc(d.seq != null ? d.seq : '?') + '</span><span class="tier ' + esc(d.tier) + '">' + esc(d.tier) + '</span><span class="type">' + esc(d.type) + '</span>' + stPill(d.status)
     : stPill('backlog');
   root.querySelector('#p-chips').innerHTML = chips;
   root.querySelector('#p-title').textContent = d.title;
-  var body = root.querySelector('#p-body');
   body.innerHTML = d.kind === 'change' ? renderChange(d) : renderBacklog(d);
-  if (d.kind === 'change') bindDetailTabs(body);
+  if (d.kind === 'change') bindDetailTabs(body, restoreTab);
   if (!isRefresh) body.scrollTop = 0;
   drawer.classList.add('open');
   backdrop.classList.add('open');
@@ -1752,7 +1828,7 @@ return {
     changeCard: changeCard,
     renderJournal: renderJournal,
     bindDetailTabs: bindDetailTabs,
-    openDetail: function (key) { openDetail(key); }
+    openDetail: function (key, isRefresh) { openDetail(key, isRefresh); }
   }
 };
 })();
