@@ -141,3 +141,13 @@ implement 落下的锁定文件 `tests/test_board_card_progress.py`（`test_lock
 
 修复 commit：`1ac1b1d`（阶段徽标当前性、tab 热刷新保留、docstring 去溯源、相关回归用例）。P1-3 wont-fix（既有脏改动保留）。P2-1 本轮不修。
 速报：自动化 FAIL 0；AC-1/2/4/5 人工过目仍待用户。
+
+### 重跑记录 · 2026-08-02（review 轮 2 · P1-5 修复后）
+
+| 验证点 | 命令 | 关键输出 | 结论 |
+| --- | --- | --- | --- |
+| 锁定套件（含 P1-5 回归） | `python3 -m unittest tests.test_board_card_progress -v` | 18/18 OK | ✅ |
+| 全仓回归 | `python3 -m unittest discover -s tests -q` | `Ran 283 tests in 86.258s` / `OK` | ✅ |
+
+修复 commit：`eba11da`（轮次 warn 与当前阶段解耦；「门已通过 / archived + ≥3 轮」仍 warn）。P2-1 仍 open。
+速报：自动化 FAIL 0；AC-1/2/4/5 人工过目仍待用户。

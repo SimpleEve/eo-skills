@@ -25,7 +25,7 @@ summary: >
 | P1-2 | P1 | serve 数据刷新会把用户选中的详情 tab 重置为概览 | `cli/eo-board:1711` | verified | implementation | 1/2 | `bd4856b` / `1ac1b1d` |
 | P1-3 | P1 | 实施夹带 3 处未映射到 AC/决策的旧卡面行为变化 | `cli/eo-board:1527` | waived | implementation | 1/2 | `bd4856b` / —（用户裁决：总控已核实为既有工作区改动，非本 change 引入，保留） |
 | P1-4 | P1 | 测试 docstring 写入 AC 编号流程溯源 | `tests/test_board_card_progress.py:428` | verified | implementation | 1/2 | `bd4856b` / `1ac1b1d` |
-| P1-5 | P1 | 无活动阶段时丢失任一门 ≥3 轮的警告样式 | `cli/eo-board:562` | open | implementation | 2/2 | `1ac1b1d` / ~ |
+| P1-5 | P1 | 无活动阶段时丢失任一门 ≥3 轮的警告样式 | `cli/eo-board:562` | fixed | implementation | 2/2 | `1ac1b1d` / `eba11da` |
 | P2-1 | P2 | tab 的 ARIA/键盘语义未形成完整关联 | `cli/eo-board:1487` | open | implementation | 1/2 | `bd4856b` / ~ |
 
 ## 审查总结（首轮快照）
