@@ -441,6 +441,16 @@ class JournalAndFullTextTests(BoardCardProgressFixture):
         on_disk = (self.change_dir / "change.md").read_text(encoding="utf-8")
         self.assertEqual(rec.get("full_text"), on_disk)
 
+    def test_frontmatter_exposed_without_empty_fields(self):
+        rec = self.rec()
+        fm = rec.get("frontmatter")
+        self.assertIsInstance(fm, dict)
+        self.assertEqual(fm.get("id"), "demo-progress")
+        self.assertEqual(fm.get("seq"), 11)
+        self.assertEqual(fm.get("status"), "implementing")
+        self.assertNotIn("summary", fm)  # 缺省字段不出现
+        self.assertNotIn("issue", fm)
+
     def test_parse_journal_entries_keeps_recent_window_reports(self):
         text = "\n\n".join(
             f"• {10 + i}:00 「窗{i}」\n\n一句定性：没有需要你裁决的事项。\n"
@@ -561,8 +571,11 @@ class ProjectJsSurfaceTests(BoardCardProgressFixture):
         self.assertIn("has_journal", src)
         self.assertIn("journal_entries", src)
         self.assertIn("full_text", src)
+        self.assertIn("frontmatter", src)
         self.assertIn("stage_progress", src)
         self.assertIn("card-warn", src)
+        self.assertIn("md-table", src)
+        self.assertIn("md-code", src)
 
     def test_terminal_renderer_ignores_new_progress_fields(self):
         self.write_journal("• 10:00 「x」\n\n一句定性：没有需要你裁决的事项。\n")
@@ -631,14 +644,98 @@ class ProjectJsRenderTests(BoardCardProgressFixture):
         self.assertNotIn('<pre class="full-md">', detail)
         self.assertIn("<li>", detail)  # journal「- 派发」
         self.assertIn("<p>", detail)
-        # 全文 tab 含 change 正文片段（渲染后仍可读）
+        # 概览完整 frontmatter 键值
+        self.assertIn("frontmatter", detail)
+        self.assertIn("<dt>seq</dt>", detail)
+        self.assertIn("<dd>11</dd>", detail)
+        self.assertIn("<dt>id</dt>", detail)
+        # 全文 tab 含 change 正文片段（渲染后仍可读）；# 标题成 h1
         self.assertIn("Demo Progress", detail)
+        self.assertIn("<h1>", detail)
         card = result["card"]
         self.assertIn("card-warn", card)
         self.assertTrue(
             "stage" in card or "change-review" in card or "第" in card,
             card,
         )
+
+    def test_md_block_rich_syntax_and_xss_escape(self):
+        """全文 mdBlock：标题/表格/代码/checkbox/有序列表 + XSS 探针不回退。"""
+        rich = (
+            "---\nid: demo-progress\nseq: 11\ntitle: Demo Progress\n"
+            "status: implementing\ntier: light\ntype: feature\n"
+            "created: 2026-08-02\nsummary: rich-summary\n---\n\n"
+            "# H1 Title\n\n## H2 Section\n\n"
+            "| ColA | ColB |\n| --- | --- |\n| v1 | v2 |\n\n"
+            "```js\nconst x = 1;\n```\n\n"
+            "- [x] done task\n- [ ] open task\n\n"
+            "1. first\n2. second\n\n"
+            "See [link](https://example.com) and **bold** and `code`.\n\n"
+            "<script>evil()</script>\n"
+        )
+        (self.change_dir / "change.md").write_text(rich, encoding="utf-8")
+        data = self.build()
+        rec = data["changes"][0]
+        self.assertEqual(rec["frontmatter"].get("summary"), "rich-summary")
+        html = self.board.render_html(data)
+        project_js, markup = self._extract_project_assets(html)
+        # 直接调 mdBlock 钩子，避免整页挂载噪音
+        runner = self.root / "mdblock-runner.js"
+        runner.write_text(
+            "const fs=require('fs');\n"
+            "const js=fs.readFileSync(process.argv[2],'utf8');\n"
+            "const sample=fs.readFileSync(process.argv[3],'utf8');\n"
+            "globalThis.document={getElementById:()=>null,addEventListener(){},removeEventListener(){}};\n"
+            "global.window=globalThis.window={};\n"
+            "globalThis.setInterval=()=>0;globalThis.clearInterval=()=>{};\n"
+            "(0,eval)(js);\n"
+            "const out=global.window.EO_PROJECT.__test.mdBlock(sample);\n"
+            "process.stdout.write(out);\n",
+            encoding="utf-8",
+        )
+        js_file = self.root / "project-md.js"
+        js_file.write_text(project_js, encoding="utf-8")
+        sample = self.root / "sample.md"
+        sample.write_text(rich, encoding="utf-8")
+        proc = subprocess.run(
+            [NODE, str(runner), str(js_file), str(sample)],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        out = proc.stdout
+        self.assertIn("<h1>", out)
+        self.assertIn("<h2>", out)
+        self.assertIn('class="md-table"', out)
+        self.assertIn("<th>", out)
+        self.assertIn("<td>", out)
+        self.assertIn('class="md-code"', out)
+        self.assertIn("const x = 1;", out)
+        self.assertIn('type="checkbox"', out)
+        self.assertIn("checked", out)
+        self.assertIn("<ol>", out)
+        self.assertIn("<a href=", out)
+        self.assertIn("<strong>", out)
+        self.assertIn("<code>", out)
+        self.assertIn("&lt;script&gt;", out)
+        self.assertNotRegex(out, r"<script[\s>]")
+        # 概览侧 frontmatter 含 summary
+        payload = {"data": data}
+        runner2 = self.root / "detail-runner.js"
+        runner2.write_text(NODE_DETAIL_RUNNER, encoding="utf-8")
+        data_file = self.root / "payload-rich.json"
+        data_file.write_text(json.dumps(payload), encoding="utf-8")
+        markup_file = self.root / "markup-rich.html"
+        markup_file.write_text(markup, encoding="utf-8")
+        proc2 = subprocess.run(
+            [NODE, str(runner2), str(js_file), str(data_file), str(markup_file)],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc2.returncode, 0, proc2.stderr)
+        detail = json.loads(proc2.stdout)["detail"]
+        self.assertIn("<dt>summary</dt>", detail)
+        self.assertIn("rich-summary", detail)
 
     def _extract_project_assets(self, html):
         m_js = re.search(

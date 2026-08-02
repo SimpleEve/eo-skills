@@ -161,3 +161,13 @@ implement 落下的锁定文件 `tests/test_board_card_progress.py`（`test_lock
 
 动态 tab 条目正文与全文 tab 改用 `mdBlock`；DOM 断言锁定 `j-body md-block` / `full-md md-block`、无 `<pre class="full-md">`。
 速报：自动化 FAIL 0；AC-1/2/4/5 人工过目仍待用户。
+
+### 重跑记录 · 2026-08-02（frontmatter 概览 + mdBlock 扩能）
+
+| 验证点 | 命令 | 关键输出 | 结论 |
+| --- | --- | --- | --- |
+| 锁定套件 | `python3 -m unittest tests.test_board_card_progress -v` | 20/20 OK | ✅ |
+| 全仓回归 | `python3 -m unittest discover -s tests -q` | `Ran 285 tests in 87.928s` / `OK` | ✅ |
+
+概览 frontmatter 键值；mdBlock 标题/表格/代码/checkbox/有序/链接 + XSS 探针；journal 列表不回退。
+速报：自动化 FAIL 0；AC-1/2/4/5 人工过目仍待用户。

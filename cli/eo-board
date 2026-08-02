@@ -580,14 +580,35 @@ def derive_stage_progress(gates, status=None):
     }
 
 
+def _frontmatter_public(fm):
+    """概览用 frontmatter：缺省/空值不输出，保留 YAML 解析后的键顺序。"""
+    if not fm:
+        return {}
+    out = {}
+    for key, value in fm.items():
+        if value is None or value == "":
+            continue
+        out[str(key)] = value
+    return out
+
+
 def attach_card_progress(rec, warnings):
-    """给 change 记录补 full_text / journal / stage_progress（只读、失败降级）。"""
+    """给 change 记录补 full_text / journal / stage_progress / frontmatter（只读、失败降级）。"""
     path = Path(rec["path"])
     try:
         rec["full_text"] = path.read_text(encoding="utf-8")
     except Exception as e:
         warnings.append(f"change 全文读取失败：{path}（{e}）")
         rec["full_text"] = None
+
+    rec["frontmatter"] = {}
+    if rec.get("full_text"):
+        try:
+            fm, _ = split_frontmatter(rec["full_text"])
+            rec["frontmatter"] = _frontmatter_public(fm)
+        except Exception as e:
+            warnings.append(f"frontmatter 再解析失败：{path}（{e}）")
+            rec["frontmatter"] = {}
 
     jpath = Path(rec["worktree"]) / "tmp" / "eo" / "loop" / rec["id"] / "journal.md"
     if jpath.is_file():
@@ -1165,15 +1186,38 @@ PROJECT_CSS = r"""
   .md-block { font-size: 13.5px; line-height: 1.65; }
   .md-block p { margin: 0 0 8px; }
   .md-block p:last-child { margin-bottom: 0; }
-  .md-block ul { margin: 2px 0 8px; padding-left: 18px; }
-  .md-block ul ul { margin: 2px 0; }
+  .md-block ul, .md-block ol { margin: 2px 0 8px; padding-left: 18px; }
+  .md-block ul ul, .md-block ol ol, .md-block ul ol, .md-block ol ul { margin: 2px 0; }
   .md-block li { margin-bottom: 2px; }
+  .md-block li.task { list-style: none; margin-left: -1.1em; }
+  .md-block li.task input { margin-right: 6px; vertical-align: middle; }
   .md-block blockquote {
     margin: 6px 0; padding: 2px 10px; border-left: 2px solid var(--line); color: var(--muted); font-size: 13px;
   }
-  .md-block h4 { font-size: 12.5px; font-weight: 700; color: var(--ink); margin: 10px 0 4px; }
-  .md-block h4:first-child { margin-top: 0; }
+  .md-block h1, .md-block h2, .md-block h3, .md-block h4 {
+    font-weight: 700; color: var(--ink); margin: 12px 0 6px; line-height: 1.3;
+  }
+  .md-block h1 { font-size: 16px; }
+  .md-block h2 { font-size: 14.5px; }
+  .md-block h3 { font-size: 13.5px; }
+  .md-block h4 { font-size: 12.5px; }
+  .md-block h1:first-child, .md-block h2:first-child, .md-block h3:first-child, .md-block h4:first-child { margin-top: 0; }
   .md-block strong { font-weight: 700; color: var(--ink); }
+  .md-block a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+  .md-block hr { border: none; border-top: 1px solid var(--line); margin: 12px 0; }
+  .md-block pre.md-code {
+    font-family: var(--mono); font-size: 11.5px; line-height: 1.5;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+    padding: 8px 10px; overflow-x: auto; margin: 6px 0 10px; white-space: pre;
+  }
+  .md-block pre.md-code code { background: none; border: none; padding: 0; font-size: inherit; }
+  .md-block table.md-table {
+    border-collapse: collapse; width: 100%; margin: 6px 0 10px; font-size: 12.5px;
+  }
+  .md-block table.md-table th, .md-block table.md-table td {
+    border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top;
+  }
+  .md-block table.md-table th { background: var(--surface); font-weight: 700; }
   .md-block code, .intent-text code, .decisions code {
     font-family: var(--mono); font-size: 11.5px; background: var(--surface2); border: 1px solid var(--line); border-radius: 3px; padding: 0 3px;
   }
@@ -1318,11 +1362,14 @@ function esc(s) {
 }
 
 // ── 安全迷你 markdown：白名单转换，且只作用在 esc() 之后的文本上 ──
-// applyInline 的入参必须已经过 esc()；** / ` 本身不在转义字符集里，转义后依旧原样可匹配，
-// 而载荷里夹带的 <script> 等已经变成 &lt;script&gt;，转换只会把它们包进 <strong>/<code>，不会变回真标签。
+// applyInline 的入参必须已经过 esc()；** / ` / []() 本身不在转义字符集里，转义后依旧原样可匹配，
+// 而载荷里夹带的 <script> 等已经变成 &lt;script&gt;，转换只会把它们包进白名单标签，不会变回真标签。
 function applyInline(escapedText) {
   var s = escapedText.replace(/`([^`]+)`/g, function (_, code) { return '<code>' + code + '</code>'; });
   s = s.replace(/\*\*([^*]+)\*\*/g, function (_, b) { return '<strong>' + b + '</strong>'; });
+  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (_, t, u) {
+    return '<a href="' + u + '" rel="noopener noreferrer">' + t + '</a>';
+  });
   return s;
 }
 
@@ -1330,29 +1377,62 @@ function mdInline(raw) {
   return applyInline(esc(raw));
 }
 
-// 一层嵌套列表：缩进行归入上一个顶层 li 的子 <ul>
+function mdIsTableSep(trimmed) {
+  // | --- | :---: | ---: |
+  return /^\|?(\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*$/.test(trimmed);
+}
+
+function mdSplitRow(trimmed) {
+  var s = trimmed;
+  if (s.charAt(0) === '|') s = s.slice(1);
+  if (s.charAt(s.length - 1) === '|') s = s.slice(0, -1);
+  return s.split('|').map(function (c) { return c.trim(); });
+}
+
+// 一层嵌套：无序/有序/task checkbox；缩进行归入上一个顶层 li
 function mdList(lines, startIdx) {
   var top = [];
   var i = startIdx;
+  var ordered = null;
   while (i < lines.length) {
-    var m = lines[i].match(/^(\s*)[-*]\s+(.*)$/);
-    if (!m) break;
-    var text = applyInline(m[2]);
-    if (m[1].length === 0 || !top.length) {
-      top.push({ text: text, sub: [] });
+    var mTask = lines[i].match(/^(\s*)[-*+]\s+\[([ xX])\]\s+(.*)$/);
+    var mUl = !mTask && lines[i].match(/^(\s*)[-*+]\s+(.*)$/);
+    var mOl = !mTask && !mUl && lines[i].match(/^(\s*)(\d+)\.\s+(.*)$/);
+    if (!mTask && !mUl && !mOl) break;
+    var indent, body, task = null;
+    if (mTask) {
+      indent = mTask[1].length; body = mTask[3]; task = mTask[2].toLowerCase() === 'x';
+      if (ordered === null) ordered = false;
+    } else if (mUl) {
+      indent = mUl[1].length; body = mUl[2];
+      if (ordered === null) ordered = false;
+    } else {
+      indent = mOl[1].length; body = mOl[3];
+      if (ordered === null) ordered = true;
+    }
+    var text = applyInline(body);
+    var item = { text: text, sub: [], task: task };
+    if (indent === 0 || !top.length) {
+      top.push(item);
     } else {
       top[top.length - 1].sub.push(text);
     }
     i++;
   }
-  var html = '<ul>' + top.map(function (it) {
-    return '<li>' + it.text + (it.sub.length ? '<ul>' + it.sub.map(function (s) { return '<li>' + s + '</li>'; }).join('') + '</ul>' : '') + '</li>';
-  }).join('') + '</ul>';
+  var tag = ordered ? 'ol' : 'ul';
+  var html = '<' + tag + '>' + top.map(function (it) {
+    var cls = it.task === null || it.task === undefined ? '' : ' class="task"';
+    var box = (it.task === null || it.task === undefined) ? ''
+      : '<input type="checkbox" disabled' + (it.task ? ' checked' : '') + '> ';
+    return '<li' + cls + '>' + box + it.text
+      + (it.sub.length ? '<ul>' + it.sub.map(function (s) { return '<li>' + s + '</li>'; }).join('') + '</ul>' : '')
+      + '</li>';
+  }).join('') + '</' + tag + '>';
   return { html: html, next: i };
 }
 
-// 块级：段落 / 单行换行 / 列表 / 引用块 / ###·#### 子标题。
-// 全文先 esc() 一次再按行做结构识别——不引入通用 md 库，只认这几种白名单结构。
+// 块级：标题 #~#### / 表格 / fenced code / 列表(含 checkbox) / 引用 / hr / 段落。
+// 全文先 esc() 一次再按行做结构识别——零第三方，只认白名单结构。
 function mdBlock(raw) {
   if (!raw) return '';
   var lines = esc(raw).split('\n');
@@ -1363,10 +1443,51 @@ function mdBlock(raw) {
     var trimmed = line.trim();
     if (!trimmed) { i++; continue; }
 
-    var mHeading = trimmed.match(/^(#{3,4})\s+(.*)$/);
-    if (mHeading) {
-      html += '<h4>' + applyInline(mHeading[2]) + '</h4>';
+    // fenced code
+    if (/^```/.test(trimmed)) {
       i++;
+      var code = [];
+      while (i < lines.length && !/^```/.test(lines[i].trim())) {
+        code.push(lines[i]);
+        i++;
+      }
+      if (i < lines.length) i++;
+      html += '<pre class="md-code"><code>' + code.join('\n') + '</code></pre>';
+      continue;
+    }
+    // horizontal rule
+    if (/^(-{3,}|\*{3,}|_{3,})\s*$/.test(trimmed)) {
+      html += '<hr>';
+      i++;
+      continue;
+    }
+    // ATX headings # .. ####
+    var mHeading = trimmed.match(/^(#{1,4})\s+(.*)$/);
+    if (mHeading) {
+      var lv = mHeading[1].length;
+      html += '<h' + lv + '>' + applyInline(mHeading[2]) + '</h' + lv + '>';
+      i++;
+      continue;
+    }
+    // table: header + separator
+    if (trimmed.indexOf('|') !== -1 && i + 1 < lines.length && mdIsTableSep(lines[i + 1].trim())) {
+      var heads = mdSplitRow(trimmed);
+      i += 2;
+      var bodyRows = [];
+      while (i < lines.length && lines[i].trim() && lines[i].trim().indexOf('|') !== -1
+             && !mdIsTableSep(lines[i].trim())) {
+        bodyRows.push(mdSplitRow(lines[i].trim()));
+        i++;
+      }
+      html += '<table class="md-table"><thead><tr>'
+        + heads.map(function (c) { return '<th>' + applyInline(c) + '</th>'; }).join('')
+        + '</tr></thead><tbody>'
+        + bodyRows.map(function (row) {
+          return '<tr>' + heads.map(function (_, idx) {
+            return '<td>' + applyInline(row[idx] || '') + '</td>';
+          }).join('') + '</tr>';
+        }).join('')
+        + '</tbody></table>';
       continue;
     }
     if (/^&gt;\s?/.test(trimmed)) {
@@ -1378,7 +1499,7 @@ function mdBlock(raw) {
       html += '<blockquote>' + quoteLines.join('<br>') + '</blockquote>';
       continue;
     }
-    if (/^(\s*)[-*]\s+/.test(line)) {
+    if (/^(\s*)([-*+]|\d+\.)\s+/.test(line) || /^(\s*)[-*+]\s+\[[ xX]\]\s+/.test(line)) {
       var listResult = mdList(lines, i);
       html += listResult.html;
       i = listResult.next;
@@ -1386,9 +1507,13 @@ function mdBlock(raw) {
     }
     var paraLines = [];
     while (i < lines.length && lines[i].trim()
-           && !/^(#{3,4})\s+/.test(lines[i].trim())
+           && !/^(#{1,4})\s+/.test(lines[i].trim())
            && !/^&gt;\s?/.test(lines[i].trim())
-           && !/^(\s*)[-*]\s+/.test(lines[i])) {
+           && !/^```/.test(lines[i].trim())
+           && !/^(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[i].trim())
+           && !/^(\s*)([-*+]|\d+\.)\s+/.test(lines[i])
+           && !/^(\s*)[-*+]\s+\[[ xX]\]\s+/.test(lines[i])
+           && !(lines[i].trim().indexOf('|') !== -1 && i + 1 < lines.length && mdIsTableSep(lines[i + 1].trim()))) {
       paraLines.push(applyInline(lines[i].trim()));
       i++;
     }
@@ -1404,6 +1529,32 @@ function stPill(status) {
 }
 
 function metaRow(dt, dd) { return '<dt>' + dt + '</dt><dd>' + dd + '</dd>'; }
+
+function formatFmValue(v) {
+  if (v === null || v === undefined) return null;
+  if (Array.isArray(v)) return v.length ? v.map(function (x) { return String(x); }).join(', ') : null;
+  if (typeof v === 'object') {
+    try { return JSON.stringify(v); } catch (e) { return String(v); }
+  }
+  var s = String(v);
+  return s === '' ? null : s;
+}
+
+function renderFrontmatter(d) {
+  var fm = d.frontmatter;
+  if (!fm || typeof fm !== 'object') return '';
+  var keys = Object.keys(fm);
+  if (!keys.length) return '';
+  var rows = '';
+  keys.forEach(function (k) {
+    var v = formatFmValue(fm[k]);
+    if (v === null) return;
+    rows += metaRow(esc(k), esc(v));
+  });
+  if (!rows) return '';
+  return '<div class="d-section"><div class="d-label">frontmatter <span class="src">change.md YAML</span></div>'
+    + '<dl class="meta-grid fm-grid">' + rows + '</dl></div>';
+}
 
 function ckItem(it) {
   var noteCls = it.manual ? 'vnote manual' : 'vnote';
@@ -1517,7 +1668,9 @@ function renderChange(d) {
   if (d.stale) meta += metaRow('停滞', '<span style="color: var(--warn); font-weight: 700">' + d.stale_days + ' 天未动（防蒸发提醒）</span>');
 
   h += '<div class="detail-pane active" data-pane="overview" role="tabpanel">';
-  h += '<div class="d-section"><dl class="meta-grid">' + meta + '</dl></div>';
+  h += renderFrontmatter(d);
+  h += '<div class="d-section"><div class="d-label">派生信息 <span class="src">git / 运行时</span></div>'
+    + '<dl class="meta-grid">' + meta + '</dl></div>';
   h += '<div class="d-section"><div class="d-label">意图 §1 <span class="src">正文解析</span></div>'
     + '<div class="md-block">' + (d.intent ? mdBlock(d.intent) : '<p style="color: var(--faint)">（未解析到意图正文）</p>') + '</div>';
   if (d.decisions && d.decisions.length) {
@@ -1844,6 +1997,7 @@ return {
     changeCard: changeCard,
     renderJournal: renderJournal,
     bindDetailTabs: bindDetailTabs,
+    mdBlock: mdBlock,
     openDetail: function (key, isRefresh) { openDetail(key, isRefresh); }
   }
 };
