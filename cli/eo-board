@@ -237,8 +237,12 @@ def estimate_rounds_approx(fm, worktree_path, rel_path):
     return max(git_based, fm_based)
 
 
+# 复审核销前同属未决：open（未修）+ fixed（已修待 verified）；verified/waived/superseded 不算当前
+_LEDGER_UNRESOLVED_STATUSES = frozenset({"open", "fixed"})
+
+
 def parse_finding_ledger_open_items(body):
-    """在「...台账」节表格里收集状态=open 的行：{level, id, summary}。
+    """在「...台账」节表格里收集未决行（状态 open/fixed）：{level, id, summary, status}。
 
     列位置按表头文字定位；找不到表头时退回模板默认（ID0 / 级别1 / 摘要2 / 状态4）。
     """
@@ -272,19 +276,21 @@ def parse_finding_ledger_open_items(body):
         cells = [c.strip() for c in stripped.split("|")]
         if len(cells) <= need:
             continue
-        if cells[status_idx].lower() != "open":
+        st = cells[status_idx].lower()
+        if st not in _LEDGER_UNRESOLVED_STATUSES:
             continue
         level = cells[level_idx].upper()
         items.append({
             "level": level,
             "id": cells[id_idx],
             "summary": cells[summary_idx],
+            "status": st,
         })
     return items
 
 
 def parse_finding_ledger_open_p0(body):
-    """兼容旧调用：open 状态且级别=P0 的行数。"""
+    """兼容旧调用：未决（open/fixed）且级别=P0 的行数。"""
     return sum(1 for it in parse_finding_ledger_open_items(body) if it.get("level") == "P0")
 
 
@@ -310,6 +316,7 @@ def parse_review_gate(path, worktree_path, rel_path, warnings):
         for it in open_items if it.get("level") == "P1"
     ]
     open_p0 = sum(1 for it in open_items if it.get("level") == "P0")
+    open_p1 = sum(1 for it in open_items if it.get("level") == "P1")
     return {
         "exists": True,
         "rounds_approx": estimate_rounds_approx(fm, worktree_path, rel_path),
@@ -320,6 +327,7 @@ def parse_review_gate(path, worktree_path, rel_path, warnings):
         "p2": len(p2_titles),
         "p0_titles": p0_titles[:3],
         "open_p0": open_p0,
+        "open_p1": open_p1,
         "open_p0_titles": open_p0_titles[:8],
         "open_p1_titles": open_p1_titles[:8],
         "date": fm.get("updated") or fm.get("created"),
@@ -336,8 +344,13 @@ def parse_test_gate(path, worktree_path, rel_path, warnings):
     fm = fm or {}
     fail_titles = parse_pxx_headings(body, "FAIL")
     verdict, next_step = parse_speed_report(body)
-    # 速报已通过时历史 FAIL 标题不算当前未决
-    passed = bool(verdict and "通过" in verdict and "不通过" not in verdict)
+    # 完全通过时历史 FAIL 不算当前未决（「有保留通过」对 test 不适用，仍按含「通过」且无「不通过」）
+    passed = bool(
+        verdict
+        and "通过" in verdict
+        and "不通过" not in verdict
+        and "有保留通过" not in verdict
+    )
     return {
         "exists": True,
         "rounds_approx": estimate_rounds_approx(fm, worktree_path, rel_path),
@@ -422,10 +435,21 @@ def compute_gates(rec, doc_root, warnings):
     if review_path.is_file():
         g = parse_review_gate(review_path, wt_path, f"{rel_dir}/review.md", warnings)
         gates["review"] = g
+        open_p0 = int(g.get("open_p0") or 0)
+        open_p1 = int(g.get("open_p1") or 0)
         if g.get("verdict") and "不通过" in g["verdict"]:
             text = f"review P0×{g.get('p0', 0)} 待修"
             if g.get("rounds_approx", 1) >= 2:
                 text += f"（第≈{g['rounds_approx']}轮）"
+            candidates.append((file_last_touch(wt_path, f"{rel_dir}/review.md") or "", text))
+        elif open_p0 or open_p1:
+            # 有保留通过等：台账 open/fixed 仍为当前卡点
+            bits = []
+            if open_p0:
+                bits.append(f"P0×{open_p0}")
+            if open_p1:
+                bits.append(f"P1×{open_p1}")
+            text = "review 未决 · " + " ".join(bits)
             candidates.append((file_last_touch(wt_path, f"{rel_dir}/review.md") or "", text))
 
     test_path = dir_path / "test.md"
@@ -481,8 +505,11 @@ def parse_journal_entries(text, limit=JOURNAL_RECENT_LIMIT):
 
 
 def _gate_verdict_pass(g):
+    """完全通过：含「通过」且不含「不通过」/「有保留通过」。"""
     v = (g or {}).get("verdict") or ""
-    return "通过" in v and "不通过" not in v
+    if not v or "不通过" in v or "有保留通过" in v:
+        return False
+    return "通过" in v
 
 
 def _gate_verdict_fail(g):
@@ -505,7 +532,7 @@ def _max_gate_rounds(gates):
 
 
 def _review_open_p0(rv):
-    """未决 P0：优先台账 open；速报已通过时强制 0，避免历史标题冒充当前阻塞。"""
+    """未决 P0：优先台账 open/fixed 计数；完全通过时强制 0。"""
     if not rv:
         return 0
     if _gate_verdict_pass(rv):
@@ -515,6 +542,16 @@ def _review_open_p0(rv):
     if _gate_verdict_fail(rv):
         return int(rv.get("p0") or 0)
     return 0
+
+
+def _review_open_p1(rv):
+    """未决 P1：台账 open/fixed；完全通过时强制 0。"""
+    if not rv or _gate_verdict_pass(rv):
+        return 0
+    if "open_p1" in rv and rv.get("open_p1") is not None:
+        return int(rv.get("open_p1") or 0)
+    titles = rv.get("open_p1_titles") or []
+    return len(titles)
 
 
 def derive_stage_progress(gates, status=None):
@@ -546,14 +583,18 @@ def derive_stage_progress(gates, status=None):
     acc = gates.get("acceptance") or None
 
     cr_open = int((cr or {}).get("open_p0") or 0) if cr else 0
-    rv_open = _review_open_p0(rv)
+    rv_open_p0 = _review_open_p0(rv)
+    rv_open_p1 = _review_open_p1(rv)
 
     cr_active = bool(cr) and (cr_open > 0 or _gate_verdict_fail(cr))
     ts_active = bool(ts) and (
         _gate_verdict_fail(ts)
         or (not _gate_verdict_pass(ts) and int((ts or {}).get("fail_count") or 0) > 0)
     )
-    rv_active = bool(rv) and (_gate_verdict_fail(rv) or rv_open > 0)
+    # 不通过 / 台账未决 P0|P1（含有保留通过 + open/fixed）均算当前 review 阶段
+    rv_active = bool(rv) and (
+        _gate_verdict_fail(rv) or rv_open_p0 > 0 or rv_open_p1 > 0
+    )
     # 人工验收只在流程真正进入 reviewed 后才抢占徽标
     acc_active = bool(acc) and bool(acc.get("unchecked")) and status == "reviewed"
 
@@ -564,7 +605,12 @@ def derive_stage_progress(gates, status=None):
     if rv_active:
         stage = "review"
         rounds = int(rv.get("rounds_approx") or 1)
-        label = f"review P0×{rv_open}" if rv_open > 0 else f"review ≈{rounds} 轮"
+        if rv_open_p0 > 0:
+            label = f"review P0×{rv_open_p0}"
+        elif rv_open_p1 > 0:
+            label = f"review P1×{rv_open_p1}"
+        else:
+            label = f"review ≈{rounds} 轮"
     elif ts_active:
         stage = "test"
         rounds = int(ts.get("rounds_approx") or 1)
@@ -1656,8 +1702,10 @@ function gateRow(label, roundsText, g, detailTitles) {
 }
 
 function gateVerdictPass(g) {
+  // 完全通过：不含「不通过」「有保留通过」
   var v = (g && g.verdict) || '';
-  return v.indexOf('通过') !== -1 && v.indexOf('不通过') === -1;
+  if (!v || v.indexOf('不通过') !== -1 || v.indexOf('有保留通过') !== -1) return false;
+  return v.indexOf('通过') !== -1;
 }
 
 function gateVerdictFail(g) {

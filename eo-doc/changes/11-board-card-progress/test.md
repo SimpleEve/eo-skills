@@ -191,3 +191,13 @@ implement 落下的锁定文件 `tests/test_board_card_progress.py`（`test_lock
 
 journal 时间逆序；质量门顶部当前阶段/卡点/未决明细（台账 open / 未通过 FAIL）；无卡点空态。
 速报：自动化 FAIL 0；AC-1/2/4/5 人工过目仍待用户。
+
+### 重跑记录 · 2026-08-02（P1-8/P1-9：有保留通过 + fixed 未决 + AC 同步）
+
+| 验证点 | 命令 | 关键输出 | 结论 |
+| --- | --- | --- | --- |
+| 锁定套件 | `python3 -m unittest tests.test_board_card_progress -v` | 26/26 OK | ✅ |
+| 全仓回归 | `python3 -m unittest discover -s tests -q` | `Ran 291 tests in 89.344s` / `OK` | ✅ |
+
+台账 open/fixed 为未决来源；区分完全通过与有保留通过；verified 不回退；AC-1/3 同步逆序与当前状态。
+速报：自动化 FAIL 0；AC-1/2/4/5 人工过目仍待用户。

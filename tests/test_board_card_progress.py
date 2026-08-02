@@ -360,16 +360,35 @@ class BoardCardProgressFixture(unittest.TestCase):
             encoding="utf-8",
         )
 
-    def write_review_gate(self, p0=1, rounds_hint=1, verdict="不通过", open_p0=None):
+    def write_review_gate(
+        self,
+        p0=1,
+        p1=0,
+        rounds_hint=1,
+        verdict="不通过",
+        open_p0=None,
+        open_p1=None,
+        p1_status="open",
+    ):
+        """p0/p1 为标题与台账总行数；open_p0/open_p1 为未决条数（open/fixed）。
+
+        p1_status：未决 P1 行的状态（open 或 fixed）；超出未决的为 verified。
+        """
         created = "2026-08-01"
         updated = "2026-08-02" if rounds_hint >= 2 else "2026-08-01"
         headings = "".join(f"### [P0-{i}] 问题{i}\n\n" for i in range(1, p0 + 1))
+        headings += "".join(f"### [P1-{i}] P1问题{i}\n\n" for i in range(1, p1 + 1))
         if open_p0 is None:
-            open_p0 = p0 if verdict == "不通过" else 0
+            open_p0 = p0 if ("不通过" in verdict or "有保留" in verdict) else 0
+        if open_p1 is None:
+            open_p1 = p1 if ("不通过" in verdict or "有保留" in verdict) else 0
         rows = ""
         for i in range(1, p0 + 1):
             st = "open" if i <= open_p0 else "verified"
             rows += f"| P0-{i} | P0 | 问题{i} | a | {st} | implementation | 1/1 | `abc` |\n"
+        for i in range(1, p1 + 1):
+            st = p1_status if i <= open_p1 else "verified"
+            rows += f"| P1-{i} | P1 | P1问题{i} | a | {st} | implementation | 1/1 | `abc` |\n"
         (self.change_dir / "review.md").write_text(
             f"---\ncreated: {created}\nupdated: {updated}\n---\n\n"
             f"# review\n\n## Finding 台账\n\n"
@@ -377,7 +396,7 @@ class BoardCardProgressFixture(unittest.TestCase):
             "|----|------|------|------|------|------|-------------|------------------|\n"
             f"{rows}\n"
             f"{headings}"
-            f"## 速报\n结论：{verdict}\n下一步：修 P0\n",
+            f"## 速报\n结论：{verdict}\n下一步：修\n",
             encoding="utf-8",
         )
 
@@ -568,6 +587,46 @@ class StageProgressTests(BoardCardProgressFixture):
         self.assertEqual(len(titles), 1)
         self.assertIn("P0-1", titles[0])
 
+    def test_reserved_pass_with_open_p1_is_current_stage(self):
+        """有保留通过 + 台账 open P1 → 当前仍是 review，不得吞掉未决。"""
+        self.write_review_gate(
+            p0=0, p1=1, verdict="有保留通过（P1 1 条）", open_p0=0, open_p1=1, p1_status="open",
+        )
+        rec = self.rec()
+        sp = rec.get("stage_progress")
+        self.assertIsInstance(sp, dict, sp)
+        self.assertEqual(sp.get("stage"), "review", sp)
+        self.assertIn("P1", sp.get("label") or "", sp)
+        rv = (rec.get("gates") or {}).get("review") or {}
+        self.assertEqual(rv.get("open_p1"), 1)
+        self.assertTrue(any("P1-1" in t for t in (rv.get("open_p1_titles") or [])))
+        self.assertTrue(rec.get("blocker"))
+
+    def test_fixed_p1_counts_as_unresolved_until_verified(self):
+        """台账 fixed P1 在复审核销前仍为未决。"""
+        self.write_review_gate(
+            p0=0, p1=1, verdict="有保留通过（P1 1 条）", open_p0=0, open_p1=1, p1_status="fixed",
+        )
+        rec = self.rec()
+        rv = (rec.get("gates") or {}).get("review") or {}
+        self.assertEqual(rv.get("open_p1"), 1)
+        self.assertTrue(any("P1-1" in t for t in (rv.get("open_p1_titles") or [])))
+        sp = rec.get("stage_progress")
+        self.assertEqual(sp.get("stage"), "review", sp)
+
+    def test_verified_p1_with_clean_pass_not_current(self):
+        """完全通过 + verified 历史 P1 不回退为当前卡点。"""
+        self.write_review_gate(
+            p0=0, p1=1, verdict="通过（P0 0 条，P1 0 条）", open_p0=0, open_p1=0,
+        )
+        rec = self.rec()
+        sp = rec.get("stage_progress")
+        if sp is not None:
+            self.assertNotEqual(sp.get("stage"), "review", sp)
+        rv = (rec.get("gates") or {}).get("review") or {}
+        self.assertEqual(rv.get("open_p1") or 0, 0)
+        self.assertEqual(rv.get("open_p1_titles") or [], [])
+
 
 class ProjectJsSurfaceTests(BoardCardProgressFixture):
     """前端模板锁：五 tab + 卡面徽标/警告类（静态 + 可选 node）。"""
@@ -704,8 +763,6 @@ class ProjectJsRenderTests(BoardCardProgressFixture):
         self.assertIn("P0", detail)
         self.assertIn("⛔", detail)
         # 无卡点空态：无 gates 时
-        data2 = self.build()  # still has review - clear by new fixture without gates
-        # 单独构造：重用 rec 去掉 gates
         data_clear = json.loads(json.dumps(data))
         data_clear["changes"][0]["gates"] = {}
         data_clear["changes"][0]["blocker"] = None
@@ -720,6 +777,36 @@ class ProjectJsRenderTests(BoardCardProgressFixture):
         self.assertEqual(proc2.returncode, 0, proc2.stderr)
         detail2 = json.loads(proc2.stdout)["detail"]
         self.assertIn("当前无卡点", detail2)
+
+    def test_gates_dom_shows_reserved_pass_fixed_p1(self):
+        """有保留通过 + fixed P1：DOM 当前状态含未决明细与卡点。"""
+        self.write_review_gate(
+            p0=0, p1=1, verdict="有保留通过（P1 1 条）", open_p0=0, open_p1=1, p1_status="fixed",
+        )
+        data = self.build()
+        html = self.board.render_html(data)
+        project_js, markup = self._extract_project_assets(html)
+        runner = self.root / "detail-runner.js"
+        runner.write_text(NODE_DETAIL_RUNNER, encoding="utf-8")
+        js_file = self.root / "project-reserved.js"
+        js_file.write_text(project_js, encoding="utf-8")
+        data_file = self.root / "payload-reserved.json"
+        data_file.write_text(json.dumps({"data": data}), encoding="utf-8")
+        markup_file = self.root / "markup-reserved.html"
+        markup_file.write_text(markup, encoding="utf-8")
+        proc = subprocess.run(
+            [NODE, str(runner), str(js_file), str(data_file), str(markup_file)],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        detail = json.loads(proc.stdout)["detail"]
+        self.assertIn("current-gate-status", detail)
+        self.assertIn("未决明细", detail)
+        self.assertIn("P1", detail)
+        self.assertIn("P1-1", detail)
+        self.assertIn("⛔", detail)
+        self.assertNotIn("无活动质量门阶段", detail)
 
     def test_md_block_rich_syntax_and_xss_escape(self):
         """全文 mdBlock：标题/表格/代码/checkbox/有序列表 + XSS 探针不回退。"""
