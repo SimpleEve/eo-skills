@@ -28,8 +28,8 @@ summary: >
 | P1-5 | P1 | 无活动阶段时丢失任一门 ≥3 轮的警告样式 | `cli/eo-board:562` | verified | implementation | 2/3 | `1ac1b1d` / `eba11da` |
 | P1-6 | P1 | Markdown 链接未限制协议，可生成可点击的 `javascript:` URL | `cli/eo-board:1370` | verified | implementation | 5/6 | `afc13fb` / `643e163` |
 | P1-7 | P1 | 第 2 批用户反馈未同步到 AC 唯一期望来源 | `eo-doc/changes/11-board-card-progress/change.md:22` | verified | requirement | 5/6 | `afc13fb` / `643e163` |
-| P1-8 | P1 | `有保留通过`/`fixed` 未决项被当前状态区块误报为无卡点 | `cli/eo-board:275` | fixed | implementation | 7/7 | `4505efb` /  |
-| P1-9 | P1 | 第 3 批动态逆序与质量门当前状态反馈未同步到 AC | `eo-doc/changes/11-board-card-progress/change.md:22` | fixed | requirement | 7/7 | `4505efb` /  |
+| P1-8 | P1 | `有保留通过`/`fixed` 未决项被当前状态区块误报为无卡点 | `cli/eo-board:275` | fixed | implementation | 7/7 | `4505efb` / `4c72710` |
+| P1-9 | P1 | 第 3 批动态逆序与质量门当前状态反馈未同步到 AC | `eo-doc/changes/11-board-card-progress/change.md:22` | fixed | requirement | 7/7 | `4505efb` / `4c72710` |
 | P2-1 | P2 | tab 的 ARIA/键盘语义未形成完整关联 | `cli/eo-board:1498` | open | implementation | 1/3 | `bd4856b` / ~ |
 
 ## 审查总结（首轮快照）
