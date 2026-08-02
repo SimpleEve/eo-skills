@@ -333,6 +333,11 @@ class StageProgressTests(BoardCardProgressFixture):
         self.assertTrue(sp.get("warn"), sp)
         self.assertGreaterEqual(sp.get("rounds") or 0, 3)
 
+    def test_stage_progress_none_without_gates(self):
+        """无质量门时卡面不贴阶段徽标（warn 也不应出现）。"""
+        rec = self.rec()
+        self.assertIsNone(rec.get("stage_progress"))
+
 
 class ProjectJsSurfaceTests(BoardCardProgressFixture):
     """前端模板锁：五 tab + 卡面徽标/警告类（静态 + 可选 node）。"""
@@ -418,6 +423,46 @@ class ProjectJsRenderTests(BoardCardProgressFixture):
             "stage" in card or "change-review" in card or "第" in card,
             card,
         )
+
+    def test_journal_absent_renders_empty_hint_in_detail(self):
+        """AC-3：无 journal 时动态 pane 出空态提示，且五 tab 仍在。"""
+        data = self.build()
+        html = self.board.render_html(data)
+        m_js = re.search(
+            r'<script>\s*(window\.EO_PROJECT[\s\S]*?)</script>',
+            html,
+        )
+        self.assertIsNotNone(m_js)
+        project_js = m_js.group(1)
+        m_markup = re.search(
+            r'id="eo-project-markup">([\s\S]*?)</script>',
+            html,
+        )
+        self.assertIsNotNone(m_markup)
+        markup = m_markup.group(1)
+        runner = self.root / "detail-runner-empty.js"
+        runner.write_text(NODE_DETAIL_RUNNER, encoding="utf-8")
+        js_file = self.root / "project-empty.js"
+        js_file.write_text(project_js, encoding="utf-8")
+        data_file = self.root / "payload-empty.json"
+        data_file.write_text(json.dumps({"data": data}), encoding="utf-8")
+        markup_file = self.root / "markup-empty.html"
+        markup_file.write_text(markup, encoding="utf-8")
+        proc = subprocess.run(
+            [NODE, str(runner), str(js_file), str(data_file), str(markup_file)],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        result = json.loads(proc.stdout)
+        self.assertNotIn("error", result, result)
+        detail = result["detail"]
+        for label in ("概览", "清单", "质量门", "动态", "全文"):
+            self.assertIn(label, detail)
+        self.assertIn("empty-hint", detail)
+        self.assertIn("暂无 loop 窗口报告", detail)
+        self.assertIn("Demo Progress", detail)
+        self.assertNotIn("journal-entry", detail)
 
 
 if __name__ == "__main__":
