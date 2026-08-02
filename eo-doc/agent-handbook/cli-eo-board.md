@@ -1,58 +1,88 @@
 ---
 title: cli/eo-board 只读看板 CLI
 type: agent
-tags: [cli, eo-board, serve, cache, rendering, routing]
+tags: [cli, eo-board, serve, cache, rendering, routing, gates, journal, mdBlock]
 created: 2026-07-24
-updated: 2026-07-27
-scope: 改动看板呈现、门禁判定、serve 缓存、聚合页视图与下钻路由时
+updated: 2026-08-02
+scope: 改动看板呈现、门禁判定、serve 缓存、聚合页视图与下钻路由、泳道卡详情 tab 时
 status: active
 source: cli/eo-board
 summary: >
-  零第三方依赖的单文件只读看板（2729 行）：终端摘要 / --html 静态快照 / --serve 本地轮询服务三形态，
-  消费 eo_lib 解析层，board 专属逻辑为门禁判定、backlog/roadmap 聚合、渲染与 HTTP 服务（含每项目单飞缓存）；
+  零第三方依赖的单文件只读看板（约 3400 行）：终端摘要 / --html 静态快照 / --serve 本地轮询服务三形态，
+  消费 eo_lib 解析层，board 专属逻辑为门禁判定、stage_progress、journal/frontmatter 投影、详情五 tab 与 HTTP 服务（含每项目单飞缓存）；
   聚合形态另有「change 流 ⇄ 概要卡」双视图首页与 route_key 下钻路由。
 conclusions:
   - 宪法四条：只读铁律（绝不写项目文件）、不做清单（无 SSE/无观测/无写操作/零第三方依赖）、性能靠缓存、GitHub 实时状态仅可选旗标
   - serve 缓存：每配置槽一构建锁（_BOARD_BUILD_LOCKS），锁内重算键+二次查表，同槽单飞、跨槽并行
   - 解析能力已抽至 cli/eo_lib，本文件只留呈现职责；改解析先看 eo_lib
   - 单项目泳道页只有一套资产（PROJECT_CSS/MARKUP/JS），serve 与聚合快照共用；改泳道渲染就是改这三块
+  - attach_card_progress 给每条 change 补 full_text / frontmatter / journal_entries / stage_progress；derive_stage_progress 与 blocker 共卡面
+  - mdBlock：先 esc 后白名单；safeHref 仅 http/https/mailto；台账未决 = open|fixed
   - route_key = `<URL 编码显示名>~<项目根 realpath 的 sha256 前 8 位>`；显示名不承担唯一性，路由映射逐请求重建
 ---
 
-eo-skills 的默认呈现层。数据全部派生自 change.md frontmatter 与 backlog/roadmap 文件（不读 Obsidian stub）。
+eo-skills 的默认呈现层。数据全部派生自 change.md frontmatter、质量门报告与 backlog/roadmap 文件（不读 Obsidian stub）。
 
 ## 结构（单文件分区）
 
 | 分区 | 内容 |
 |------|------|
 | 头部导入引导 | `Path(__file__).resolve()` 定位真实 `cli/` 后 `from eo_lib import ...`；入口捕获 `ConfigError` 格式化退出 |
-| 门禁判定（gates） | 探测 review/test/change-review/acceptance 报告，解析 P0/P1/FAIL/轮次，合成 blocker |
-| 活跃度 | `max_activity` / `is_recent`（`ACTIVE_WINDOW_DAYS = 3`）/ `compute_project_activity`——项目级 `activity_at` = max(各 worktree HEAD commit 时间, `changes/` 与 `backlog/` 树 max-mtime)，与 freshness 键共用 `eo_lib.tree_max_mtime` |
-| 聚合 | backlog 扫描（vault/local 分流）、roadmap frontmatter、`git log` 直改统计、change git 统计 |
-| 单项目视图资产 | `PROJECT_CSS` / `PROJECT_MARKUP` / `PROJECT_JS` 三块共享常量 → `HTML_TEMPLATE`（独立页，含内嵌 style/markup/data/script）与 `PROJECT_ASSETS`（聚合快照嵌入形态，同内容换标签壳）；`render_html(data, data_url, home_url)` 是唯一泳道页出口，`home_url` 非空即渲出「← 返回首页」 |
-| 多项目聚合 | `collect_sources`（注册表 + `--scan`）→ `_aggregate_row`（逐项目一行：五状态计数、backlog、as-of、`activity_at`、`route_key`、非 archived 的 `changes[]`）→ `build_all_data`（线程池 ≤8 并发、`_safe_row` 单条目兜底）；`_stream_change` 把 change 流一行所需字段全部前置，前端不回查 |
-| 路由 | `make_route_key(display_name, project_dir)` / `build_route_map`（逐请求重建，新注册与新 scan 立即可下钻；配置读不出的条目不进映射）/ `lookup_route`（原样匹配 → 解码后按可读名再比一次，容忍未编码的中文路径） |
-| 渲染 | 终端表（单项目 `render_terminal` / 聚合 `render_all_terminal`）/ 自包含 HTML（JSON 注入 + 前端 JS 渲染）/ `ALL_HTML_TEMPLATE` 聚合首页（双视图 + hash 路由）/ `ROUTE_MISS_TEMPLATE` 失效路由指引页 |
-| serve | 单项目 `BoardRequestHandler`：`/` 与 `/data.json`；聚合 `AllBoardRequestHandler`：`/`、`/data.json`、`/p/<route_key>`、`/p/<route_key>/data.json`，未知路径一律 404 指引页（不 5xx）。均仅绑 127.0.0.1:7333，前端 3 秒轮询 hash 比对热刷新 |
-| 缓存（serve 内） | `_BOARD_CACHE` 槽（config_path 为键）+ `_BOARD_BUILD_LOCKS` 每槽构建锁；miss 时锁内重算 freshness 键并二次查表后才 `build_data`；hit/miss 各记一行 stderr 诊断。聚合首页与 `/p/<key>` 下钻共用同一批槽 |
+| 门禁判定（gates） | `parse_*_gate` / `compute_gates`：探测 review/test/change-review/acceptance；台账 `parse_finding_ledger_open_items`（**open+fixed** 为未决）；合成 `blocker` |
+| 阶段与进度投影 | `derive_stage_progress(gates, status)`：当前阶段徽标 + `warn`（`STAGE_WARN_ROUNDS=3`，与 stage 解耦）；`_gate_verdict_pass` 不含「有保留通过」 |
+| journal | `parse_journal_entries`：按 `• HH:MM` 切窗，最近 N 条后**逆序**；`attach_card_progress` 读 `tmp/eo/loop/<id>/journal.md` |
+| frontmatter 再投影 | `attach_card_progress`：`split_frontmatter(full_text)` → `frontmatter` 公开字典（空值省略） |
+| 活跃度 | `max_activity` / `is_recent`（`ACTIVE_WINDOW_DAYS = 3`）/ `compute_project_activity` |
+| 聚合 | backlog 扫描、roadmap、`git log` 直改统计、change git 统计；`build_data` 内对每条 change 调 `attach_card_progress` |
+| 单项目视图资产 | `PROJECT_CSS` / `PROJECT_MARKUP` / `PROJECT_JS` → `render_html` 唯一泳道出口 |
+| 多项目聚合 | `collect_sources` → `_aggregate_row` → `build_all_data`；`_stream_change` 行字段前置 |
+| 路由 | `make_route_key` / `build_route_map` / `lookup_route` |
+| 渲染 | 终端 `render_terminal`（**不**投 tab/journal）；HTML 前端 `renderChange` 五 tab 等 |
+| serve / 缓存 | 单项目与聚合 handler；`_BOARD_CACHE` + `_BOARD_BUILD_LOCKS` |
+
+## 门禁与 stage_progress（Python）
+
+| 符号 | 职责 |
+|------|------|
+| `parse_finding_ledger_open_items` | 台账表行 → 未决列表；状态 ∈ `{open, fixed}`；verified/waived/superseded 忽略 |
+| `parse_review_gate` | 轮次近似、历史标题计数 + `open_p0`/`open_p1` 与 titles |
+| `parse_test_gate` | 完全通过时 `fail_titles` 清空（不算当前未决） |
+| `compute_gates` | 填 `rec["gates"]` 与 `rec["blocker"]`；review 未决 P0/P1 也会成 blocker（含有保留通过） |
+| `derive_stage_progress` | 返回 `{stage, label, rounds, warn}` 或仅 warn 对象 / `None`；archived 无阶段可有 warn |
+| `attach_card_progress` | `full_text` / `frontmatter` / `journal_*` / `stage_progress` |
+
+**当前阶段优先级（简化）**：review 未决（不通过或 open/fixed P0|P1）> test 失败 > change_review 未决 > acceptance（仅 `status=reviewed`）> 进行中弱信号。
+
+## 泳道详情五 tab（PROJECT_JS）
+
+| 函数 | 职责 |
+|------|------|
+| `renderChange` | tab 壳：概览 / 清单 / 质量门 / 动态 / 全文 |
+| `renderFrontmatter` | 概览 frontmatter 键值 |
+| `renderCurrentGateStatus` | 质量门顶部：阶段 / 卡点 / 未决明细；空态「当前无卡点」 |
+| `renderGates` | 当前状态 + 各门报告（detail 列表只用 open/fixed titles，不用历史 p0_titles） |
+| `renderJournal` | journal 条目 `mdBlock`；顺序依赖数据层逆序 |
+| `mdBlock` / `applyInline` / `safeHref` | 迷你 markdown：标题 #~####、表、fenced code、列表/checkbox、hr、粗体/code/链接；**safeHref** 仅 http/https/mailto |
+| `bindDetailTabs` / `openDetail(..., isRefresh)` | tab 点击；热刷新时恢复活动 `data-tab` |
+| `changeCard` | 卡面阶段标签 + `card-warn`（`stage_progress.warn`） |
 
 ## 三形态入口
 
-`eo-board`（终端）/ `--html [-o P]` / `--serve`；多项目三形态：`--all`（终端 / `--html` 自包含聚合快照 / `--serve` 聚合页逐请求重读注册表+跨槽并行+空表指引页；argparse 组合矩阵钉定 --port 限 serve、--no-open 限 html/serve）（注册表聚合，线程池并发、坏条目行内隔离、as-of 戳）/ `--project <路径|注册名>`（任意目录下钻，重名歧义拒绝）/ `--all --scan <父目录>`（一层兜底、同仓 worktree 去重、零写入）；`--register/--unregister` 维护注册表（写 ~/.eo，预钉例外）——共用 `build_data(cfg)`，只是渲染出口不同。单次运行形态不走缓存（天然全量扫）。
+`eo-board`（终端）/ `--html [-o P]` / `--serve`；多项目：`--all` / `--project` / `--all --scan`；`--register/--unregister`。共用 `build_data(cfg)`，渲染出口不同。单次运行不走缓存。
 
 ## 聚合页双视图与下钻（`--all --html` / `--all --serve`）
 
 | 关注点 | 落点 |
 |--------|------|
-| 首页两视图 | `ALL_HTML_TEMPLATE` 内前端 JS：`#/` = 跨项目 change 流（非 archived，按 `activity_at` 倒序，`active=false` 的行降权并以分界线区隔）、`#/cards` = 概要卡；视图态记在 URL hash，刷新不丢 |
-| 下钻路由 | serve 走真实路径 `/p/<route_key>`（`_send_project` 查 `build_route_map` → `get_board_data_cached` → `render_html(..., home_url="/")`）；`--html` 走同一套 key 的 hash 路由 `#/p/<route_key>`，泳道数据由 `build_all_data(embed_board=True)` 内嵌单文件，离线零请求 |
-| 两套样式共存 | 快照同文件里既有聚合首页样式又有 `PROJECT_CSS`；进泳道视图时禁用聚合样式表并挂载 `PROJECT_CSS`，靠样式表互斥分流，**没有第二套模板分支**——`render_all_html` 仅在真嵌了泳道数据时才带 `PROJECT_ASSETS`，serve 首页不背这份体量 |
-| 容器宽度口径 | `ALL_HTML_TEMPLATE` 的 `.wrap` = `max-width: 1280px` 居中（管首页两视图）；`PROJECT_CSS` 的 `.wrap` = `max-width: min(94vw, 1800px)` 居中（管泳道页，六列约需 1678px 故上限取 1800）；`.drawer` = `min(920px, 94vw)`。两处 `.wrap` 靠上面的样式表互斥天然分流 |
-| 失效路由 | `render_route_miss` 列出当前可下钻项目并给回首页链接；空聚合时给注册/`--scan` 指引 |
+| 首页两视图 | `ALL_HTML_TEMPLATE`：`#/` change 流、`#/cards` 概要卡 |
+| 下钻 | serve `/p/<route_key>` → `render_html(..., home_url="/")`；html 用 hash `#/p/<key>` + `embed_board` |
+| 样式 | 聚合 CSS 与 `PROJECT_CSS` 互斥；泳道 `.wrap` = `min(94vw,1800px)`；`.drawer` = `min(920px,94vw)` |
+| 失效路由 | `render_route_miss` |
 
 ## 来源
 
 - [cli/eo-board](../../cli/eo-board) — 实现本体
 - [cli-eo-lib.md](cli-eo-lib.md) — 解析层依赖
 - install.sh — 符号链接安装入口
-- `tests/test_eo_board_cache.py`（1615 行）— 缓存单飞、路由、渲染与终端兼容基线。两点约定：①「终端输出兼容基线」常量守 `render_terminal` 逐字节不变，`build_data`/`render_html` 只做「旧字段保真、新字段放行」的递归子集断言；②视图层断言用最小 DOM 垫片把内嵌脚本交给 `node` 真跑（`NODE_MOUNT_RUNNER`），断言落在渲染产出的 DOM 上——`node` 缺失时该类用例 `skipUnless` 跳过，运行时仍是零第三方依赖（由 `test_stays_on_stdlib_only_and_binds_loopback_only` 静态守护）
+- `tests/test_eo_board_cache.py` — 缓存/路由/聚合与终端兼容基线；视图层 node 垫片
+- `tests/test_board_card_progress.py` — 泳道卡进度：journal 逆序、stage_progress 当前性、tab 刷新、mdBlock/safeHref、质量门当前状态、XSS
