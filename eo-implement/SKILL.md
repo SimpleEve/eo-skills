@@ -92,7 +92,7 @@ description: |
 6. 修复提交带 `[<change-id>]` 前缀
 7. **按反馈来源交接，不给含糊二选一**：
    - 当前存在未核销 Test FAIL（含 Test 与 Review 混合反馈）→ 回**原 tester**复验；测试通过后，只要本轮产生过实施提交，再回**原 reviewer**增量审查
-   - 只有 Review / acceptance 反馈 → 先回**原 reviewer**增量复审；由 reviewer 基于最近通过 Test 基线 `T` 到当前实施基线 `H` 的完整差异签署 `测试证据处置：沿用 / 复验`。Implement 的“预计沿用”不得直接让 Loop 跳过 Test
+   - 只有 Review / acceptance 反馈 → 先回**原 reviewer**增量复审；由 reviewer 基于最近通过 Test 基线 `T` 到当前交付基线 `H`（最后一个业务代码或测试资产提交）的完整差异签署 `测试证据处置：沿用 / 复验`。Implement 的“预计沿用”不得直接让 Loop 跳过 Test
    - 交付速报固定列：`反馈来源`、`修复 commit`、`受影响 AC / 测试`、`局部验证`、`测试影响候选`、`下一节点`
 8. 修复不开新 change；发现根源是方案/需求问题 → 停下告知用户，转 /eo-change **回炉子流程**（实质修订 + 重新确认；意图不变的口径精化不必全量回炉，就地补 AC 即可）
 
@@ -148,7 +148,7 @@ spawn 一个**新鲜上下文 subagent**（执行者自述不作数——修了 
 - **重验证不在 implement 跑**：auto-heavy AC（起服务 / 多环境组合 / 点击流）归 /eo-test——implement 不起环境、不跑环境矩阵、不代勾 heavy 项；判不准 light/heavy 按 heavy 处理
 - **批末跑为主，写为例外**：全档批末验证优先用既有绿灯与一次性冒烟作证据，不为过批末门系统性编写测试——回归资产的沉淀归 /eo-test（轻模式的测试锁定不受此限，它是轻档唯一证据门）
 - **修复循环双向取证**：先复现失败再修，且复现取最低成本层——起环境是最后手段，不是默认
-- **测试影响不自证**：Implement 只提交影响候选；Review 来源的修复是否可沿用既有 Test 证据，由原 reviewer 在当前实施基线上签署。存在 Test FAIL 时无条件回原 tester
+- **测试影响不自证**：Implement 只提交影响候选；Review 来源的修复是否可沿用既有 Test 证据，由原 reviewer 在当前交付基线上签署。存在 Test FAIL 时无条件回原 tester
 - **勾选即时**：TODO/AC 完成立即在 change.md 勾选，不攒批
 - **commit 前缀**：所有实施提交带 `[<change-id>]`（archive 靠它归集区间）
 - **注释纪律**：一切流程溯源标注（change 编号/slug、TODO/AC、finding P0-x/P1-x、FAIL-x、批次号）**严禁**进代码注释（溯源走 commit 前缀）；注释只写代码表达不了的约束、一两行为限，不写「为何正确」的辩护，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §2.6

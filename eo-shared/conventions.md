@@ -92,10 +92,12 @@ implementing ──(eo-change 回炉子流程：方案需实质修订)──▶ 
 
 **修复后的节点路由不等于重放固定流水线**：Test / Review 是证据节点，不是 `status`。首轮可按风险选择先 Test 或先 Review；一旦进入反馈循环，按反馈来源与证据新鲜度分流：
 
-- **Review 反馈**：`eo-review → eo-implement → 原 reviewer 增量复审`。仍有 P0/P1 就继续修，不在代码审查尚未收敛时反复启动 Test；复审通过后，原 reviewer 再审计最近一次通过的 Test 基线 `T` 到当前实施基线 `H` 的完整差异，并在最新 review 轮写 `测试证据处置：沿用 / 复验`
+- **Review 反馈**：`eo-review → eo-implement → 原 reviewer 增量复审`。仍有 P0/P1 就继续修，不在代码审查尚未收敛时反复启动 Test；复审通过后，若存在较旧的通过 Test 基线 `T`，原 reviewer 再审计 `T` 到当前交付基线 `H` 的完整差异，并在最新 review 轮写 `测试证据处置：沿用 / 复验`。`H` = 本 change 最后一个 `[<change-id>]` 业务代码或测试资产提交
   - `沿用`：`T` 是 `H` 的祖先，`T..H` 可完整审计，既有 Test 无阻塞项，且修复未改变受测外部行为、AC / 验证口径、测试断言 / fixture / mock / 配置 / 环境组合 / 关键依赖，也未弄脏 auto-heavy AC；跳过 eo-test
-  - `复验`：任一沿用条件不成立，或处置缺失、含糊、基线关系无法证明；派回原 tester。影响能映射到有限 AC、用例及依赖闭包时定向复验；跨共享路径 / 契约 / 状态机 / schema / 并发 / 权限安全 / 外部集成 / 环境矩阵 / 测试基础设施，或范围无法圈定时完整复验
-- **Test 反馈**：存在未核销 Test FAIL 时固定走 `eo-test → eo-implement → 原 tester 复验`，不得被 Review 的证据沿用分支绕过；复验通过后，若产生过新的实施提交，再由原 reviewer 增量审查该提交，恢复 Review 基线新鲜度
+  - `复验`：任一沿用条件不成立，或处置缺失、含糊、基线关系无法证明；派回原 tester。影响不含 auto-heavy 且能映射到有限 AC、用例及依赖闭包时定向复验；任一 auto-heavy AC 被弄脏，或影响跨共享路径 / 契约 / 状态机 / schema / 并发 / 权限安全 / 外部集成 / 环境矩阵 / 测试基础设施，或范围无法圈定时完整复验
+  - `不适用`：没有历史 Test，或 Test 已在当前 `(plan_revision, H)` 通过。前者按既有 heavy AC 门决定是否首跑 Test（无待验 heavy AC 则不强迫补 Test），后者直接复用当前证据键上的 Test
+- **Test 反馈**：存在未核销 Test FAIL 时固定走 `eo-test → eo-implement → 原 tester 复验`，不得被 Review 的证据沿用分支绕过；Test 失败曾把 status 置回 `implementing` 时，复验通过后无论 `H` 是否变化都回原 reviewer（`reviewed` 的恢复权归 Review）；若产生过新的业务代码或测试资产提交，Reviewer 同时增量审查这些提交，恢复状态与 Review 基线新鲜度
+- **Test 资产与基线**：测试文件、fixture、mock、harness、测试配置都属于测试资产。eo-test 本轮改动测试资产时，须先以 `[<change-id>]` 提交，再在更新后的 `H` 上执行最终验证；`test.md` / `review.md` / change 元数据等纯流程工件提交不推进 `H`。Test 报告以 `B` 记录本轮最终执行基线（执行时 `B = H`）。Test / Review 的完整新鲜度键是 `(plan_revision, commit)`：任何业务代码或测试资产提交都会推进 `H`，而回炉提升 `plan_revision` 即使 `H` 不变也会使旧证据过期
 - **权限边界**：Implement 只提供修复 commit、finding / FAIL 映射、同层验证和受影响 AC 候选；它的“预计无测试影响”只是 reviewer 的输入，不能自行批准跳过独立 Test。Loop 只校验并消费 review/test 的结构化处置，不亲自看 diff 作语义判定
 
 无需为该路由新增 frontmatter 状态：Review 通过仍可置 `reviewed`；其后 Test 若失败再按既有回退边置回 `implementing`，Test 通过则保持 `reviewed`。

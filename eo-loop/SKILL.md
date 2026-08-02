@@ -25,7 +25,7 @@ description: |
 **① 圈线段**：从用户话语确定三要素——**入口节点、出口节点、收敛标准**（出口状态怎样算达成）。地图是 [../eo-shared/conventions.md](../eo-shared/conventions.md) §3 的状态机（主路径 + 回退边）。典型线段只是示例、不是枚举：
 
 - 方案对齐：change ↔ change-review，收敛 = 审查通过、用户确认
-- 实施对齐：implement → test → review，收敛 = 台账无阻塞项（P0/P1 清零）
+- 实施对齐（首轮典型路径）：implement → test → review，收敛 = 台账无阻塞项（P0/P1 清零）、最新 Review 覆盖当前 `(plan_revision, H)`，且测试证据已闭合（Test 在当前 revision 的 `H` 通过 / 当前 Review 明确签署旧证据沿用 / 无历史 Test 且无待验 heavy AC）；进入反馈循环后按 ④ 的非对称回路分流，不机械重放整条路径
 - 直通：change → … → review 或 archive
 
 三要素判不出的，先查偏好文件补缺省（见「经验沉淀」）；仍缺 → 按封闭选择协议（[../eo-shared/questioning.md](../eo-shared/questioning.md) §4）问一次，不追问第二轮。
@@ -48,6 +48,10 @@ description: |
 - **产出实在**：声称的 commit / 报告 / 勾选真实存在，且锚定当前基线（勾了 AC 却无对应提交、review 结论基于旧基线，都是假进度）
 - **边界合规**：无越界产物（test 改了业务代码、review 亲自动手修、implement 动了测试锁定 → 一律不通过）
 
+Review 修复后的免测判定同样执行证据完整性校验：总控只读取最新 review 轮的 `测试证据处置`、既有 Test 基线 `T`、当前交付基线 `H`、受影响范围与依据。存在较旧 Test 时，只有原 reviewer 在当前 `plan_revision` 的 `H` 上明确签署 `沿用`，且 `既有通过 Test：第 N 轮 @ T` 精确对应同一 `test.md` 中当前 revision 最新的通过轮、该轮先通过下文同等级的 Test 结构/定向来源链/范围覆盖校验、台账无阻塞项、`T` 为 `H` 的祖先时才可跳过 eo-test；Implement 的影响候选、worker 口头结论、旧 revision 或字段缺失/含糊都不能放行，后一律按 `复验` 路由。处置为 `不适用` 时只接受两种可机械证明的情况：Test 已在当前 revision 的 `H` 通过且同样通过下文结构校验，或从未运行 Test 且没有待验 heavy AC；否则派 Test。
+
+Test 交付也按当前基线校验：`H` 是最后一个触及业务代码或测试资产的本 change commit，纯报告/元数据提交不计；Test 新增或修改测试资产时必须先以 `[<change-id>]` 提交，再在新 `H` 上执行最终验证。总控只接受当前 `plan_revision` 的结构化 Test 轮次：结论通过、台账无阻塞项、`当前交付基线 B` 可解析，且 `验证方式`、`触发来源`、`测试资产提交`、`重跑范围`、`沿用范围`、`范围校验` 均明确，测试资产提交已包含在 `B` 中；定向复验还须指向同一报告内结构完整且明确通过的 `第 N 轮 @ S`（定向来源链递归有效），证明 `S` 是 `B` 的祖先、从触发来源指向的历史 Review/Test 轮解析出的影响集包含在重跑范围内，且来源证据被重跑范围与沿用范围无遗漏、无重叠地覆盖。字段残缺、revision 过期、来源链不通过、范围覆盖无法证明或存在本 change 的未提交业务代码/测试资产 → 拒收并打回对应原 worker。若 Review 在 `H` 上签署 `复验`，只有后续通过的 Test 轮明确写 `触发来源：Review 第 R 轮 @ H` 才算消费该路由；消费后即使 Review 速报仍保留 `复验` 字样，也不得再次派 Test。Test 通过后若 `status` 不是 `reviewed` 或最新 Review 未覆盖当前 `(plan_revision, H)`，先回原 reviewer；Reviewer 在 Test 已于当前 revision 的 `H` 通过时写 `不适用`，不会因此再次触发 Test。
+
 裁决三分支：
 
 - **通过** → 推进线段，派发下一步
@@ -56,7 +60,16 @@ description: |
 
 **分叉清单转达**：worker 随交付上报的分叉清单（见「派发 prompt 纪律」的分叉上报条款）不走裁决三分支——校验通过后，总控把清单攒成**一次封闭选择**（协议见 [../eo-shared/questioning.md](../eo-shared/questioning.md) §4，逐叉列 worker 所采假设作推荐项）转达用户；用户改判的项作为修订输入随下一轮回灌原 worker，维持假设的项不返工。
 
-**④ 收敛判定**：对照收敛标准。达成 → 收口（回写经验，见「经验沉淀」，并发最终速报）。未达成 → 走状态机**既有**回退边继续循环：test 不通过 / review 出 P0/P1 → eo-implement 模式二；方案需实质修订 → eo-change 回炉。**熔断只消费、不发明**：`fix_rounds ≥3` 三选一、change-review 轮数上限，任一触发即停下，按对应 skill 的协议问用户，绝不代答、绝不无限循环。
+**④ 收敛判定**：先消费待执行的证据路由，再对照收敛标准；Review 虽已通过但处置为 `复验` 且尚无匹配该 Review 轮的后续 Test 通过、处置不可采、任一证据 revision 过期、最新 Review 未覆盖 `(plan_revision, H)` 或仍有待验 heavy AC 时，均**尚未收敛**。只有台账无阻塞项、最新 Review 覆盖当前 `(plan_revision, H)`，且测试证据按上方三种方式之一闭合，才收口（回写经验并发最终速报）。其余走下列**非对称回路**，不把首轮路径当循环体：
+
+- `review` 有 P0/P1 → 原 impl worker 走 eo-implement 模式二 → **原 reviewer 增量复审**。仍有 P0/P1 就继续这条短回路，不启动 Test；复审通过后读取测试证据处置：`沿用` → 跳过 eo-test，尚未被匹配 Test 轮消费的 `复验` / 缺失 / 含糊 / 基线关系不成立 → 派原 test worker，`不适用` → Test 已在当前基线通过则继续收口；无历史 Test 时仅有待验 heavy AC 才首跑 Test
+- 进入 `test` 后，由原 tester 根据 review 指出的影响集决定范围：不含 auto-heavy 且能映射到有限 AC、用例及依赖闭包 → **定向复验**，从明确通过的来源轮组合“重跑范围 + 沿用范围”；任一 auto-heavy AC 被弄脏、影响跨共享行为 / 契约 / 测试基础设施或影响圈不住 → **完整复验**。tester 可扩大范围，不得无证据缩小 reviewer 指出的影响集
+- `test` 通过 → 若 `status` 因先前 Test FAIL 仍为 `implementing`、本轮测试资产提交推进了 `H`，或最新 Review 因 revision/其他交付提交未覆盖 `(plan_revision, H)`，先派原 reviewer 增量审查；只有 `status: reviewed`、Review 覆盖当前 `(plan_revision, H)` 且 Test 结论也在该键上时才继续收口
+- `test` 有未核销 FAIL（含 Test 与 Review 同时有反馈）→ 原 impl worker 修复 → **原 test worker 复验**；通过后只要 `status` 仍为 `implementing`，或产生过业务代码/测试资产提交，就再派原 reviewer 增量审查，恢复 status 与 Review 基线新鲜度。此分支不得套用 `沿用` 跳过 tester
+- acceptance 打回 → implement 修复 → 原 reviewer 增量审查，再按其测试证据处置继续
+- 方案需实质修订 → eo-change 回炉
+
+**熔断只消费、不发明**：`fix_rounds ≥3` 三选一、change-review 轮数上限，任一触发即停下，按对应 skill 的协议问用户，绝不代答、绝不无限循环。
 
 ## 节点清单
 
@@ -67,7 +80,7 @@ description: |
 | eo-change | 意图 / 回炉反馈 | change.md（draft → confirmed 经用户确认） | 含判档（light/full）与回炉子流程 |
 | eo-change-review | draft/confirmed 的 change.md | 方案审查与修订（文档修订，不产码） | 轻档用探针对齐替代，不派本节点 |
 | eo-implement | confirmed | 代码 + AC 勾选（implementing） | 模式二承接 test/review 反馈修复 |
-| eo-test | implementing 后的代码 | test.md 台账 | 严禁改业务代码 |
+| eo-test | implementing/reviewed 后需验证的代码 | test.md 台账 + 定向/完整范围 | 严禁改业务代码；首轮完整审计，复验按影响范围分流 |
 | eo-review | implementing 后的代码 | review.md P0/P1/P2（通过 → reviewed） | 代码级审查 |
 | eo-archive | 全档 reviewed；轻档 implementing + 完成门留痕 | archived（不可逆） | 两档同源：轻档走轻档门；implement 收口也内嵌调用它 |
 
@@ -108,7 +121,7 @@ description: |
 
 - 派发：<task / dispatch 凭据（orca 时）或 worker 标识>
 - owner：<基底 + 模型>
-- 当前规则：<本轮循环策略，如「修完全部 P1 再由同一 reviewer 增量核销，暂不启动 heavy test」>
+- 当前规则：<本轮循环策略，如「Review 短回路先收敛；同一 reviewer 核销后再按测试证据处置决定是否派 Test」>
 
 下一次固定进度报告约 <HH:MM +30min>。
 ```
@@ -130,6 +143,7 @@ journal 属 tmp/eo 命名空间（[../eo-shared/conventions.md](../eo-shared/con
 - worker 的完成声明 ≠ 状态推进；状态真相只在 frontmatter 与台账
 - 回退边（status 置回）由**产出该结果的 skill 当场执行**（conventions §3），总控不代写 status
 - review 结果不授权总控动手修——修复一律派回 eo-implement 模式二
+- Review 修复不自动回 Test：先回原 reviewer 增量复审；只有结构化处置为 `复验`（或处置不可采）才派原 tester
 - 并行派发 >2 个 worker 前，先报数量与预算，等用户点头
 
 ## 关键约束
@@ -138,6 +152,7 @@ journal 属 tmp/eo 命名空间（[../eo-shared/conventions.md](../eo-shared/con
 |------|------|
 | 三不做 | 总控不写码、不改 change 实质、不复述下游流程 |
 | 先校验再裁决 | worker 交付不直接采信：三项检查 → 通过 / 打回（附证据）/ 上交用户；代用户做裁决 = 违规 |
+| 反馈回路非对称 | Review 修复先走 implement↔review 短回路，再按 reviewer 的测试证据处置决定是否 Test；Test FAIL 修复则必须先回 tester |
 | worker 按角色复用 | 同角色跨轮次复用原 worker（上下文资产）；跨角色隔离；换模型 / 污染 / 不可达才重建 |
 | 无状态 | 不落自有状态文件；中断恢复 = 重读 frontmatter |
 | 熔断只消费 | 到限即停、按下游 skill 协议问用户，绝不无限循环 |

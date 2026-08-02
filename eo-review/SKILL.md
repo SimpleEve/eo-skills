@@ -49,13 +49,13 @@ description: |
 
 1. `eo-doc/changes/<change-id>/change.md`：§1 意图与已钉决策、§2 AC、§3 TODO、条件节（§5 方案 / §7 风险若存在）
 2. 经 `eo-doc/agent-handbook/INDEX.md` 定位相关代码地图，理解既有架构与模式
-3. 本次实施的 diff（按 frontmatter `base_commit` 起算，或 `[<change-id>]` 前缀的提交）
+3. 本次交付的 diff（按 frontmatter `base_commit` 起算，或 `[<change-id>]` 前缀的业务代码与测试资产提交）
 
 ### 第二步：确定条件维度
 
 - 维度 1-5 恒定执行
 - 涉及 UI 且仓库根存在 `DESIGN.md` → 加启用维度 6（设计一致性）
-- 存在最近一次通过的 Test 基线 `T`，且 `T` 之后有新的实施提交 → 加启用维度 7（测试证据失效审计）
+- 存在最近一次通过的 Test，且其 revision 不等于当前 `plan_revision`，或其基线 `T` 之后有新的业务代码/测试资产提交 → 加启用维度 7（测试证据失效审计）
 
 ### 第三步：代码审查
 
@@ -65,15 +65,15 @@ description: |
 - **维度 4 · 代码规范**：命名一致、类型严格（无随意 `any`）、重复代码、公共 API 注释；**注释纪律**（[../eo-shared/conventions.md](../eo-shared/conventions.md) §2.6）——diff 中发现流程溯源标注（change/TODO/AC/finding 编号、slug 作溯源）或「为何正确」的叙事辩护注释 → P1
 - **维度 5 · 安全与性能**：注入/越权/敏感信息暴露；明显性能瓶颈
 - **维度 6 · 设计一致性（条件）**：UI 实现的字体/色值/间距/圆角是否符合 `DESIGN.md`；发现色板外颜色、刻度外魔法数标 P1
-- **维度 7 · 测试证据失效审计（条件）**：存在最近一次通过的 `test.md`，且其基线 `T` 之后又有实施提交时启用。以当前最后一个 `[<change-id>]` 实施提交为 `H`，审计完整 `T..H`，不采信 implement 的“预计无影响”自述。只有同时满足下列条件才签署 `测试证据处置：沿用`：Test 台账无 `open`/`fixed` 阻塞项；`T` 是 `H` 的祖先且范围可完整审计；未改变受测外部行为、AC / 验证口径、测试断言 / fixture / mock / 配置 / 环境组合 / 关键依赖；未弄脏 auto-heavy AC；受影响 auto-light AC 已有同层重验证证据。任一不成立或无法证明 → `测试证据处置：复验`，列出受影响 AC / 测试与原因。这里仅判证据是否失效，不运行 heavy Test、不修改 test.md、不宣告测试通过
+- **维度 7 · 测试证据失效审计（条件）**：存在最近一次通过的 `test.md`，但其 revision 已旧，或其基线 `T` 之后又有业务代码/测试资产提交时启用。证据 revision 不等于当前 `plan_revision` → AC / 验证口径可能已变化，直接签 `复验`，不得仅凭 `T == H` 沿用；其余情况以当前最后一个 `[<change-id>]` 交付提交为 `H`，审计完整 `T..H`，不采信 implement 的“预计无影响”自述。只有同时满足下列条件才签署 `测试证据处置：沿用`：Test 台账无 `open`/`fixed` 阻塞项；Test 与 Review 均属当前 revision；`T` 是 `H` 的祖先且范围可完整审计；未改变受测外部行为、AC / 验证口径、测试断言 / fixture / mock / 配置 / 环境组合 / 关键依赖；未弄脏 auto-heavy AC；受影响 auto-light AC 已有同层重验证证据。任一不成立或无法证明 → `测试证据处置：复验`，列出受影响 AC / 测试与原因。这里仅判证据是否失效，不运行 heavy Test、不修改 test.md、不宣告测试通过
 
 ### 第四步：报告与速报（轮次留痕，追加不覆盖）
 
 1. 按 [references/review-template.md](references/review-template.md) 维护 `eo-doc/changes/<change-id>/review.md`：
-   - **首轮**（文件不存在）：全量写入，P0/P1/P2 各条同步建入 Finding 台账（状态 open、首见轮 1、根因、本轮审查基线 commit）
+   - **首轮**（文件不存在）：全量写入并建立 `第 1 轮记录`，P0/P1/P2 各条同步建入 Finding 台账（状态 open、首见轮 1、根因、本轮审查基线 commit）
    - **复审轮**：**不重写报告**——先核销台账：`fixed` 项按其修复 commit 复验，到位 → `verified`，没到位 → 回 `open` 一句话说明；`verified` 项再次打回 = **reopen**（状态回 `open`、刷新最近轮）；新 finding 建条（编号沿用同一序列）。然后在「速报」前追加 `## 第 N 轮记录（revision R · 日期）` 节，原地更新末尾速报。遇**无台账的旧格式报告** → 按当前内容一次性补建台账再继续
    - 台账写入权见模板 writer matrix：本 skill 建条与核销；`fixed` + 修复 commit 归 eo-implement 回写；用户当场裁决不修的 P1 → 状态置 `waived`（附原话要点，不阻塞 reviewed/归档）；历史轮次节不改；轮次编号全文件单调递增，跨 revision 不清零
-   - **测试证据处置**：仅当维度 7 启用时，在本轮记录与末尾速报同步写固定字段：`测试证据处置：沿用 / 复验`、`既有通过 Test：第 N 轮 @ T`、`当前实施基线：H`、`受影响 AC / 测试`、`依据`。没有历史 Test 或 Test 已在 `H` 通过时写 `测试证据处置：不适用`；字段缺失/含糊不等价于沿用
+   - **测试证据处置**：末尾速报每轮都写固定字段：`测试证据处置：不适用 / 沿用 / 复验`、`既有通过 Test`、`当前交付基线 H`、`受影响 AC / 测试`、`依据`；维度 7 启用时还须把同组字段写进本轮记录留历史。没有历史 Test，或 Test 已在当前 revision 的 `H` 通过时写 `不适用` 并说明是哪一种；字段缺失/含糊、revision 过期均不等价于沿用
 2. **status 流转（双向都归本 skill）**：无未决 P0/P1（`open`/`fixed`；`waived` 不算）→ change.md `status` 置 `reviewed`；有 P0/P1 且当前 status 已是 `reviewed`（复审翻车）→ **当场置回 `implementing`**（回退边，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §3）
 3. **对话速报（硬性——缺速报 = 流程未完成）**：
 
@@ -81,7 +81,7 @@ description: |
 结论：通过 / 不通过（P0 x 条）/ 有保留通过（P1 x 条）［第 N 轮 · revision R · 基线 <short-sha>］
 ⚠️ 复发：<ID> 第二次打回（无则省略此行）
 测试证据处置：不适用 / 沿用 / 复验
-既有通过 Test：无 / 第 N 轮 @ <T>；当前实施基线：<H>
+既有通过 Test：无 / 第 N 轮 @ <T>；当前交付基线：<H>
 受影响 AC / 测试：无 / <清单>；依据：<一句话>
 P0（阻塞）：
 1. <一句话> — <file:line>
@@ -94,7 +94,7 @@ P2（可后置）：
 （详细分析见 <review.md 路径>）
 ```
 
-无某级问题整行省略；全绿压缩为「结论 + 下一步」两行；每条一句话 + 定位，不展开分析。
+无某级问题整行省略；每条一句话 + 定位，不展开分析。全绿时省略 finding 明细，但测试证据处置、`T/H`、受影响范围、依据与下一步仍保留，不能压缩掉机器可读路由字段。
 
 ## 关键约束
 

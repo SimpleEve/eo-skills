@@ -30,9 +30,15 @@ description: |
 
 1. `status: reviewed`（不是 → 指出当前所处环节：draft/confirmed 回 /eo-change 或 /eo-implement；implementing 回 /eo-implement；已 archived 直接告知）
 2. **报告当前结论门**（读末尾速报 + 台账，不通读正文——正文是历史快照）：
-   - **工作区无本 change 的未提交实施改动**（有 → 先结算成 `[<change-id>]` commit 再回 /eo-review——未经审查的实施改动不得借第二层结算绕过下一条）
-   - `review.md` 存在且末尾速报结论为通过（P0/P1 已清零），且其**最新轮基线 commit == 本 change 最后一个 `[<change-id>]` 实施提交**——修过码必须重新 review，旧结论不作数（不符 → 回 /eo-review 复审）
-   - `test.md` 存在时末尾速报必须为通过（test 不强制基线新鲜度——重验证一次跑完的取舍；触及 heavy AC 的修复由模式二收尾提示重跑）；台账不得有 `open`/`fixed` 的**阻塞项**（= review 台账 P0/P1、test 台账级别「阻塞」行；`waived`/`superseded`/P2 不算）——有 → 回 /eo-implement 模式二修复或重跑对应验证核销
+   - **工作区无本 change 的未提交交付改动**：交付改动 = 业务代码或测试资产（测试文件、fixture、mock、harness、测试配置）。有未提交业务代码 → 先结算成 `[<change-id>]` commit 再回 /eo-review；有未提交测试资产 → 回 /eo-test 提交后在新基线上执行最终验证。二者都不得借第二层结算绕过证据门
+   - 记本 change 最后一个触及业务代码或测试资产的 `[<change-id>]` commit 为当前交付基线 `H`；`test.md`、`review.md`、change 元数据等纯流程工件提交不推进 `H`
+   - `review.md` 存在且末尾速报结论为通过（P0/P1 已清零），且其**最新轮 revision == 当前 `plan_revision`、基线 commit == H**——回炉提升 revision，或任何后续业务代码/测试资产提交，都会同时使 Review 结论与沿用签署过期（不符 → 回原 reviewer 复审）
+   - **Test 证据门（`test.md` 存在时）**：先校验最新轮 Test 自身完整，再校验它相对 `H` 的新鲜度：
+     1. **结论完整**：末尾速报为通过，台账无 `open`/`fixed` 的阻塞项，且最新 Test 轮 revision == 当前 `plan_revision`；从该轮的 `当前交付基线` 取 Test 结论基线 `B`。`B` 必须是可解析 commit，`验证方式`、`触发来源`、`测试资产提交`、`重跑范围`、`沿用范围`、`范围校验` 均须明确；按触发来源解析本轮起点 `A`（首轮 = `base_commit`，Review/Test FAIL = 对应触发基线），`测试资产提交` 必须列全 `A..B` 内所有触及测试资产的本 change commit，且每个提交都是 `B` 的祖先或等于 `B`
+     2. **定向来源与覆盖完整**：若 `验证方式：定向复验`，`来源 Test` 必须精确写成 `第 N 轮 @ S`；该历史轮须在同一报告中属于当前 revision、结论为通过，`S` 是 `B` 的祖先。若来源轮也是定向复验，按同一规则递归回溯到当前 revision 的首轮完整/完整复验，任一环 revision 过期、缺失、成环或基线不单调都失败。重跑范围与沿用范围必须是非空、非占位的明确清单；从 `触发来源` 指向的历史轮解析影响集 `I`（Review 触发取该 Review 轮的受影响 AC / 测试，Test FAIL 触发取该轮结束时的 open/fixed FAIL IDs 及当时依赖闭包），再机械证明 `I ⊆ R`，且来源轮证据全集被重跑 `R` 与沿用 `U` 无遗漏、无重叠地覆盖。无法证明就必须完整复验。缺任一项，即使 `B == H` 也不得把残缺的定向报告当整体通过
+     3. **新鲜度二选一**：`B == H`；或 `B != H` 且最新 Review 锚定 `H`、明确写 `测试证据处置：沿用`、`既有通过 Test：第 N 轮 @ B`，并可机械证明 `B` 是 `H` 的祖先。Review 沿用的必须是这份最新通过 Test，不能指向更早轮次。`B == H` 时若最新 Review 仍写 `复验`，还须由最新 Test 轮的 `触发来源：Review 第 R 轮 @ H` 精确匹配该 Review 轮，证明复验路由已被后续 Test 消费；否则仍回 Test
+
+     任一步缺失/含糊、来源轮不通过、基线关系不成立，或 Review 写 `复验` 且未由第 3 项的匹配后续 Test 消费 → 回原 tester 做定向/完整复验，不得用“Test 曾经通过”静默放行。`test.md` 不存在时保持既有语义：本条跳过，后续由未勾 auto-heavy AC 门决定是否必须补 Test
 3. **验收清单全勾 + 人工验收硬门**（规范见 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)）：
    - 从 change.md §2 解析 manual AC 集合（「人工:」标记）——**非空则 `acceptance.md` 必须存在且与集合一一对应**（缺项/孤儿/重复 = 校验失败）；空集则只查普通 AC 全勾
    - 逐项核对勾选与异常行：用户勾的「通过」直接有效（勾选权归用户）；agent 代勾必须带确认记录（日期 +「原话」），缺记录按未勾处理
@@ -44,8 +50,8 @@ description: |
 **轻档（tier: light）**——无 review/test 台账，门槛改为**完成门留痕校验**（证据只认工件留痕与重跑，执行者自述不作数）：
 
 1. `status: implementing`（draft/confirmed → 回 /eo-implement 轻模式；已 archived 直接告知）
-2. **工作区无本 change 的未提交实施改动**（有 → 先结算成 `[<change-id>]` commit；结算后独立复核基线必然过期，由下一条拦回——不得跳过下条放行）
-3. **独立复核留痕新鲜**：change.md 末尾存在「独立复核：通过」行，且其基线 short-sha == 本 change 最后一个 `[<change-id>]` 实施提交（缺失 / 不通过 / 基线过期 → 回 /eo-implement 重跑完成门）
+2. **工作区无本 change 的未提交交付改动**（有 → 先结算成 `[<change-id>]` commit；结算后独立复核基线必然过期，由下一条拦回——不得跳过下条放行）
+3. **独立复核留痕新鲜**：change.md 末尾存在「独立复核：通过」行，且其基线 short-sha == 本 change 最后一个 `[<change-id>]` 交付提交（缺失 / 不通过 / 基线过期 → 回 /eo-implement 重跑完成门）
 4. **锁定测试绿**：frontmatter 有 `test_lock_commit` → 重跑锁定测试确认全绿（implement 收口内嵌调用时，完成门刚跑过且其后无新提交 → 可复用该绿灯不重跑）；无锁定轻档（change.md 已注明）→ 跳过本条
 5. **AC 全勾 + manual 确认留痕**：manual 项（「人工:」）代勾必须带 AC 行确认记录（「确认：原话要点 + 日期 + 基线 sha」，规范见 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)）；存在未勾/缺记录项 → 三选一：补齐（回 /eo-implement）/ 显式豁免（AC 行标豁免 + 原话 + 日期）/ 终止归档
 
@@ -97,6 +103,8 @@ cursor 基于 commit，sync 只能看见已提交内容，因此先结算：
 | 不反写任何文档 | change 内容不合并回 state/handbook/其他文件；活文档更新只经由第四层的 sync |
 | 零同步逻辑 | 第四层是内嵌调用 /eo-doc-manager，本文件不复述其任何步骤 |
 | AC 门禁 | 未全勾必须走「补齐 / 显式豁免 / 终止」三选一，不得静默放行 |
+| 统一交付基线 | `H` 同时包含业务代码与测试资产；未提交测试资产、Test 后新增测试资产或未被最新 Review 覆盖的测试资产都挡归档，纯报告/元数据提交不推进 `H` |
+| Test 证据新鲜度 | 新鲜度键为 `(plan_revision, commit)`。有历史 Test 时，先验证当前 revision 最新轮自身完整（定向复验还须有同 revision 的通过来源链与完整重跑/沿用范围），再接受 `B == H`，或当前键 Review 对 `B → H` 的结构化沿用签署；缺失/过期一律回 Test。无 test.md 且无 heavy AC 不被本规则强制补测 |
 | 归档不可逆 | archived 后不回退 status；后续问题走 /eo-fix 或新 change |
 | 区间 ≠ 范围 | commit 区间只写 frontmatter 审计；同步范围永远是 cursor..HEAD |
 | 一次一个 | 一次归档一个 change；多个待归档时逐个走完五层 |
