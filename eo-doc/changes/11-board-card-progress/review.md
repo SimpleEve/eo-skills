@@ -142,12 +142,13 @@ summary: >
 - 独立验证：`python3 -m unittest tests.test_board_card_progress -v` 为 18/18 通过；`python3 -m unittest -q tests.test_eo_board_cache` 为 56/56 通过；`git diff --check 1c6cce2..HEAD` 通过。
 - 本轮结论：通过；台账无 `open`/`fixed` P0/P1，P1-3 为用户裁决 waived，P2-1 后置。
 
+## 第 4 轮记录（revision 1 · 2026-08-02）
+
+- 本轮结论：通过——`e9c8835` 的动态/全文均复用先 `esc()` 后白名单转换的既有 `mdBlock`，无 XSS/转义回退且两路径一致；AC-2/AC-3 仅精化已钉定的迷你 markdown 呈现口径，未改变意图，无新增 P0/P1。
+
 ## 速报
 
-结论：通过（P0 0 条，P1 0 条，P2 1 条）［第 3 轮 · revision 1 · 基线 `eba11da`］
+结论：通过（P0 0 条，P1 0 条，P2 1 条）［第 4 轮 · revision 1 · 基线 `e9c8835`］
 P2（可后置）：
 1. tab 的 ARIA/键盘语义不完整 — `cli/eo-board:1498`
 下一步：代码审查已通过；light change 保持 `implementing`，等待 AC-1/2/4/5 manual 用户验收后走轻档完成门/归档收口。
-
-### 验收反馈就地精化 · 2026-08-02
-用户反馈「动态/全文」纯文本呈现：已改为既有 `mdBlock` 渲染（不扩渲染器）；AC-2/AC-3 措辞就地补 markdown 口径。见后续 implement commit。
