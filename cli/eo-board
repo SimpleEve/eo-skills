@@ -409,6 +409,129 @@ def compute_gates(rec, doc_root, warnings):
     rec["blocker"] = max(candidates, key=lambda c: c[0])[1] if candidates else None
 
 
+JOURNAL_ENTRY_RE = re.compile(r"^•\s+\d{1,2}:\d{2}\b", re.MULTILINE)
+JOURNAL_RECENT_LIMIT = 5
+STAGE_WARN_ROUNDS = 3
+
+
+def parse_journal_entries(text, limit=JOURNAL_RECENT_LIMIT):
+    """把 journal.md 切成窗口报告列表（最近 limit 条）。解析失败时降级为原文尾部一条。"""
+    if not text or not str(text).strip():
+        return []
+    body = str(text)
+    matches = list(JOURNAL_ENTRY_RE.finditer(body))
+    if not matches:
+        tail_lines = body.strip().splitlines()[-40:]
+        tail = "\n".join(tail_lines).strip()
+        if not tail:
+            return []
+        return [{"title": "（未解析到窗口标题）", "body": tail, "raw": tail}]
+    entries = []
+    for i, m in enumerate(matches):
+        start = m.start()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(body)
+        block = body[start:end].strip()
+        lines = block.splitlines()
+        title = lines[0].lstrip("•").strip() if lines else ""
+        entry_body = "\n".join(lines[1:]).strip()
+        entries.append({"title": title, "body": entry_body, "raw": block})
+    if limit and limit > 0:
+        return entries[-limit:]
+    return entries
+
+
+def derive_stage_progress(gates):
+    """从 gates 推导卡面阶段徽标：当前门 + 轮次 + 任一门 ≥3 警告。
+
+    管道优先级（后者覆盖前者）：change_review → test → review → acceptance(未勾)。
+    无任何门时返回 None。
+    """
+    gates = gates or {}
+    max_rounds = 0
+    for key, field in (
+        ("change_review", "rounds"),
+        ("test", "rounds_approx"),
+        ("review", "rounds_approx"),
+    ):
+        g = gates.get(key) or {}
+        r = g.get(field)
+        if isinstance(r, int) and r > max_rounds:
+            max_rounds = r
+
+    stage = label = None
+    rounds = 0
+
+    cr = gates.get("change_review")
+    if cr:
+        rounds = int(cr.get("rounds") or 1)
+        stage = "change_review"
+        label = f"change-review 第{rounds}轮"
+        if cr.get("open_p0"):
+            label += f" P0×{cr['open_p0']}"
+
+    ts = gates.get("test")
+    if ts:
+        rounds = int(ts.get("rounds_approx") or 1)
+        stage = "test"
+        label = f"test ≈{rounds} 轮"
+        if ts.get("fail_count"):
+            label += f" FAIL×{ts['fail_count']}"
+
+    rv = gates.get("review")
+    if rv:
+        rounds = int(rv.get("rounds_approx") or 1)
+        stage = "review"
+        if rv.get("p0"):
+            label = f"review P0×{rv['p0']}"
+        else:
+            label = f"review ≈{rounds} 轮"
+
+    acc = gates.get("acceptance")
+    if acc and acc.get("unchecked"):
+        stage = "acceptance"
+        total = acc.get("total") or 0
+        done = total - (acc.get("unchecked") or 0)
+        rounds = max_rounds or 0
+        label = f"验收 {done}/{total}"
+
+    if stage is None:
+        return None
+    return {
+        "stage": stage,
+        "label": label,
+        "rounds": rounds if stage != "acceptance" else max_rounds,
+        "warn": max_rounds >= STAGE_WARN_ROUNDS,
+    }
+
+
+def attach_card_progress(rec, warnings):
+    """给 change 记录补 full_text / journal / stage_progress（只读、失败降级）。"""
+    path = Path(rec["path"])
+    try:
+        rec["full_text"] = path.read_text(encoding="utf-8")
+    except Exception as e:
+        warnings.append(f"change 全文读取失败：{path}（{e}）")
+        rec["full_text"] = None
+
+    jpath = Path(rec["worktree"]) / "tmp" / "eo" / "loop" / rec["id"] / "journal.md"
+    if jpath.is_file():
+        rec["has_journal"] = True
+        try:
+            jtext = jpath.read_text(encoding="utf-8")
+            rec["journal_entries"] = parse_journal_entries(jtext)
+            rec["journal_path"] = str(jpath)
+        except Exception as e:
+            warnings.append(f"journal 读取失败：{jpath}（{e}）")
+            rec["journal_entries"] = []
+            rec["journal_path"] = str(jpath)
+    else:
+        rec["has_journal"] = False
+        rec["journal_entries"] = None
+        rec["journal_path"] = None
+
+    rec["stage_progress"] = derive_stage_progress(rec.get("gates"))
+
+
 def compute_monthly_direct_commits(anchor_dir):
     since = date.today().replace(day=1).isoformat()
     out = run_git(["log", "--all", "--pretty=%s", "--since", since], cwd=str(anchor_dir))
@@ -544,6 +667,7 @@ def build_data(cfg):
         probe_change_artifacts(rec, cfg["doc_root"])
         compute_change_git_stats(rec, cfg["doc_root"], main_wt["path"])
         compute_gates(rec, cfg["doc_root"], warnings)
+        attach_card_progress(rec, warnings)
     changes.sort(key=lambda c: (c.get("seq") is None, c.get("seq") or 0))
 
     if cfg["mode"] == "vault":
@@ -853,6 +977,11 @@ PROJECT_CSS = r"""
   }
   .card.dim { opacity: 0.62; }
   .card.dim:hover { opacity: 1; }
+  .card.card-warn {
+    border-color: var(--warn);
+    box-shadow: 0 0 0 1px var(--warn-soft);
+  }
+  .card.card-warn:hover { box-shadow: 0 3px 12px rgba(180, 90, 20, 0.12); }
 
   .card-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding-right: 14px; }
   .seq { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -881,6 +1010,7 @@ PROJECT_CSS = r"""
   .tag.warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); font-weight: 600; }
   .tag.lock { background: var(--st-confirmed-soft); border-color: transparent; color: var(--st-confirmed); }
   .tag.branch { background: var(--st-implementing-soft); border-color: transparent; color: var(--st-implementing); }
+  .tag.stage { background: var(--st-implementing-soft); border-color: transparent; color: var(--st-implementing); font-weight: 600; }
   .date { font-family: var(--mono); font-size: 10.5px; color: var(--faint); margin-left: auto; }
 
   .bl-title { font-size: 13.5px; font-weight: 600; line-height: 1.45; padding-right: 12px; }
@@ -911,6 +1041,34 @@ PROJECT_CSS = r"""
   }
   .close-btn:hover { color: var(--ink); border-color: var(--faint); }
   .drawer-body { overflow-y: auto; padding: 16px 20px 24px; flex: 1; }
+  .detail-tabs {
+    display: flex; gap: 2px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--line); margin: -4px 0 14px; padding-bottom: 0;
+  }
+  .detail-tab {
+    font-family: var(--mono); font-size: 11.5px; font-weight: 600;
+    padding: 7px 11px; border: none; background: transparent; color: var(--muted);
+    cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .detail-tab:hover { color: var(--ink); }
+  .detail-tab.active { color: var(--ink); border-bottom-color: var(--accent); }
+  .detail-pane { display: none; }
+  .detail-pane.active { display: block; }
+  .journal-list { display: flex; flex-direction: column; gap: 10px; }
+  .journal-entry {
+    background: var(--surface2); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px;
+  }
+  .journal-entry .j-title {
+    font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--ink); margin-bottom: 6px;
+  }
+  .journal-entry .j-body {
+    font-size: 12.5px; line-height: 1.6; color: var(--muted); white-space: pre-wrap;
+  }
+  .full-md {
+    font-family: var(--mono); font-size: 11.5px; line-height: 1.55; white-space: pre-wrap;
+    background: var(--surface2); border: 1px solid var(--line); border-radius: 6px;
+    padding: 10px 12px; color: var(--ink); overflow-wrap: anywhere; margin: 0;
+  }
   .d-section { margin-bottom: 18px; }
   .d-label {
     font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--faint);
@@ -1231,8 +1389,43 @@ function renderGates(d) {
   return h;
 }
 
+function renderJournal(d) {
+  if (!d.has_journal) {
+    return '<div class="empty-hint">暂无 loop 窗口报告——仅被 eo-loop 跑过的 change 会有 journal'
+      + '（路径 tmp/eo/loop/&lt;slug&gt;/journal.md）</div>';
+  }
+  var entries = d.journal_entries || [];
+  if (!entries.length) {
+    return '<div class="empty-hint">journal 文件存在但未解析到窗口条目</div>';
+  }
+  var h = '<div class="journal-list">';
+  entries.forEach(function (e) {
+    h += '<article class="journal-entry"><div class="j-title">' + esc(e.title || '（无标题）') + '</div>'
+      + '<div class="j-body">' + esc(e.body || e.raw || '') + '</div></article>';
+  });
+  h += '</div>';
+  if (d.journal_path) {
+    h += '<div class="path-box" style="margin-top:10px">' + esc(d.journal_path) + '</div>'
+      + '<div class="path-hint">journal 为 tmp 速报，可丢弃、不作信源</div>';
+  }
+  return h;
+}
+
 function renderChange(d) {
-  var h = '';
+  var tabs = [
+    ['overview', '概览'],
+    ['checklist', '清单'],
+    ['gates', '质量门'],
+    ['journal', '动态'],
+    ['full', '全文']
+  ];
+  var h = '<div class="detail-tabs" role="tablist">';
+  tabs.forEach(function (t, i) {
+    h += '<button type="button" class="detail-tab' + (i === 0 ? ' active' : '') + '" role="tab" data-tab="'
+      + t[0] + '"' + (i === 0 ? ' aria-selected="true"' : '') + '>' + t[1] + '</button>';
+  });
+  h += '</div>';
+
   var meta = metaRow('created', esc(d.created || '—'))
     + metaRow('最近活动', esc(d.last_touch || '—') + ' <span class="src">git 推导</span>')
     + metaRow('worktree', esc(d.worktree_name || '—') + (d.branch && !d.is_default_worktree ? ' ⎇ ' + esc(d.branch) : ''));
@@ -1241,8 +1434,9 @@ function renderChange(d) {
   if (d.issue !== null && d.issue !== undefined) meta += metaRow('issue', '#' + esc(d.issue));
   if (d.pr) meta += metaRow('PR', esc(d.pr));
   if (d.stale) meta += metaRow('停滞', '<span style="color: var(--warn); font-weight: 700">' + d.stale_days + ' 天未动（防蒸发提醒）</span>');
-  h += '<div class="d-section"><dl class="meta-grid">' + meta + '</dl></div>';
 
+  h += '<div class="detail-pane active" data-pane="overview" role="tabpanel">';
+  h += '<div class="d-section"><dl class="meta-grid">' + meta + '</dl></div>';
   h += '<div class="d-section"><div class="d-label">意图 §1 <span class="src">正文解析</span></div>'
     + '<div class="md-block">' + (d.intent ? mdBlock(d.intent) : '<p style="color: var(--faint)">（未解析到意图正文）</p>') + '</div>';
   if (d.decisions && d.decisions.length) {
@@ -1250,13 +1444,13 @@ function renderChange(d) {
       return '<li>' + mdInline(dc.text) + (dc.assume ? ' <span class="assume">（假设，未逐条确认）</span>' : '') + '</li>';
     }).join('') + '</ul>';
   }
-  h += '</div>';
+  h += '</div></div>';
 
+  h += '<div class="detail-pane" data-pane="checklist" role="tabpanel">';
   var acDone = d.ac.filter(function (a) { return a.done; }).length;
   h += '<div class="d-section"><div class="d-label">验收清单 §2 <span class="cnt">' + acDone + '/' + d.ac.length + '</span>'
     + '<span class="src">§2 checkbox 现场计数</span></div>'
     + (d.ac.length ? '<ul class="cklist">' + d.ac.map(ckItem).join('') + '</ul>' : '<div class="empty-hint">未解析到 AC（可能是正文格式不规整）</div>') + '</div>';
-
   if (d.todo) {
     var all = d.todo.reduce(function (acc, b) { return acc.concat(b.items); }, []);
     var tdDone = all.filter(function (t) { return t.done; }).length;
@@ -1270,18 +1464,29 @@ function renderChange(d) {
     h += '<div class="d-section"><div class="d-label">TODO §3</div>'
       + '<div class="intent-text" style="color: var(--faint); font-size: 12.5px">轻档无 TODO 节（AC 即工作清单）</div></div>';
   }
+  h += '</div>';
 
-  h += renderGates(d);
-
+  h += '<div class="detail-pane" data-pane="gates" role="tabpanel">';
+  var gatesHtml = renderGates(d);
+  h += gatesHtml || '<div class="empty-hint">尚无质量门报告</div>';
   if (d.oq && d.oq.length) {
     h += '<div class="d-section"><div class="d-label">开放问题 §8</div><ul class="oq-list">'
       + d.oq.map(function (q) { return '<li>' + (q.code ? '<b>' + esc(q.code) + '</b> ' : '') + esc(q.text) + '</li>'; }).join('')
       + '</ul></div>';
   }
+  h += '</div>';
 
-  h += '<div class="d-section"><div class="d-label">全文</div>'
+  h += '<div class="detail-pane" data-pane="journal" role="tabpanel">'
+    + '<div class="d-section"><div class="d-label">动态 <span class="src">tmp/eo/loop journal</span></div>'
+    + renderJournal(d) + '</div></div>';
+
+  h += '<div class="detail-pane" data-pane="full" role="tabpanel">'
+    + '<div class="d-section"><div class="d-label">全文</div>'
     + '<div class="path-box">' + esc(d.path) + '</div>'
-    + '<div class="path-hint">§4 涉及文件 / §5 技术方案 / §6 流程图 / §7 风险等条件节不进抽屉——复制路径进 IDE 看全文</div></div>';
+    + (d.full_text
+      ? '<pre class="full-md">' + esc(d.full_text) + '</pre>'
+      : '<div class="empty-hint">全文不可用（读取失败）</div>')
+    + '</div></div>';
   return h;
 }
 
@@ -1311,22 +1516,29 @@ function changeCard(d) {
       + '<span class="prog-num">' + tdDone + '/' + tdTotal + ' · B' + batchDone + '/' + d.todo.length + '</span></div>';
   }
   var foot = '';
+  var sp = d.stage_progress;
+  if (sp && sp.label) {
+    foot += '<span class="tag ' + (sp.warn ? 'warn' : 'stage') + '">' + esc(sp.label) + '</span>';
+  }
   if (d.branch && !d.is_default_worktree) foot += '<span class="tag branch">⎇ ' + esc(d.branch) + ' · ' + esc(d.worktree_name) + '</span>';
   if (d.commit_count) foot += '<span class="tag">' + d.commit_count + ' commits</span>';
   if (d.issue !== null && d.issue !== undefined) foot += '<span class="tag ok">issue #' + esc(d.issue) + '</span>';
   if (d.pr) foot += '<span class="tag ok">PR ↗</span>';
-  if (d.test_lock_commit) foot += '<span class="tag lock">测试锁定 ' + esc(d.test_lock_commit) + '</span>';
+  if (d.test_lock_commit) { var lockCommit = String(d.test_lock_commit); foot += '<span class="tag lock" title="' + esc(lockCommit) + '">测试锁定 ' + esc(lockCommit.slice(0, 8)) + '</span>'; }
   if (d.artifacts && d.artifacts.change_review && d.artifacts.change_review.exists) foot += '<span class="tag">change-review ✓</span>';
   if (d.artifacts && d.artifacts.test && d.artifacts.test.exists) foot += '<span class="tag">test.md ✓</span>';
   if (d.stale) foot += '<span class="tag warn">⚠ ' + d.stale_days + ' 天未动</span>';
   if (d.blocker) foot += '<span class="tag warn">⛔ ' + esc(d.blocker) + '</span>';
 
-  return '<article class="card' + (d.status === 'archived' ? ' dim' : '') + '" data-detail="' + esc(d._key)
+  var cardClass = 'card'
+    + (d.status === 'archived' ? ' dim' : '')
+    + (sp && sp.warn ? ' card-warn' : '');
+  return '<article class="' + cardClass + '" data-detail="' + esc(d._key)
     + '" tabindex="0" role="button" aria-label="查看详情：#' + esc(d.seq != null ? d.seq : '?') + ' ' + esc(d.title) + '">'
     + '<div class="card-top"><span class="seq">#' + esc(d.seq != null ? d.seq : '?') + '</span>'
     + '<span class="tier ' + esc(d.tier) + '">' + esc(d.tier) + '</span>'
     + '<span class="type">' + esc(d.type) + '</span><span class="src">frontmatter</span></div>'
-    + '<div class="card-title">' + esc(d.title) + '</div>'
+    + '<div class="card-title">' + mdInline(d.title) + '</div>'
     + (d.summary ? '<div class="card-summary">' + esc(d.summary) + '</div>' : '')
     + '<div class="slug">' + esc(d.dirname || d.id) + '/</div>'
     + '<div class="progress">'
@@ -1341,7 +1553,7 @@ function changeCard(d) {
 function backlogCard(d) {
   var tags = (d.tags || []).map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join('');
   return '<article class="card" data-detail="' + esc(d._key) + '" tabindex="0" role="button" aria-label="查看详情：' + esc(d.title) + '">'
-    + '<div class="bl-title">' + esc(d.title) + '</div>'
+    + '<div class="bl-title">' + mdInline(d.title) + '</div>'
     + (d.body ? '<div class="bl-note">' + esc(d.body.length > 90 ? d.body.slice(0, 90) + '…' : d.body) + '</div>' : '')
     + '<div class="bl-tags">' + tags + (d.issue ? '<span class="tag ok">外部 issue ↗</span>' : '') + '<span class="date">' + esc((d.created || '').slice(5)) + '</span></div>'
     + '</article>';
@@ -1426,6 +1638,27 @@ function buildBoard() {
 
 var lastFocus = null;
 
+function bindDetailTabs(container) {
+  var tabs = container.querySelectorAll('.detail-tab');
+  var panes = container.querySelectorAll('.detail-pane');
+  if (!tabs.length) return;
+  function activate(id) {
+    for (var i = 0; i < tabs.length; i++) {
+      var on = tabs[i].getAttribute('data-tab') === id;
+      tabs[i].classList.toggle('active', on);
+      tabs[i].setAttribute('aria-selected', on ? 'true' : 'false');
+    }
+    for (var j = 0; j < panes.length; j++) {
+      panes[j].classList.toggle('active', panes[j].getAttribute('data-pane') === id);
+    }
+  }
+  for (var k = 0; k < tabs.length; k++) {
+    (function (tab) {
+      tab.addEventListener('click', function () { activate(tab.getAttribute('data-tab')); });
+    })(tabs[k]);
+  }
+}
+
 function openDetail(key, isRefresh) {
   var d = CARD_INDEX[key];
   if (!d) return;
@@ -1435,8 +1668,10 @@ function openDetail(key, isRefresh) {
     : stPill('backlog');
   root.querySelector('#p-chips').innerHTML = chips;
   root.querySelector('#p-title').textContent = d.title;
-  root.querySelector('#p-body').innerHTML = d.kind === 'change' ? renderChange(d) : renderBacklog(d);
-  if (!isRefresh) root.querySelector('#p-body').scrollTop = 0;
+  var body = root.querySelector('#p-body');
+  body.innerHTML = d.kind === 'change' ? renderChange(d) : renderBacklog(d);
+  if (d.kind === 'change') bindDetailTabs(body);
+  if (!isRefresh) body.scrollTop = 0;
   drawer.classList.add('open');
   backdrop.classList.add('open');
   if (!isRefresh) { lastFocus = document.activeElement; root.querySelector('#p-close').focus(); }
@@ -1509,7 +1744,17 @@ function unmount() {
   CARD_INDEX = {}; openDetailId = null; lastFocus = null;
 }
 
-return { mount: mount, unmount: unmount };
+return {
+  mount: mount,
+  unmount: unmount,
+  __test: {
+    renderChange: renderChange,
+    changeCard: changeCard,
+    renderJournal: renderJournal,
+    bindDetailTabs: bindDetailTabs,
+    openDetail: function (key) { openDetail(key); }
+  }
+};
 })();
 """
 
