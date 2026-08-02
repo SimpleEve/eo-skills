@@ -422,10 +422,9 @@ class JournalAndFullTextTests(BoardCardProgressFixture):
         self.assertGreaterEqual(len(entries), 1)
         joined = "\n".join(e.get("raw") or e.get("body") or "" for e in entries)
         self.assertIn("是否需要你裁决", joined)
-        self.assertTrue(
-            any("第二窗" in (e.get("title") or "") or "第二窗" in (e.get("raw") or "") for e in entries),
-            entries,
-        )
+        # 时间逆序：最新窗口在最上
+        self.assertIn("第二窗", (entries[0].get("title") or "") + (entries[0].get("raw") or ""))
+        self.assertIn("第一窗", (entries[-1].get("title") or "") + (entries[-1].get("raw") or ""))
 
     def test_journal_absent_empty_state_without_poisoning_other_fields(self):
         rec = self.rec()
@@ -458,8 +457,9 @@ class JournalAndFullTextTests(BoardCardProgressFixture):
         )
         entries = self.board.parse_journal_entries(text, limit=5)
         self.assertEqual(len(entries), 5)
-        self.assertIn("窗2", entries[0]["title"] + entries[0].get("raw", ""))
-        self.assertIn("窗6", entries[-1]["title"] + entries[-1].get("raw", ""))
+        # 取最近 5 条后逆序：窗6 最上、窗2 最下
+        self.assertIn("窗6", entries[0]["title"] + entries[0].get("raw", ""))
+        self.assertIn("窗2", entries[-1]["title"] + entries[-1].get("raw", ""))
 
 
 class StageProgressTests(BoardCardProgressFixture):
@@ -558,6 +558,16 @@ class StageProgressTests(BoardCardProgressFixture):
         rec = self.rec()
         self.assertIsNone(rec.get("stage_progress"))
 
+    def test_review_open_titles_from_ledger_not_historical_only(self):
+        """review 未决标题来自台账 open 行。"""
+        self.write_review_gate(p0=2, rounds_hint=1, verdict="不通过", open_p0=1)
+        rec = self.rec()
+        rv = (rec.get("gates") or {}).get("review") or {}
+        self.assertEqual(rv.get("open_p0"), 1)
+        titles = rv.get("open_p0_titles") or []
+        self.assertEqual(len(titles), 1)
+        self.assertIn("P0-1", titles[0])
+
 
 class ProjectJsSurfaceTests(BoardCardProgressFixture):
     """前端模板锁：五 tab + 卡面徽标/警告类（静态 + 可选 node）。"""
@@ -576,6 +586,8 @@ class ProjectJsSurfaceTests(BoardCardProgressFixture):
         self.assertIn("card-warn", src)
         self.assertIn("md-table", src)
         self.assertIn("md-code", src)
+        self.assertIn("current-gate-status", src)
+        self.assertIn("当前无卡点", src)
 
     def test_terminal_renderer_ignores_new_progress_fields(self):
         self.write_journal("• 10:00 「x」\n\n一句定性：没有需要你裁决的事项。\n")
@@ -652,12 +664,62 @@ class ProjectJsRenderTests(BoardCardProgressFixture):
         # 全文 tab 含 change 正文片段（渲染后仍可读）；# 标题成 h1
         self.assertIn("Demo Progress", detail)
         self.assertIn("<h1>", detail)
+        # 质量门顶部当前状态
+        self.assertIn("current-gate-status", detail)
+        self.assertIn("当前状态", detail)
         card = result["card"]
         self.assertIn("card-warn", card)
         self.assertTrue(
             "stage" in card or "change-review" in card or "第" in card,
             card,
         )
+
+    def test_gates_tab_shows_current_blocker_and_open_items(self):
+        """质量门 tab 顶部展示阶段/卡点/未决明细；无卡点时空态。"""
+        self.write_review_gate(p0=1, rounds_hint=1, verdict="不通过", open_p0=1)
+        data = self.build()
+        rec = data["changes"][0]
+        self.assertTrue(rec.get("blocker"))
+        html = self.board.render_html(data)
+        project_js, markup = self._extract_project_assets(html)
+        payload = {"data": data}
+        runner = self.root / "detail-runner.js"
+        runner.write_text(NODE_DETAIL_RUNNER, encoding="utf-8")
+        js_file = self.root / "project-gates.js"
+        js_file.write_text(project_js, encoding="utf-8")
+        data_file = self.root / "payload-gates.json"
+        data_file.write_text(json.dumps(payload), encoding="utf-8")
+        markup_file = self.root / "markup-gates.html"
+        markup_file.write_text(markup, encoding="utf-8")
+        proc = subprocess.run(
+            [NODE, str(runner), str(js_file), str(data_file), str(markup_file)],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        detail = json.loads(proc.stdout)["detail"]
+        self.assertIn("current-gate-status", detail)
+        self.assertIn("未决明细", detail)
+        self.assertIn("gate-open-list", detail)
+        self.assertIn("P0", detail)
+        self.assertIn("⛔", detail)
+        # 无卡点空态：无 gates 时
+        data2 = self.build()  # still has review - clear by new fixture without gates
+        # 单独构造：重用 rec 去掉 gates
+        data_clear = json.loads(json.dumps(data))
+        data_clear["changes"][0]["gates"] = {}
+        data_clear["changes"][0]["blocker"] = None
+        data_clear["changes"][0]["stage_progress"] = None
+        data_file2 = self.root / "payload-gates-empty.json"
+        data_file2.write_text(json.dumps({"data": data_clear}), encoding="utf-8")
+        proc2 = subprocess.run(
+            [NODE, str(runner), str(js_file), str(data_file2), str(markup_file)],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc2.returncode, 0, proc2.stderr)
+        detail2 = json.loads(proc2.stdout)["detail"]
+        self.assertIn("当前无卡点", detail2)
 
     def test_md_block_rich_syntax_and_xss_escape(self):
         """全文 mdBlock：标题/表格/代码/checkbox/有序列表 + XSS 探针不回退。"""

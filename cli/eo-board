@@ -237,6 +237,57 @@ def estimate_rounds_approx(fm, worktree_path, rel_path):
     return max(git_based, fm_based)
 
 
+def parse_finding_ledger_open_items(body):
+    """在「...台账」节表格里收集状态=open 的行：{level, id, summary}。
+
+    列位置按表头文字定位；找不到表头时退回模板默认（ID0 / 级别1 / 摘要2 / 状态4）。
+    """
+    target_lines = None
+    for title, lines in split_by_h2(body):
+        if title and "台账" in title:
+            target_lines = lines
+            break
+    if target_lines is None:
+        return []
+    table_rows = [l for l in target_lines if l.strip().startswith("|")]
+    if not table_rows:
+        return []
+    header_cells = [c.strip() for c in table_rows[0].strip().strip("|").split("|")]
+    id_idx, level_idx, summary_idx, status_idx = 0, 1, 2, 4
+    for idx, cell in enumerate(header_cells):
+        if cell in ("ID", "id") or cell.upper() == "ID":
+            id_idx = idx
+        if "级别" in cell:
+            level_idx = idx
+        if "摘要" in cell:
+            summary_idx = idx
+        if "状态" in cell:
+            status_idx = idx
+    need = max(id_idx, level_idx, summary_idx, status_idx)
+    items = []
+    for row in table_rows[1:]:
+        stripped = row.strip().strip("|")
+        if re.fullmatch(r"[\s:|-]+", stripped):
+            continue
+        cells = [c.strip() for c in stripped.split("|")]
+        if len(cells) <= need:
+            continue
+        if cells[status_idx].lower() != "open":
+            continue
+        level = cells[level_idx].upper()
+        items.append({
+            "level": level,
+            "id": cells[id_idx],
+            "summary": cells[summary_idx],
+        })
+    return items
+
+
+def parse_finding_ledger_open_p0(body):
+    """兼容旧调用：open 状态且级别=P0 的行数。"""
+    return sum(1 for it in parse_finding_ledger_open_items(body) if it.get("level") == "P0")
+
+
 def parse_review_gate(path, worktree_path, rel_path, warnings):
     try:
         text = path.read_text(encoding="utf-8")
@@ -249,6 +300,16 @@ def parse_review_gate(path, worktree_path, rel_path, warnings):
     p1_titles = parse_pxx_headings(body, "P1")
     p2_titles = parse_pxx_headings(body, "P2")
     verdict, next_step = parse_speed_report(body)
+    open_items = parse_finding_ledger_open_items(body)
+    open_p0_titles = [
+        (f"{it['id']} {it['summary']}".strip() if it.get("id") else it.get("summary") or "")
+        for it in open_items if it.get("level") == "P0"
+    ]
+    open_p1_titles = [
+        (f"{it['id']} {it['summary']}".strip() if it.get("id") else it.get("summary") or "")
+        for it in open_items if it.get("level") == "P1"
+    ]
+    open_p0 = sum(1 for it in open_items if it.get("level") == "P0")
     return {
         "exists": True,
         "rounds_approx": estimate_rounds_approx(fm, worktree_path, rel_path),
@@ -258,8 +319,9 @@ def parse_review_gate(path, worktree_path, rel_path, warnings):
         "p1": len(p1_titles),
         "p2": len(p2_titles),
         "p0_titles": p0_titles[:3],
-        # 卡面阶段只看台账未决；详情抽屉仍可用历史标题计数
-        "open_p0": parse_finding_ledger_open_p0(body),
+        "open_p0": open_p0,
+        "open_p0_titles": open_p0_titles[:8],
+        "open_p1_titles": open_p1_titles[:8],
         "date": fm.get("updated") or fm.get("created"),
     }
 
@@ -274,48 +336,17 @@ def parse_test_gate(path, worktree_path, rel_path, warnings):
     fm = fm or {}
     fail_titles = parse_pxx_headings(body, "FAIL")
     verdict, next_step = parse_speed_report(body)
+    # 速报已通过时历史 FAIL 标题不算当前未决
+    passed = bool(verdict and "通过" in verdict and "不通过" not in verdict)
     return {
         "exists": True,
         "rounds_approx": estimate_rounds_approx(fm, worktree_path, rel_path),
         "verdict": verdict,
         "next": next_step,
-        "fail_count": len(fail_titles),
-        "fail_titles": fail_titles[:3],
+        "fail_count": 0 if passed else len(fail_titles),
+        "fail_titles": [] if passed else fail_titles[:8],
         "date": fm.get("updated") or fm.get("created"),
     }
-
-
-def parse_finding_ledger_open_p0(body):
-    """在「...台账」节里找 Markdown 表格，数级别=P0 且状态=open 的行；列位置按表头文字定位，
-    找不到表头就退回模板默认列序（级别第 1 列、状态第 4 列）。"""
-    target_lines = None
-    for title, lines in split_by_h2(body):
-        if title and "台账" in title:
-            target_lines = lines
-            break
-    if target_lines is None:
-        return 0
-    table_rows = [l for l in target_lines if l.strip().startswith("|")]
-    if not table_rows:
-        return 0
-    header_cells = [c.strip() for c in table_rows[0].strip().strip("|").split("|")]
-    level_idx, status_idx = 1, 4
-    for idx, cell in enumerate(header_cells):
-        if "级别" in cell:
-            level_idx = idx
-        if "状态" in cell:
-            status_idx = idx
-    open_p0 = 0
-    for row in table_rows[1:]:
-        stripped = row.strip().strip("|")
-        if re.fullmatch(r"[\s:|-]+", stripped):
-            continue  # 表格分隔行
-        cells = [c.strip() for c in stripped.split("|")]
-        if len(cells) <= max(level_idx, status_idx):
-            continue
-        if cells[level_idx].upper() == "P0" and cells[status_idx].lower() == "open":
-            open_p0 += 1
-    return open_p0
 
 
 def parse_change_review_gate(path, warnings):
@@ -336,11 +367,17 @@ def parse_change_review_gate(path, warnings):
         mode, round_date = "全量", None  # 首轮无复审记录节，必为全量
 
     verdict, next_step = parse_speed_report(body)
+    open_items = parse_finding_ledger_open_items(body)
+    open_p0_titles = [
+        (f"{it['id']} {it['summary']}".strip() if it.get("id") else it.get("summary") or "")
+        for it in open_items if it.get("level") == "P0"
+    ]
     return {
         "exists": True,
         "rounds": rounds,
         "mode": mode,
-        "open_p0": parse_finding_ledger_open_p0(body),
+        "open_p0": sum(1 for it in open_items if it.get("level") == "P0"),
+        "open_p0_titles": open_p0_titles[:8],
         "verdict": verdict,
         "next": next_step,
         "date": round_date or fm.get("created"),
@@ -438,8 +475,9 @@ def parse_journal_entries(text, limit=JOURNAL_RECENT_LIMIT):
         entry_body = "\n".join(lines[1:]).strip()
         entries.append({"title": title, "body": entry_body, "raw": block})
     if limit and limit > 0:
-        return entries[-limit:]
-    return entries
+        entries = entries[-limit:]
+    # 时间逆序：最新窗口报告在最上
+    return list(reversed(entries))
 
 
 def _gate_verdict_pass(g):
@@ -1254,6 +1292,20 @@ PROJECT_CSS = r"""
     font-family: var(--mono); font-size: 11px; background: var(--surface); border: 1px solid var(--line);
     border-radius: 3px; padding: 0 4px; color: var(--ink);
   }
+  .current-gate-status .meta-grid { margin-bottom: 0; }
+  .gate-open-list {
+    margin: 6px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px;
+  }
+  .gate-open-list li {
+    font-size: 12.5px; line-height: 1.5; color: var(--ink);
+    padding: 4px 8px; background: var(--surface2); border: 1px solid var(--line); border-radius: 4px;
+  }
+  .gate-open-tag {
+    font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-right: 4px;
+  }
+  .gate-open-level {
+    font-family: var(--mono); font-size: 10.5px; font-weight: 700; color: var(--warn); margin-right: 6px;
+  }
   .path-box {
     font-family: var(--mono); font-size: 11.5px; background: var(--surface2);
     border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px;
@@ -1603,22 +1655,107 @@ function gateRow(label, roundsText, g, detailTitles) {
   return html;
 }
 
+function gateVerdictPass(g) {
+  var v = (g && g.verdict) || '';
+  return v.indexOf('通过') !== -1 && v.indexOf('不通过') === -1;
+}
+
+function gateVerdictFail(g) {
+  var v = (g && g.verdict) || '';
+  return v.indexOf('不通过') !== -1;
+}
+
+/** 质量门 tab 顶部：当前阶段 / 卡点 / 未决明细（与卡面 stage_progress、blocker 同源） */
+function renderCurrentGateStatus(d) {
+  var sp = d.stage_progress;
+  var g = d.gates || {};
+  var h = '<div class="d-section current-gate-status"><div class="d-label">当前状态 <span class="src">stage_progress · blocker · 未决台账</span></div>';
+  h += '<dl class="meta-grid">';
+  if (sp && sp.label) {
+    h += metaRow('阶段', esc(sp.label) + (sp.warn ? ' <span class="tag warn">轮次≥3</span>' : ''));
+  } else if (sp && sp.warn) {
+    h += metaRow('阶段', '<span style="color:var(--faint)">无活动阶段</span> <span class="tag warn">历史轮次≥3</span>');
+  } else {
+    h += metaRow('阶段', '<span style="color:var(--faint)">无活动质量门阶段</span>');
+  }
+  if (d.blocker) {
+    h += metaRow('卡点', '<span style="color:var(--warn);font-weight:600">⛔ ' + esc(d.blocker) + '</span>');
+  } else {
+    h += metaRow('卡点', '<span style="color:var(--st-reviewed)">当前无卡点</span>');
+  }
+  h += '</dl>';
+
+  var openItems = [];
+  var cr = g.change_review;
+  if (cr && cr.open_p0) {
+    var crTitles = cr.open_p0_titles || [];
+    if (crTitles.length) {
+      crTitles.forEach(function (t) { openItems.push({ gate: 'change-review', level: 'P0', text: t }); });
+    } else {
+      openItems.push({ gate: 'change-review', level: 'P0', text: 'open P0×' + cr.open_p0 });
+    }
+  }
+  var rv = g.review;
+  if (rv && !gateVerdictPass(rv)) {
+    (rv.open_p0_titles || []).forEach(function (t) {
+      openItems.push({ gate: 'review', level: 'P0', text: t });
+    });
+    (rv.open_p1_titles || []).forEach(function (t) {
+      openItems.push({ gate: 'review', level: 'P1', text: t });
+    });
+    // 无台账 open 标题但速报不通过时，不回退到历史 p0_titles（P1-1 当前性）
+  }
+  var ts = g.test;
+  if (ts && (gateVerdictFail(ts) || (ts.fail_count && !gateVerdictPass(ts)))) {
+    (ts.fail_titles || []).forEach(function (t) {
+      openItems.push({ gate: 'test', level: 'FAIL', text: t });
+    });
+  }
+  var acc = g.acceptance;
+  if (acc && acc.unchecked && d.status === 'reviewed') {
+    openItems.push({ gate: 'acceptance', level: '验收', text: '待勾 ' + acc.unchecked + '/' + acc.total });
+  }
+
+  if (openItems.length) {
+    h += '<div class="gate-line" style="margin-top:8px;font-weight:600">未决明细</div><ul class="gate-open-list">';
+    openItems.forEach(function (it) {
+      h += '<li><span class="gate-open-tag">' + esc(it.gate) + '</span> '
+        + '<span class="gate-open-level">' + esc(it.level) + '</span> '
+        + mdInline(it.text) + '</li>';
+    });
+    h += '</ul>';
+  } else if (!d.blocker) {
+    h += '<div class="empty-hint" style="margin-top:8px">当前无卡点</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
 function renderGates(d) {
   var g = d.gates;
-  if (!g || !(g.change_review || g.review || g.test || g.acceptance)) return '';
-  var h = '<div class="d-section"><div class="d-label">质量门</div><div class="gates">';
+  if (!g || !(g.change_review || g.review || g.test || g.acceptance)) {
+    // 无门文件时仍可能展示 stage/blocker 空态
+    return renderCurrentGateStatus(d);
+  }
+  var h = renderCurrentGateStatus(d);
+  h += '<div class="d-section"><div class="d-label">各门报告</div><div class="gates">';
   if (g.change_review) {
     var cr = g.change_review;
     h += gateRow('change-review', '第 ' + cr.rounds + ' 轮 · ' + esc(cr.mode || '?')
-      + (cr.open_p0 ? (' · open P0×' + cr.open_p0) : ''), cr, null);
+      + (cr.open_p0 ? (' · open P0×' + cr.open_p0) : ''), cr,
+      (cr.open_p0 && cr.open_p0_titles) ? cr.open_p0_titles : null);
   }
   if (g.review) {
     var rv = g.review;
-    h += gateRow('review', '≈' + rv.rounds_approx + ' 轮 · P0×' + rv.p0 + ' P1×' + rv.p1 + ' P2×' + rv.p2, rv, rv.p0_titles);
+    // 各门报告区：仅挂当前 open 标题，不挂历史 p0_titles
+    var rvOpen = [].concat(rv.open_p0_titles || [], rv.open_p1_titles || []);
+    h += gateRow('review', '≈' + rv.rounds_approx + ' 轮 · P0×' + rv.p0 + ' P1×' + rv.p1 + ' P2×' + rv.p2,
+      rv, gateVerdictPass(rv) ? null : (rvOpen.length ? rvOpen : null));
   }
   if (g.test) {
     var ts = g.test;
-    h += gateRow('test', '≈' + ts.rounds_approx + ' 轮 · FAIL×' + ts.fail_count, ts, ts.fail_titles);
+    h += gateRow('test', '≈' + ts.rounds_approx + ' 轮 · FAIL×' + ts.fail_count, ts,
+      (ts.fail_titles && ts.fail_titles.length) ? ts.fail_titles : null);
   }
   if (g.acceptance) {
     var a = g.acceptance;

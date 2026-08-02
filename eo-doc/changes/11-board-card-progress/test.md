@@ -181,3 +181,13 @@ implement 落下的锁定文件 `tests/test_board_card_progress.py`（`test_lock
 
 `safeHref` 仅 http/https/mailto；javascript:/data: 负向锁定；AC-1/2 措辞同步 frontmatter 与 md 扩能。
 速报：自动化 FAIL 0；AC-1/2/4/5 人工过目仍待用户。
+
+### 重跑记录 · 2026-08-02（动态逆序 + 质量门当前状态）
+
+| 验证点 | 命令 | 关键输出 | 结论 |
+| --- | --- | --- | --- |
+| 锁定套件 | `python3 -m unittest tests.test_board_card_progress -v` | 22/22 OK | ✅ |
+| 全仓回归 | `python3 -m unittest discover -s tests -q` | `Ran 287 tests in 97.703s` / `OK` | ✅ |
+
+journal 时间逆序；质量门顶部当前阶段/卡点/未决明细（台账 open / 未通过 FAIL）；无卡点空态。
+速报：自动化 FAIL 0；AC-1/2/4/5 人工过目仍待用户。

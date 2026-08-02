@@ -189,3 +189,6 @@ summary: >
 P2（可后置）：
 1. tab 的 ARIA/键盘语义不完整 — `cli/eo-board:1667`
 下一步：代码审查已通过；light change 保持 `implementing`，等待 AC-1/2/4/5 manual 用户验收后走轻档完成门/归档收口。
+
+### 验收反馈就地精化 · 2026-08-02（第 3 批）
+动态 tab journal 改为时间逆序；质量门 tab 顶部「当前状态」区块（阶段/blocker/未决明细，与卡面同源；无卡点显式空态）。见 implement commit。
