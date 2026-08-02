@@ -3,14 +3,14 @@ id: loop-risk-triggered-verification
 seq: 13
 title: 将 eo-loop 核查改为风险触发
 summary: eo-loop 仅在出现客观风险信号时升级核查
-status: reviewed
+status: archived
 tier: full
 type: enhance
 base_commit: 618a8a3
 plan_revision: 1
 fix_rounds: 0
 fix_consumed: []
-commits: []
+commits: [733dfc0..b44d896]
 issue: ~
 pr: ~
 created: 2026-08-02
