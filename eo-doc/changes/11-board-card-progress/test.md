@@ -151,3 +151,13 @@ implement 落下的锁定文件 `tests/test_board_card_progress.py`（`test_lock
 
 修复 commit：`eba11da`（轮次 warn 与当前阶段解耦；「门已通过 / archived + ≥3 轮」仍 warn）。P2-1 仍 open。
 速报：自动化 FAIL 0；AC-1/2/4/5 人工过目仍待用户。
+
+### 重跑记录 · 2026-08-02（动态/全文 mdBlock 渲染）
+
+| 验证点 | 命令 | 关键输出 | 结论 |
+| --- | --- | --- | --- |
+| 锁定套件 | `python3 -m unittest tests.test_board_card_progress -v` | 18/18 OK | ✅ |
+| 全仓回归 | `python3 -m unittest discover -s tests -q` | `Ran 283 tests in 87.460s` / `OK` | ✅ |
+
+动态 tab 条目正文与全文 tab 改用 `mdBlock`；DOM 断言锁定 `j-body md-block` / `full-md md-block`、无 `<pre class="full-md">`。
+速报：自动化 FAIL 0；AC-1/2/4/5 人工过目仍待用户。

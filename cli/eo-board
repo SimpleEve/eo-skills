@@ -1138,12 +1138,16 @@ PROJECT_CSS = r"""
     font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--ink); margin-bottom: 6px;
   }
   .journal-entry .j-body {
-    font-size: 12.5px; line-height: 1.6; color: var(--muted); white-space: pre-wrap;
+    font-size: 12.5px; line-height: 1.6; color: var(--muted);
   }
+  .journal-entry .j-body.md-block p { color: var(--muted); }
   .full-md {
-    font-family: var(--mono); font-size: 11.5px; line-height: 1.55; white-space: pre-wrap;
+    font-size: 13px; line-height: 1.6;
     background: var(--surface2); border: 1px solid var(--line); border-radius: 6px;
     padding: 10px 12px; color: var(--ink); overflow-wrap: anywhere; margin: 0;
+  }
+  .full-md.md-block code {
+    font-family: var(--mono); font-size: 11.5px;
   }
   .d-section { margin-bottom: 18px; }
   .d-label {
@@ -1476,8 +1480,9 @@ function renderJournal(d) {
   }
   var h = '<div class="journal-list">';
   entries.forEach(function (e) {
+    var bodyRaw = e.body || e.raw || '';
     h += '<article class="journal-entry"><div class="j-title">' + esc(e.title || '（无标题）') + '</div>'
-      + '<div class="j-body">' + esc(e.body || e.raw || '') + '</div></article>';
+      + '<div class="j-body md-block">' + (bodyRaw ? mdBlock(bodyRaw) : '') + '</div></article>';
   });
   h += '</div>';
   if (d.journal_path) {
@@ -1560,7 +1565,7 @@ function renderChange(d) {
     + '<div class="d-section"><div class="d-label">全文</div>'
     + '<div class="path-box">' + esc(d.path) + '</div>'
     + (d.full_text
-      ? '<pre class="full-md">' + esc(d.full_text) + '</pre>'
+      ? '<div class="full-md md-block">' + mdBlock(d.full_text) + '</div>'
       : '<div class="empty-hint">全文不可用（读取失败）</div>')
     + '</div></div>';
   return h;

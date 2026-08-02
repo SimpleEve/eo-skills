@@ -625,7 +625,13 @@ class ProjectJsRenderTests(BoardCardProgressFixture):
         self.assertIn("detail-tab", detail)
         self.assertIn("实窗", detail)
         self.assertIn("是否需要你裁决", detail)
-        # 全文 tab 含 change 正文片段
+        # 动态 / 全文走 mdBlock：条目与全文容器带 md-block，列表项成 <li>
+        self.assertIn("j-body md-block", detail)
+        self.assertIn("full-md md-block", detail)
+        self.assertNotIn('<pre class="full-md">', detail)
+        self.assertIn("<li>", detail)  # journal「- 派发」
+        self.assertIn("<p>", detail)
+        # 全文 tab 含 change 正文片段（渲染后仍可读）
         self.assertIn("Demo Progress", detail)
         card = result["card"]
         self.assertIn("card-warn", card)
@@ -711,6 +717,7 @@ class ProjectJsRenderTests(BoardCardProgressFixture):
         self.assertIn("empty-hint", detail)
         self.assertIn("暂无 loop 窗口报告", detail)
         self.assertIn("Demo Progress", detail)
+        self.assertIn("full-md md-block", detail)
         self.assertNotIn("journal-entry", detail)
 
 

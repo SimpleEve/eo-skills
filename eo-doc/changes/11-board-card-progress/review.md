@@ -148,3 +148,6 @@ summary: >
 P2（可后置）：
 1. tab 的 ARIA/键盘语义不完整 — `cli/eo-board:1498`
 下一步：代码审查已通过；light change 保持 `implementing`，等待 AC-1/2/4/5 manual 用户验收后走轻档完成门/归档收口。
+
+### 验收反馈就地精化 · 2026-08-02
+用户反馈「动态/全文」纯文本呈现：已改为既有 `mdBlock` 渲染（不扩渲染器）；AC-2/AC-3 措辞就地补 markdown 口径。见后续 implement commit。
