@@ -3,14 +3,14 @@ id: review-fix-test-routing
 seq: 12
 title: 按测试影响路由 Review 修复
 summary: Review 修复后仅在既有测试证据失效时进入 Test
-status: implementing
+status: archived
 tier: full
 type: enhance
 base_commit: 4374c8ba7747dece27141b949b7ecdd233c07add
 plan_revision: 1
 fix_rounds: 0
 fix_consumed: []
-commits: []
+commits: [75c7431..6f5e408]
 issue: ~
 pr: ~
 created: 2026-08-02

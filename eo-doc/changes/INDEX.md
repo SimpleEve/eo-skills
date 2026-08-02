@@ -13,4 +13,4 @@
 | 9 | [loop-fork-escalation](09-loop-fork-escalation/change.md) | light | enhance | archived | 2026-07-25 | worker 不问用户但形态分叉须清单上报，总控攒成封闭选择转达用户后回灌 |
 | 10 | [board-all-v2](10-board-all-v2/change.md) | full | feature | archived | 2026-07-27 | 聚合首页升级 change 流与概要卡双视图切换，/p/<key> 稳定键路由下钻泳道页（含 --scan 项目），--html 单文件 hash 路由 |
 | 11 | [board-card-progress](11-board-card-progress/change.md) | light | feature | archived | 2026-08-02 | card 详情改五 tab（含全文/journal 动态），卡面标质量门阶段轮次，≥3 轮警告样式 |
-| 12 | [review-fix-test-routing](12-review-fix-test-routing/change.md) | full | enhance | implementing | 2026-08-02 | Review 修复后仅在既有测试证据失效时进入 Test |
+| 12 | [review-fix-test-routing](12-review-fix-test-routing/change.md) | full | enhance | archived | 2026-08-02 | Review 修复后仅在既有测试证据失效时进入 Test |
