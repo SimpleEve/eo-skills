@@ -34,7 +34,7 @@ created: 2026-08-04
 - [ ] AC-3 卡片类展示（泳道卡面 / 聚合流行 / 卡详情概览）中 branch 与 worktree 分行显示，不再连成一行；拆分场景下包括主 worktree 在内的每张卡都带归属标记，一眼可辨（人工:构造分叉场景 → 过目卡面标记分行 + 各卡归属标记）（锁定：tests/test_eo_board_cache.py#BoardWorktreeSplitTests.test_ac3_diverged_main_worktree_card_carries_marker_data 覆盖数据层；卡面分行人工验收）
 - [x] AC-4 终端 / --html / --serve / --all 聚合流四处拆分行为一致；每张卡可独立打开详情，详情内容对应该 worktree 那份 change.md（验证：--html 快照点开两张分叉卡，全文 tab 各显各的内容）（锁定：tests/test_eo_board_cache.py#BoardWorktreeSplitTests.test_ac4_diverged_cards_have_unique_keys_and_distinct_detail）
 - [x] AC-5 回归：无分叉场景看板输出与拆分前一致；--serve 挂起时任一 worktree 修改 change.md，3 秒内拆分状态正确刷新不陈旧（验证：既有缓存基线测试不破 + 改动另一 worktree 的 change.md 看页面变化）（锁定：tests/test_eo_board_cache.py#BoardWorktreeSplitTests.test_ac5_serve_refreshes_divergence_within_three_seconds）
-- [ ] AC-6 基准 worktree（默认 main）上某 change 状态高于其他 worktree（如 main=archived、遗留=implementing）时，状态更低的过期版本被过滤不出卡；基准状态更低时不误杀（其他保留）；基准没有该 change 时不过滤（验证：构造 main=archived + stale=implementing 双 worktree fixture，跑 board 看只出一张 archived 卡）
+- [x] AC-6 基准 worktree（默认 main）上某 change 状态高于其他 worktree（如 main=archived、遗留=implementing）时，状态更低的过期版本被过滤不出卡；基准状态更低时不误杀（其他保留）；基准没有该 change 时不过滤（验证：构造 main=archived + stale=implementing 双 worktree fixture，跑 board 看只出一张 archived 卡）（锁定：tests/test_eo_board_cache.py#BoardWorktreeSplitTests.test_ac6_stale_lower_status_filtered + test_ac6_base_lower_does_not_filter_higher + test_ac6_base_missing_change_no_filter）
 
 ## 独立复核
 
