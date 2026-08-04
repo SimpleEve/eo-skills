@@ -3,7 +3,7 @@ title: eo-board 看板现状
 type: state
 tags: [eo-board, cache, config, collaboration, aggregate, card, gates, journal]
 created: 2026-07-24
-updated: 2026-08-02
+updated: 2026-08-04
 scope: 想了解看板能做什么、配置怎么生效时
 status: active
 source: cli/eo-board
@@ -17,7 +17,9 @@ conclusions:
   - 看板严格只读：不写任何项目文件，数据源是 change.md frontmatter 与质量门报告，而非 Obsidian stub
   - 聚合页默认看到的是「哪个 change 在动」而不是「有哪些项目」；archived change 不进流，只在计数里可见
   - 泳道卡详情：五 tab 定位；质量门「当前状态」与卡面阶段/blocker 同源；journal 最新在上；全文迷你 markdown（链接仅 http/https/mailto）
-  - 3 天无动静只降权不过滤——久未动的 draft 仍在流里，不会因为放久了而从视野消失
+  - 3 天无动静只降权不过滤--久未动的 draft 仍在流里，不会因为放久了而从视野消失
+  - 多 worktree 并行同一 change：实质分叉（change.md 内容不同）各出一卡，一致副本合并；状态严格低于 main worktree 的过期版本过滤不出卡（遗留 worktree 未回拉不污染）
+  - 卡片类展示（泳道卡面 / 聚合行 / 详情概览）branch 与 worktree 分行显示；终端表格列维持连成一行
 ---
 
 ## 使用方式
@@ -42,7 +44,7 @@ conclusions:
 - **阶段徽标**（如 `review P1×1`、`test ≈2 轮`）：只标「当前」质量门阶段，不把已完全通过的历史报告当当前
 - **轮次警告**：任一质量门轮次 ≥ 3 时卡面挂 `card-warn` 样式——与是否有活动阶段**解耦**（archived / 已通过但历史轮次高时仍可警告）
 - **blocker 标签**（⛔）：质量门未过或台账未决时的一句话卡点
-- 其他标签：分支 worktree、commits、issue/PR、测试锁定短 sha 等
+- 其他标签：分支 worktree（卡片类分行显示：`⎇ branch` / `worktree_name` 各占一行；分叉时主 worktree 也显标记）、commits、issue/PR、测试锁定短 sha 等
 
 ### 详情五 tab
 
@@ -68,7 +70,7 @@ conclusions:
 
 ## 聚合页：双视图首页与下钻（`--all --html` / `--all --serve`）
 
-**默认视图「change 流」**：把所有注册项目的非 archived change 拉平成一条流，按最近动静倒序。每行看得见：项目徽标、`#seq slug`、状态、`tier·type`、summary（缺省回退标题）、TODO 与 AC 进度、非主 worktree 时的 `⎇branch@worktree`、质量门 blocker（有才显示）、最近动静。3 天内没动过的行降饱和并以分界线区隔——降权不过滤，久未动的 draft 仍在。流的上方每个项目一张摘要条卡（名字、目录、主分支、worktree 数、五状态计数、backlog 数、as-of），同样按 3 天规则降饱和。
+**默认视图「change 流」**:把所有注册项目的非 archived change 拉平成一条流,按最近动静倒序。每行看得见:项目徽标、`#seq slug`、状态、`tier·type`、summary(缺省回退标题)、TODO 与 AC 进度、非主 worktree 或分叉时的 `⎇ branch` / `worktree` 分行标记、质量门 blocker（有才显示）、最近动静。3 天内没动过的行降饱和并以分界线区隔--降权不过滤,久未动的 draft 仍在。流的上方每个项目一张摘要条卡(名字、目录、主分支、worktree 数、五状态计数、backlog 数、as-of),同样按 3 天规则降饱和。
 
 **第二视图「概要卡」**：改版前的每项目一张卡，信息面不变。顶部卡区切换两视图，视图态记在 URL hash（`#/` = change 流、`#/cards` = 概要卡），刷新停在原视图。
 

@@ -3,7 +3,7 @@ title: cli/eo-board 只读看板 CLI
 type: agent
 tags: [cli, eo-board, serve, cache, rendering, routing, gates, journal, mdBlock]
 created: 2026-07-24
-updated: 2026-08-02
+updated: 2026-08-04
 scope: 改动看板呈现、门禁判定、serve 缓存、聚合页视图与下钻路由、泳道卡详情 tab 时
 status: active
 source: cli/eo-board
@@ -17,6 +17,7 @@ conclusions:
   - 解析能力已抽至 cli/eo_lib，本文件只留呈现职责；改解析先看 eo_lib
   - 单项目泳道页只有一套资产（PROJECT_CSS/MARKUP/JS），serve 与聚合快照共用；改泳道渲染就是改这三块
   - attach_card_progress 给每条 change 补 full_text / frontmatter / journal_entries / stage_progress；derive_stage_progress 与 blocker 共卡面
+  - build_data 用 scan_all_changes_split（分叉感知扫描）：同 id 候选按 change.md 内容 sha256 分组，实质分叉各出一卡（diverged=True）、一致副本合并；以 main worktree 为基准过滤状态更低的过期候选；卡面 _key 追加 @worktree_name 去重
   - mdBlock：先 esc 后白名单；safeHref 仅 http/https/mailto；台账未决 = open|fixed
   - route_key = `<URL 编码显示名>~<项目根 realpath 的 sha256 前 8 位>`；显示名不承担唯一性，路由映射逐请求重建
 ---
