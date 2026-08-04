@@ -367,6 +367,181 @@ class BoardCacheServeTests(unittest.TestCase):
             self.assertNotEqual(initial["stats"]["direct_commits"]["since"], february["stats"]["direct_commits"]["since"])
 
 
+NODE_DIVERGE_RUNNER = r"""
+const fs = require('fs');
+const projectJs = fs.readFileSync(process.argv[2], 'utf8');
+const payload = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+function stub(name) {
+  return {
+    name, innerHTML: '', textContent: '', style: {}, disabled: false, _q: {},
+    classList: { _s: new Set(), add(c){this._s.add(c);}, remove(c){this._s.delete(c);},
+      toggle(c,on){if(on===undefined){this._s.has(c)?this._s.delete(c):this._s.add(c);}else if(on)this._s.add(c);else this._s.delete(c);},
+      contains(c){return this._s.has(c);} },
+    querySelector(sel){return this._q[sel]||(this._q[sel]=stub(sel));},
+    querySelectorAll(sel){
+      if(sel==='.detail-tab')return this._tabs||[];
+      if(sel==='.detail-pane')return this._panes||[];
+      if(sel&&sel.startsWith('.card'))return this._cards||[];
+      return [];
+    },
+    addEventListener(type,fn){(this._listeners=this._listeners||{})[type]=fn;},
+    setAttribute(k,v){this[k]=v;this['data-'+k]=v;},
+    getAttribute(k){return this[k]||this['data-'+k]||null;},
+    focus(){},
+  };
+}
+const els={};
+const el=(id)=>els[id]||(els[id]=stub(id));
+el('eo-project-markup').textContent=fs.readFileSync(process.argv[4],'utf8');
+el('eo-project-css').textContent='';
+const root=stub('root');
+const drawer=stub('p-drawer');const backdrop=stub('p-backdrop');
+const pBody=stub('p-body');const pChips=stub('p-chips');const pTitle=stub('p-title');
+const pClose=stub('p-close');const pBoard=stub('p-board');const pTopbar=stub('p-topbar');
+const pStrip=stub('p-strip');const pWarn=stub('p-warn');
+root.querySelector=(sel)=>{
+  const map={'#p-drawer':drawer,'#p-backdrop':backdrop,'#p-body':pBody,
+    '#p-chips':pChips,'#p-title':pTitle,'#p-close':pClose,
+    '#p-board':pBoard,'#p-topbar':pTopbar,'#p-strip':pStrip,'#p-warn':pWarn,
+    '#p-src-toggle':stub('p-src-toggle')};
+  return map[sel]||stub(sel);
+};
+root.querySelectorAll=(sel)=>{if(sel==='.card[data-detail]')return root._cards||[];return [];};
+globalThis.document={getElementById:el,createElement:()=>stub('created'),
+  head:{appendChild(){}},documentElement:{classList:{add(){},remove(){},toggle(){}}},
+  addEventListener(){},removeEventListener(){},activeElement:null};
+globalThis.window={EO_PROJECT:null};
+globalThis.setInterval=()=>0;globalThis.clearInterval=()=>{};
+(0,eval)(projectJs);
+const api=window.EO_PROJECT;
+api.mount({root,data:payload.data,dataUrl:'/data.json',homeUrl:''});
+const keys=[];
+const re=/data-detail="(ch:[^"]+)"/g;
+let m;
+while((m=re.exec(pBoard.innerHTML||''))!==null){keys.push(m[1].replace(/&quot;/g,'"'));}
+const details=[];
+if(api.__test&&api.__test.openDetail){
+  for(const key of keys){api.__test.openDetail(key);details.push({key:key,body:pBody.innerHTML});}
+}
+process.stdout.write(JSON.stringify({keys:keys,details:details}));
+"""
+
+
+@unittest.skipUnless(NODE, "缺少 node，无法渲染泳道页验证分叉卡详情")
+class BoardWorktreeSplitTests(BoardCacheServeTests):
+    """看板按 worktree 拆分并行 change 卡（change #14）。"""
+
+    def add_side_worktree(self, branch="side"):
+        side = self.root / "side-wt"
+        run_git(self.repo, "worktree", "add", "-q", str(side), "-b", branch)
+        return side
+
+    def diverge_side_change(self, side, old="status: draft", new="status: confirmed"):
+        sc = side / "eo-doc" / "changes" / "01-fixture" / "change.md"
+        sc.write_text(sc.read_text(encoding="utf-8").replace(old, new), encoding="utf-8")
+        return sc
+
+    def test_ac1_diverged_change_shows_multiple_cards(self):
+        """AC-1: 实质分叉时 board 显示多张卡，各卡展示自己的状态与进度。"""
+        side = self.add_side_worktree()
+        self.diverge_side_change(side)
+        data = self.board.build_data(self.cfg)
+        cards = [c for c in data["changes"] if c["id"] == "fixture"]
+        self.assertEqual(len(cards), 2)
+        self.assertTrue(all(c.get("diverged") for c in cards))
+        self.assertEqual({c["status"] for c in cards}, {"draft", "confirmed"})
+        # 各卡来自不同 worktree
+        self.assertEqual(len({c["worktree"] for c in cards}), 2)
+
+    def test_ac2_identical_copies_merge_to_one_card(self):
+        """AC-2: 内容一致的副本只出一张卡，无 diverged 标记。"""
+        self.add_side_worktree()  # 继承相同 change.md
+        data = self.board.build_data(self.cfg)
+        cards = [c for c in data["changes"] if c["id"] == "fixture"]
+        self.assertEqual(len(cards), 1)
+        self.assertFalse(cards[0].get("diverged", False))
+
+    def test_ac3_diverged_main_worktree_card_carries_marker_data(self):
+        """AC-3 数据层：分叉场景下主 worktree 那张卡也带 diverged 标记。"""
+        side = self.add_side_worktree()
+        self.diverge_side_change(side)
+        data = self.board.build_data(self.cfg)
+        cards = [c for c in data["changes"] if c["id"] == "fixture"]
+        main_card = [c for c in cards if c.get("is_default_worktree")]
+        self.assertEqual(len(main_card), 1)
+        self.assertTrue(main_card[0].get("diverged"))
+
+    def test_ac4_diverged_cards_have_unique_keys_and_distinct_detail(self):
+        """AC-4: 分叉卡可独立打开详情，详情内容对应该 worktree 那份 change.md。"""
+        side = self.add_side_worktree()
+        self.diverge_side_change(side)
+        data = self.board.build_data(self.cfg)
+        html = self.board.render_html(data)
+        m_js = re.search(r'<script>\s*(window\.EO_PROJECT[\s\S]*?)</script>', html)
+        m_markup = re.search(r'id="eo-project-markup">([\s\S]*?)</script>', html)
+        self.assertIsNotNone(m_js)
+        self.assertIsNotNone(m_markup)
+        runner = self.root / "diverge-runner.js"
+        runner.write_text(NODE_DIVERGE_RUNNER, encoding="utf-8")
+        js_file = self.root / "project.js"
+        js_file.write_text(m_js.group(1), encoding="utf-8")
+        data_file = self.root / "payload.json"
+        data_file.write_text(json.dumps({"data": data}), encoding="utf-8")
+        markup_file = self.root / "markup.html"
+        markup_file.write_text(m_markup.group(1), encoding="utf-8")
+        proc = subprocess.run(
+            [NODE, str(runner), str(js_file), str(data_file), str(markup_file)],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        result = json.loads(proc.stdout)
+        keys = result["keys"]
+        self.assertEqual(len(keys), 2)
+        self.assertEqual(len(set(keys)), 2)  # _key 唯一，CARD_INDEX 不碰撞
+        # 两张卡详情内容不同（对应各自 worktree 的 change.md）
+        bodies = [d["body"] for d in result["details"]]
+        self.assertEqual(len(bodies), 2)
+        self.assertNotEqual(bodies[0], bodies[1])
+        # 一张含 draft、另一张含 confirmed（frontmatter 差异体现在全文 tab）
+        joined = "\n".join(bodies)
+        self.assertIn("draft", joined)
+        self.assertIn("confirmed", joined)
+
+    def test_ac5_serve_refreshes_divergence_within_three_seconds(self):
+        """AC-5: serve 挂起时任一 worktree 修改 change.md，3 秒内拆分状态正确刷新。"""
+        side = self.add_side_worktree()  # 初始一致 -> 1 card
+        self.start_server()
+        first = self.get_json()
+        self.assertEqual(len([c for c in first["changes"] if c["id"] == "fixture"]), 1)
+        self.diverge_side_change(side)  # 制造分叉
+        time.sleep(3.1)
+        second = self.get_json()
+        cards = [c for c in second["changes"] if c["id"] == "fixture"]
+        self.assertEqual(len(cards), 2)
+        self.assertTrue(all(c.get("diverged") for c in cards))
+
+    def test_group_changes_by_divergence_unit(self):
+        """group_changes_by_divergence：内容一致合并、分叉分组。"""
+        from eo_lib.changes import group_changes_by_divergence
+        rec_a = {"path": "/a/change.md"}
+        rec_b = {"path": "/b/change.md"}
+        rec_c = {"path": "/c/change.md"}
+        tmp = self.root / "changes"
+        tmp.mkdir()
+        pa, pb, pc = tmp / "a.md", tmp / "b.md", tmp / "c.md"
+        pa.write_text("same", encoding="utf-8")
+        pb.write_text("same", encoding="utf-8")  # 与 a 一致
+        pc.write_text("different", encoding="utf-8")  # 分叉
+        rec_a["path"], rec_b["path"], rec_c["path"] = str(pa), str(pb), str(pc)
+        groups = group_changes_by_divergence([rec_a, rec_b, rec_c])
+        self.assertEqual(len(groups), 2)  # 两组：{a,b} 和 {c}
+        sizes = sorted(len(g) for g in groups)
+        self.assertEqual(sizes, [1, 2])
+        # 单条直接返回一组
+        self.assertEqual(len(group_changes_by_divergence([rec_a])), 1)
+        self.assertEqual(len(group_changes_by_divergence([])), 1)
+
+
 class MultiProjectFixture(unittest.TestCase):
     """多项目 fixture 基座。EO_HOME 一律临时目录，不触碰真实 ~/.eo。"""
 
@@ -812,7 +987,7 @@ class BoardAllHomeViewTests(MultiProjectFixture):
         self.assertIn("实施中", content)
         self.assertIn("<b>full</b>·feature", content)
         self.assertIn("侧枝上的热变更", content)
-        self.assertIn('<span class="tag branch">⎇ side@alpha-side</span>', content)
+        self.assertIn('<span class="tag branch wt-split"><span class="wt-line">⎇ side</span><span class="wt-line">alpha-side</span></span>', content)
         self.assertIn('<span class="tag warn">⛔ 人工验收 2 项待勾</span>', content)
         self.assertIn('<span class="prog-num">1/2</span>', content)
 
@@ -873,7 +1048,7 @@ class BoardAllHomeViewTests(MultiProjectFixture):
 
         variant = classes(VARIANT_PATH.read_text(encoding="utf-8"))
         # 定稿稿没有的边界态：未注册徽标、坏条目错误行、空流提示、分支标签
-        extra = {"unreg", "proj-err", "proj-note", "list-empty", "branch"}
+        extra = {"unreg", "proj-err", "proj-note", "list-empty", "branch", "wt-split", "wt-line"}
         self.assertLessEqual(classes(content) - extra, variant)
         for anchor in ("strip", "proj", "list", "list-head", "row", "r-proj", "r-main",
                        "r-prog", "r-when", "divider", "st-pill", "bar", "todo", "ac"):
