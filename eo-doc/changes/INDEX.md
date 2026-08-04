@@ -15,3 +15,4 @@
 | 11 | [board-card-progress](11-board-card-progress/change.md) | light | feature | archived | 2026-08-02 | card 详情改五 tab（含全文/journal 动态），卡面标质量门阶段轮次，≥3 轮警告样式 |
 | 12 | [review-fix-test-routing](12-review-fix-test-routing/change.md) | full | enhance | archived | 2026-08-02 | Review 修复后仅在既有测试证据失效时进入 Test |
 | 13 | [loop-risk-triggered-verification](13-loop-risk-triggered-verification/change.md) | full | enhance | archived | 2026-08-02 | eo-loop 仅在出现客观风险信号时升级核查 |
+| 14 | [board-worktree-split](14-board-worktree-split/change.md) | light | enhance | confirmed | 2026-08-04 | 多 worktree 并行同一 change 且实质分叉时 board 各出一卡，一致副本仍合并；卡面 branch/worktree 分行显示 |

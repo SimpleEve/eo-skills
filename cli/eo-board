@@ -43,7 +43,7 @@ from eo_lib import (
     registry_path,
     repo_identity,
     run_git,
-    scan_all_changes,
+    scan_all_changes_split,
     split_frontmatter,
     tree_max_mtime,
     unregister_project,
@@ -843,7 +843,7 @@ def build_data(cfg):
     worktrees = list_worktrees(anchor)
     main_wt = worktrees[0]
 
-    changes = scan_all_changes(cfg, worktrees, warnings)
+    changes = scan_all_changes_split(cfg, worktrees, warnings)
     for rec in changes:
         probe_change_artifacts(rec, cfg["doc_root"])
         compute_change_git_stats(rec, cfg["doc_root"], main_wt["path"])
@@ -1191,6 +1191,8 @@ PROJECT_CSS = r"""
   .tag.warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); font-weight: 600; }
   .tag.lock { background: var(--st-confirmed-soft); border-color: transparent; color: var(--st-confirmed); }
   .tag.branch { background: var(--st-implementing-soft); border-color: transparent; color: var(--st-implementing); }
+  .tag.branch.wt-split { flex-direction: column; align-items: flex-start; gap: 0; line-height: 1.35; padding: 2px 6px; }
+  .tag.branch.wt-split .wt-line { display: block; }
   .tag.stage { background: var(--st-implementing-soft); border-color: transparent; color: var(--st-implementing); font-weight: 600; }
   .date { font-family: var(--mono); font-size: 10.5px; color: var(--faint); margin-left: auto; }
 
@@ -1856,9 +1858,11 @@ function renderChange(d) {
   });
   h += '</div>';
 
-  var meta = metaRow('created', esc(d.created || '—'))
-    + metaRow('最近活动', esc(d.last_touch || '—') + ' <span class="src">git 推导</span>')
-    + metaRow('worktree', esc(d.worktree_name || '—') + (d.branch && !d.is_default_worktree ? ' ⎇ ' + esc(d.branch) : ''));
+  var showBranch = d.branch && (d.diverged || !d.is_default_worktree);
+  var meta = metaRow('created', esc(d.created || '-'))
+    + metaRow('最近活动', esc(d.last_touch || '-') + ' <span class="src">git 推导</span>')
+    + metaRow('worktree', esc(d.worktree_name || '-'));
+  if (showBranch) meta += metaRow('branch', '⎇ ' + esc(d.branch));
   if (d.commit_count) meta += metaRow('commits', d.commit_count + ' 个（[' + esc(d.id) + '] 前缀）');
   if (d.test_lock_commit) meta += metaRow('测试锁定', esc(d.test_lock_commit) + ' <span class="src">frontmatter·test_lock_commit</span>');
   if (d.issue !== null && d.issue !== undefined) meta += metaRow('issue', '#' + esc(d.issue));
@@ -1952,7 +1956,8 @@ function changeCard(d) {
   if (sp && sp.label) {
     foot += '<span class="tag ' + (sp.warn ? 'warn' : 'stage') + '">' + esc(sp.label) + '</span>';
   }
-  if (d.branch && !d.is_default_worktree) foot += '<span class="tag branch">⎇ ' + esc(d.branch) + ' · ' + esc(d.worktree_name) + '</span>';
+  if ((d.branch || d.worktree_name) && (d.diverged || !d.is_default_worktree))
+    foot += '<span class="tag branch wt-split"><span class="wt-line">⎇ ' + esc(d.branch || '?') + '</span><span class="wt-line">' + esc(d.worktree_name || '?') + '</span></span>';
   if (d.commit_count) foot += '<span class="tag">' + d.commit_count + ' commits</span>';
   if (d.issue !== null && d.issue !== undefined) foot += '<span class="tag ok">issue #' + esc(d.issue) + '</span>';
   if (d.pr) foot += '<span class="tag ok">PR ↗</span>';
@@ -2053,6 +2058,7 @@ function buildBoard() {
     }
     col.forEach(function (d) {
       d._key = (status === 'backlog' ? 'bl:' : 'ch:') + (d.id || d.path);
+      if (d.diverged) d._key += '@' + (d.worktree_name || '?');
       CARD_INDEX[d._key] = d;
       html += status === 'backlog' ? backlogCard(d) : changeCard(d);
     });
@@ -2386,6 +2392,7 @@ def _stream_change(rec, project_label, route_key):
         "branch": rec.get("branch"),
         "worktree_name": rec.get("worktree_name"),
         "is_default_worktree": bool(rec.get("is_default_worktree", True)),
+        "diverged": bool(rec.get("diverged", False)),
         "activity_at": rec.get("activity_at"),
         "active": is_recent(rec.get("activity_at")),
         "project": project_label,
@@ -2746,6 +2753,8 @@ ALL_HTML_TEMPLATE = r"""<title>eo board · 所有项目</title>
   }
   .tag.warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); font-weight: 600; }
   .tag.branch { background: var(--st-implementing-soft); border-color: transparent; color: var(--st-implementing); }
+  .tag.branch.wt-split { flex-direction: column; align-items: flex-start; gap: 0; line-height: 1.35; padding: 2px 6px; }
+  .tag.branch.wt-split .wt-line { display: block; }
   .summary { font-size: 12.5px; color: var(--muted); margin-top: 3px; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   .r-prog { grid-area: prog; display: flex; flex-direction: column; gap: 5px; padding-top: 4px; }
@@ -2900,8 +2909,8 @@ function changeRow(c) {
     + '<span class="st-pill" style="background: var(--st-' + esc(c.status) + '-soft); color: var(--st-' + esc(c.status) + ')">'
     + esc(STATUS_ZH[c.status] || c.status) + '</span>'
     + '<span class="tt"><b>' + esc(c.tier) + '</b>·' + esc(c.type) + '</span>';
-  if (!c.is_default_worktree) {
-    line1 += '<span class="tag branch">⎇ ' + esc(c.branch || '?') + '@' + esc(c.worktree_name || '?') + '</span>';
+  if (c.diverged || !c.is_default_worktree) {
+    line1 += '<span class="tag branch wt-split"><span class="wt-line">⎇ ' + esc(c.branch || '?') + '</span><span class="wt-line">' + esc(c.worktree_name || '?') + '</span></span>';
   }
   if (c.blocker) line1 += '<span class="tag warn">⛔ ' + esc(c.blocker) + '</span>';
   return '<a class="row' + (c.active ? '' : ' dim') + '" href="' + esc(href)

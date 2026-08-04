@@ -237,6 +237,52 @@ def pick_change_winner(recs):
     return recs[0] if len(recs) == 1 else max(recs, key=status_rank)
 
 
+def group_changes_by_divergence(recs):
+    """同 id 候选按 change.md 内容 sha256 分组：实质分叉（>1 组）返回多组，内容一致副本合并为一组。
+    与 resolve_change 的整文件 hash 比较同源（读取失败归入 None 桶，不阻断其余分组）。
+    """
+    if len(recs) <= 1:
+        return [list(recs)]
+    groups = {}
+    order = []
+    for r in recs:
+        try:
+            digest = hashlib.sha256(Path(r["path"]).read_bytes()).hexdigest()
+        except Exception:
+            digest = None
+        if digest not in groups:
+            groups[digest] = []
+            order.append(digest)
+        groups[digest].append(r)
+    return [groups[d] for d in order]
+
+
+def scan_all_changes_split(cfg, worktrees, warnings):
+    """scan_all_changes 的分叉感知变体：同 id 候选按 change.md 内容实质分叉时各出一卡，一致副本合并。
+    diverged 标记仅在真分叉时置 True（无分叉场景数据与 scan_all_changes 一致）。
+    """
+    by_id = scan_changes_grouped(cfg, worktrees, warnings)
+    cards = []
+    for recs in by_id.values():
+        groups = group_changes_by_divergence(recs)
+        diverged = len(groups) > 1
+        for group in groups:
+            rep = pick_change_winner(group)
+            if diverged:
+                rep["diverged"] = True
+            cards.append(rep)
+
+    seq_map = {}
+    for c in cards:
+        if c.get("seq") is not None:
+            seq_map.setdefault(c["seq"], set()).add(c["id"])
+    for seq, ids in sorted(seq_map.items(), key=lambda kv: str(kv[0])):
+        if len(ids) > 1:
+            warnings.append(f"撞号：seq #{seq} 同时被 {', '.join(sorted(ids))} 占用")
+
+    return cards
+
+
 def scan_all_changes(cfg, worktrees, warnings):
     by_id = scan_changes_grouped(cfg, worktrees, warnings)
     winners = [pick_change_winner(recs) for recs in by_id.values()]
