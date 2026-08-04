@@ -7,7 +7,7 @@ status: implementing
 tier: light
 type: enhance
 base_commit: f496ca5
-test_lock_commit: 7766ec2
+test_lock_commit: 3d121ed
 commits: []
 issue: ~
 created: 2026-08-04

@@ -257,14 +257,23 @@ def group_changes_by_divergence(recs):
     return [groups[d] for d in order]
 
 
-def scan_all_changes_split(cfg, worktrees, warnings):
+def scan_all_changes_split(cfg, worktrees, warnings, base_worktree=None):
     """scan_all_changes 的分叉感知变体：同 id 候选按 change.md 内容实质分叉时各出一卡，一致副本合并。
     diverged 标记仅在真分叉时置 True（无分叉场景数据与 scan_all_changes 一致）。
+    base_worktree 指定基准 worktree 路径时，状态严格低于基准的候选视为过期（被基准超越）并过滤；
+    状态 >= 基准的保留（含同状态不同内容的有意义分叉）；基准没有该 change 时无阈值不过滤。
     """
     by_id = scan_changes_grouped(cfg, worktrees, warnings)
+    base_path = str(Path(base_worktree).resolve()) if base_worktree else None
     cards = []
     for recs in by_id.values():
-        groups = group_changes_by_divergence(recs)
+        pool = recs
+        if base_path:
+            base_recs = [r for r in recs if str(Path(r["worktree"]).resolve()) == base_path]
+            if base_recs:
+                threshold = status_rank(max(base_recs, key=status_rank))
+                pool = [r for r in recs if status_rank(r) >= threshold]
+        groups = group_changes_by_divergence(pool)
         diverged = len(groups) > 1
         for group in groups:
             rep = pick_change_winner(group)

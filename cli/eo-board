@@ -843,7 +843,7 @@ def build_data(cfg):
     worktrees = list_worktrees(anchor)
     main_wt = worktrees[0]
 
-    changes = scan_all_changes_split(cfg, worktrees, warnings)
+    changes = scan_all_changes_split(cfg, worktrees, warnings, base_worktree=main_wt["path"])
     for rec in changes:
         probe_change_artifacts(rec, cfg["doc_root"])
         compute_change_git_stats(rec, cfg["doc_root"], main_wt["path"])
