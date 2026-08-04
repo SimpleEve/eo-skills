@@ -520,6 +520,59 @@ class BoardWorktreeSplitTests(BoardCacheServeTests):
         self.assertEqual(len(cards), 2)
         self.assertTrue(all(c.get("diverged") for c in cards))
 
+    def test_ac6_stale_lower_status_filtered(self):
+        """AC-6: 基准状态更高时，状态更低的过期版本被过滤。"""
+        side = self.add_side_worktree()
+        # main=archived（基准，高），side=implementing（过期，低）
+        self.change_path.write_text(
+            self.change_path.read_text(encoding="utf-8").replace("status: draft", "status: archived"),
+            encoding="utf-8",
+        )
+        side_change = side / "eo-doc" / "changes" / "01-fixture" / "change.md"
+        side_change.write_text(
+            side_change.read_text(encoding="utf-8").replace("status: draft", "status: implementing"),
+            encoding="utf-8",
+        )
+        data = self.board.build_data(self.cfg)
+        cards = [c for c in data["changes"] if c["id"] == "fixture"]
+        self.assertEqual(len(cards), 1)
+        self.assertEqual(cards[0]["status"], "archived")
+        self.assertFalse(cards[0].get("diverged", False))
+
+    def test_ac6_base_lower_does_not_filter_higher(self):
+        """AC-6: 基准状态更低时不误杀--状态更高的 worktree 保留。"""
+        side = self.add_side_worktree()
+        # main=implementing（基准，低），side=reviewed（高，不误杀）
+        self.change_path.write_text(
+            self.change_path.read_text(encoding="utf-8").replace("status: draft", "status: implementing"),
+            encoding="utf-8",
+        )
+        side_change = side / "eo-doc" / "changes" / "01-fixture" / "change.md"
+        side_change.write_text(
+            side_change.read_text(encoding="utf-8").replace("status: draft", "status: reviewed"),
+            encoding="utf-8",
+        )
+        data = self.board.build_data(self.cfg)
+        cards = [c for c in data["changes"] if c["id"] == "fixture"]
+        self.assertEqual(len(cards), 2)
+        self.assertTrue(all(c.get("diverged") for c in cards))
+        self.assertEqual({c["status"] for c in cards}, {"implementing", "reviewed"})
+
+    def test_ac6_base_missing_change_no_filter(self):
+        """AC-6: 基准没有该 change 时无阈值不过滤。"""
+        side = self.add_side_worktree()
+        # 只在 side 创建一个新 change，main 没有
+        new_dir = side / "eo-doc" / "changes" / "02-side-only"
+        new_dir.mkdir(parents=True)
+        (new_dir / "change.md").write_text(
+            "---\nid: side-only\nseq: 2\ntitle: Side\nstatus: draft\ntier: light\n---\n\n# Side\n",
+            encoding="utf-8",
+        )
+        data = self.board.build_data(self.cfg)
+        cards = [c for c in data["changes"] if c["id"] == "side-only"]
+        self.assertEqual(len(cards), 1)
+        self.assertFalse(cards[0].get("diverged", False))
+
     def test_group_changes_by_divergence_unit(self):
         """group_changes_by_divergence：内容一致合并、分叉分组。"""
         from eo_lib.changes import group_changes_by_divergence
