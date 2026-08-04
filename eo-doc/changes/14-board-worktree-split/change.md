@@ -3,12 +3,12 @@ id: board-worktree-split
 seq: 14
 title: 看板按 worktree 拆分并行 change 卡
 summary: 多 worktree 并行同一 change 且实质分叉时，board 各出一卡；内容一致副本仍合并
-status: implementing
+status: archived
 tier: light
 type: enhance
 base_commit: f496ca5
 test_lock_commit: 3d121ed
-commits: []
+commits: ["f496ca5..bb73e86"]
 issue: ~
 created: 2026-08-04
 ---
