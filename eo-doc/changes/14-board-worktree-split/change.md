@@ -32,3 +32,15 @@ created: 2026-08-04
 - [ ] AC-3 卡片类展示（泳道卡面 / 聚合流行 / 卡详情概览）中 branch 与 worktree 分行显示，不再连成一行；拆分场景下包括主 worktree 在内的每张卡都带归属标记，一眼可辨（人工:构造分叉场景 → 过目卡面标记分行 + 各卡归属标记）（锁定：tests/test_eo_board_cache.py#BoardWorktreeSplitTests.test_ac3_diverged_main_worktree_card_carries_marker_data 覆盖数据层；卡面分行人工验收）
 - [ ] AC-4 终端 / --html / --serve / --all 聚合流四处拆分行为一致；每张卡可独立打开详情，详情内容对应该 worktree 那份 change.md（验证：--html 快照点开两张分叉卡，全文 tab 各显各的内容）（锁定：tests/test_eo_board_cache.py#BoardWorktreeSplitTests.test_ac4_diverged_cards_have_unique_keys_and_distinct_detail）
 - [ ] AC-5 回归：无分叉场景看板输出与拆分前一致；--serve 挂起时任一 worktree 修改 change.md，3 秒内拆分状态正确刷新不陈旧（验证：既有缓存基线测试不破 + 改动另一 worktree 的 change.md 看页面变化）（锁定：tests/test_eo_board_cache.py#BoardWorktreeSplitTests.test_ac5_serve_refreshes_divergence_within_three_seconds）
+
+## 独立复核
+
+独立复核：未执行（subagent 不可用——无 anthropic API key），2026-08-04，基线 d979e56
+
+subagent 起不了，以下为执行者自述（不作数，需用户验证或补跑）：
+
+- AC 覆盖：AC-1~AC-5 均有实现 + 锁定测试覆盖；AC-3 卡面分行为人工项
+- 测试完整性：实现 commit d979e56 不含测试文件改动（git show 确认），test_lock_commit 7766ec2 锁定后未篡改
+- 过拟合/硬编码：group_changes_by_divergence 用通用 sha256 分组，无 fixture 特判
+- 镀金：diff 仅含 change 要求的分组函数 + 四处卡面分行 + _key 唯一化 + CSS，无多余实现
+- 注释纪律：新增注释为功能性 docstring（含 resolve_change 同源指针），无溯源 token / 叙事辩护
