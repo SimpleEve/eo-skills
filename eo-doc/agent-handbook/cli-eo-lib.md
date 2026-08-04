@@ -3,7 +3,7 @@ title: cli/eo_lib 共享解析库
 type: agent
 tags: [cli, shared-lib, config, frontmatter, freshness]
 created: 2026-07-24
-updated: 2026-07-27
+updated: 2026-08-04
 scope: 改动 cli/ 下任何消费 change/backlog/配置文件契约的代码时
 status: active
 source: cli/eo_lib/
@@ -26,7 +26,7 @@ conclusions:
 | `config.py`（111 行） | `find_project_config(start)` / `load_project_config(path)` / `ConfigError` | 向上定位 `.eo-project.json`；同目录 `.eo-project.local.json` 顶层字段覆盖合并（local 优先）→ `_validate_merged` 必填校验 → 标准化。`_normalize_project_root`：相对 `project_root`（v1 遗留软链形态）按 repo root 解析 + realpath，得已存在目录才放行并 stderr 告警；解析不出（含成环软链的 RuntimeError、NUL 路径的 ValueError）一律 fail-closed；绝对路径分支零变化 |
 | `gitio.py` | `run_git` / `list_worktrees` / `list_worktrees_status`（降级感知枚举，供快照完整性判定） | git 子进程封装（15s 超时、失败返空串）；worktree 枚举（porcelain 解析 + 分支名覆盖） |
 | `frontmatter.py` | `split_frontmatter` / `parse_yaml_subset` / `parse_yaml_scalar` / `unquote` / `upsert_frontmatter_fields`（保序回写：已存字段原地换值、新字段 frontmatter 尾插） | 手写 YAML 子集（容错、BOM、行内注释、`[a,b]` 列表；不支持多行值/嵌套对象） |
-| `changes.py`（347 行） | `parse_change_file` / `scan_all_changes` / `scan_all_changes_split` / `group_changes_by_divergence` / `parse_ac_section` / `parse_todo_section` / `parse_oq_section` / `count_ac` / `count_todo` | change.md 各节解析与多 worktree 扫描（同 id 取状态最高者、seq 撞号告警）；`scan_all_changes_split` 按 change.md 内容 sha256 分组，实质分叉各出一卡、一致副本合并 |
+| `changes.py`（356 行） | `parse_change_file` / `scan_all_changes` / `scan_all_changes_split` / `group_changes_by_divergence` / `parse_ac_section` / `parse_todo_section` / `parse_oq_section` / `count_ac` / `count_todo` | change.md 各节解析与多 worktree 扫描（同 id 取状态最高者、seq 撞号告警）；`scan_all_changes_split` 按 change.md 内容 sha256 分组，实质分叉各出一卡、一致副本合并；以 main worktree 为基准过滤状态更低的过期候选 |
 | `registry.py` | `load_registry` / `register` / `unregister` / `entry_path` | 生态项目注册表 `${EO_HOME:-$HOME/.eo}/projects.json`：schema v1、原子写、未知字段保留、损坏报错不清空；去重键=`gitio.repo_identity()`（与 eo-sync 簿记 hash8 同源单一 API） |
 | `freshness.py`（70 行） | `compute_freshness_key(cfg)` / `tree_max_mtime(root)` | 缓存新鲜度键：当天日期 + worktree(路径,分支,HEAD) 三元组集 + `for-each-ref` sha256 指纹 + changes 树 max-mtime + backlog/roadmap mtime。`tree_max_mtime`（原私有 `_tree_max_mtime`）转公开导出：eo-board 的项目级 `activity_at` 与 freshness 键取同一把 mtime 尺子，保证「排序看到的动静」与「缓存重建的触发」同源 |
 
