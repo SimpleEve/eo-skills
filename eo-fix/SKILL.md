@@ -63,7 +63,7 @@ description: |
 | 取证结果 | 动作 |
 |---------|------|
 | 行为查无出处（无 AC 声明、state 无记载）且按口述明显是缺陷 | 按快路修（第三步） |
-| **行为是有意设计**（AC 声明过 / state 记为规则 / change 意图明确） | 停手告知：「这是 <change-id> 特意做的（AC-x）」；用户仍要改 → 这是需求变更，转 `/eo-change`（带上取证结论） |
+| **行为是有意设计**（AC 声明过 / state 记为规则 / change 意图明确） | 停手告知：「这是 <change-id> 特意做的（AC-x）」；用户仍要改 → 纯外观 / 文案类按 trivial 直改，并顺手就地精化对应 AC 文本（意图不变、不动 `plan_revision`）；涉及功能语义 / 交互逻辑 → 转 `/eo-change`（带上取证结论） |
 | AC 写漏且 change 未 archived | 确认后先补 §2/§3 再修（Update preserves context） |
 | state 与代码矛盾 | 文档陈旧 → 提示跑 `/eo-doc-manager sync`，以代码为准重判 |
 
@@ -105,7 +105,7 @@ description: |
 | 定位禁全局 grep eo-doc | 代码反查为主，INDEX 辅路 |
 | 修复范围守界 | 超 trivial 量级 / 需方案权衡 → 转 change，不硬修 |
 | 深挖必宣告、必还原 | 插桩/日志/bisect 结束后全部还原 |
-| 需求变更不伪装成 fix | 期望行为本身变了就是 /eo-change 的事，哪怕改动很小 |
+| 需求变更不伪装成 fix | **功能语义 / 交互逻辑**的期望变更就是 /eo-change 的事，哪怕改动很小；纯外观 / 样式 / 文案的期望变更不算——按 granularity §2 trivial 直改（前缀选择见 conventions §2.5） |
 | 注释纪律 | 一切流程溯源标注（change 编号/slug、TODO/AC、finding P0-x/P1-x、FAIL-x）严禁进代码注释（溯源走 commit 前缀）；不写「为何正确」的辩护；提交前对新增注释自检一眼，见 conventions.md §2.6 |
 | 与 implement 的分工 | test/review 反馈的修复归 /eo-implement 模式二；本 skill 是流程外的口喷入口 |
 

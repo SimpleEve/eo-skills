@@ -25,10 +25,13 @@ description: |
 **① 圈线段**：从用户话语确定三要素——**入口节点、出口节点、收敛标准**（出口状态怎样算达成）。地图是 [../eo-shared/conventions.md](../eo-shared/conventions.md) §3 的状态机（主路径 + 回退边）。典型线段只是示例、不是枚举：
 
 - 方案对齐：change ↔ change-review，收敛 = 审查通过、用户确认
-- 实施对齐（首轮典型路径）：implement → test → review，收敛 = 台账无阻塞项（P0/P1 清零）、最新 Review 覆盖当前 `(plan_revision, H)`，且测试证据已闭合（Test 在当前 revision 的 `H` 通过 / 当前 Review 明确签署旧证据沿用 / 无历史 Test 且无待验 heavy AC）；进入反馈循环后按 ④ 的非对称回路分流，不机械重放整条路径
+- 实施对齐（首轮典型路径）：implement → test → review，收敛 = 台账无阻塞项（P0/P1 清零）、最新 Review 覆盖当前 `(plan_revision, H)`，且测试证据已闭合（Test 在当前 revision 的 `H` 通过 / 当前 Review 明确签署旧证据沿用 / 无历史 Test 且既无待验 heavy AC、也无「待 test（需测试资产）」auto-light）；进入反馈循环后按 ④ 的非对称回路分流，不机械重放整条路径
+- 轻档直通：change confirmed → **eo-test lock（独立 test worker）** → implement → 完成门 → archive；测试锁定与业务实现不得复用同一 worker
 - 直通：change → … → review 或 archive
 
 三要素判不出的，先查偏好文件补缺省（见「经验沉淀」）；仍缺 → 按封闭选择协议（[../eo-shared/questioning.md](../eo-shared/questioning.md) §4）问一次，不追问第二轮。
+
+**随手小改先过 trivial 闸**：总控会话里用户随手提的修改（一轮收敛后或节点间隙最常见），先按 [../eo-shared/granularity.md](../eo-shared/granularity.md) §2 判档——trivial → 总控直改（需起环境验证才派原 impl worker），commit 前缀按 [../eo-shared/conventions.md](../eo-shared/conventions.md) §2.5，**不进状态机、不产工件、不动 `(plan_revision, H)`**；改动使活跃 change 的 AC / 文本与实际不符时，顺手就地精化文本（不动 `plan_revision`，见 conventions §3「文本同步不是 revision」）。四判据任一不满足 → 回到正常圈段。
 
 **举例措辞判据**：用户意图含「比如 / 之类 / 例如」等举例措辞 = 形态未定稿——例子是方向、不是规格。圈段时先安排探针对齐（轻档探针 / change 确认）把形态钉下来再派实施节点，不得让例子直接当定稿进派发 prompt。
 

@@ -54,11 +54,13 @@ skill 写入 vault（board stub、brainstorm 记录、lessons/decisions、backlo
 
 | 场景 | 前缀 | 示例 |
 |------|------|------|
-| change 相关提交（implement 批次、archive 结算/meta） | `[<change-id>]` | `[batch-export] 导出模块 Batch 1` |
+| change 相关提交（eo-test 锁定/测试资产、implement 批次、archive 结算/meta） | `[<change-id>]` | `[batch-export] 导出模块 Batch 1` |
 | 直改模式：bug 小修 | `fix:` | `fix: 修正导出文件名日期格式` |
 | 直改模式：UI/样式/文案 | `ui:` | `ui: 调整卡片间距` |
 
-change-id 前缀是 eo-archive 归集 commit 区间的依据；`fix:`/`ui:` 前缀供 retro 统计直改流量。推荐「一次 change 一次 commit」；TODO 分批时允许一批一 commit，archive 至多补两个收尾 commit：结算 meta commit + 可选 sync 身份回写 commit（后者仅当收口 `eo-sync run` 产生身份字段回写时）。**轻档例外**：预期恰为 2-3 个 commit——test-lock commit + 实施 commit（+ 收尾 meta commit），**不得 squash**（锁定边界是独立复核的比对基准）。
+change-id 前缀是 eo-archive 归集 commit 区间的依据；`fix:`/`ui:` 前缀供 retro 统计直改流量。推荐「一次 change 一次 commit」；TODO 分批时允许一批一 commit，archive 至多补两个收尾 commit：结算 meta commit + 可选 sync 身份回写 commit（后者仅当收口 `eo-sync run` 产生身份字段回写时）。**轻档例外**：预期恰为 2-3 个 commit——eo-test lock commit + eo-implement 实施 commit（+ 收尾 meta commit），**不得 squash**（锁定边界是独立复核的比对基准）。
+
+**前缀选择不因活跃 change 改向**：trivial 直改（[granularity.md](granularity.md) §2）即使落在某活跃 change 的范围内，仍走 `fix:`/`ui:`——证据冻结后（`reviewed` / 轻档完成门已过）带 `[<change-id>]` 提交会推进 `H`、使 Review / 完成门基线过期，一行 CSS 触发一轮复审。证据未冻结期（implementing 中）的范围内缺陷修复，才按 eo-fix 第六步带 `[<change-id>]` 落点。
 
 ## 2.6 代码注释纪律
 
@@ -110,7 +112,9 @@ implementing ──(eo-change 回炉子流程：方案需实质修订)──▶ 
 | `fix_rounds` | 整数，缺省视为 0 | eo-implement 模式二第 0 步 | 当前 revision 内的修复轮次；≥3 触发熔断三选一；回炉确认时归零 |
 | `fix_consumed` | 列表，缺省 `[]` | eo-implement 模式二第 0 步 | 已消费的失败反馈标识（`review#N` / `test#N` / `acceptance#<AC编号>@<验收基线sha>`）——幂等计数依据，触发集为空 = 续修不计数；回炉确认时清空 |
 
-**change 分轻/全两档**（frontmatter `tier: light | full`，**缺省视为 full**，存量 change 零迁移）。轻档共用上表状态机但**跳过 reviewed**：draft →（探针对齐）confirmed →（测试锁定 + 实施）implementing →（完成门通过，收口立即内嵌调用 eo-archive）archived——**归档两档同源于 eo-archive**，按档分流准入：全档验 review 基线新鲜度，轻档走轻档门（验完成门留痕：独立复核基线新鲜 + 锁定测试绿 + manual 确认记录）。轻模式收口负责在完成门通过后立即触发；其他上下文（主控 / 用户）持完成门留痕直接调 /eo-archive 亦可，门槛不因入口减免。判档规则见 [granularity.md](granularity.md) §5。
+**文本同步不是 revision**：change 活跃期内，意图不变的文本维护（措辞对齐实际实现、就地补 AC、typo）是编辑行为——不动 `plan_revision`、不清计数、不走回炉；loop / test / review 各节点不得把 change.md 的此类文本差异当 revision 信号。边界细则（何谓「意图不变」）以 eo-change「回炉与就地精化的边界」为单一来源。
+
+**change 分轻/全两档**（frontmatter `tier: light | full`，**缺省视为 full**，存量 change 零迁移）。轻档共用上表状态机但**跳过 reviewed**：draft →（探针对齐）confirmed →（独立 eo-test lock，status 不变）confirmed →（eo-implement 实施）implementing →（完成门通过，收口立即内嵌调用 eo-archive）archived——**归档两档同源于 eo-archive**，按档分流准入：全档验 review 基线新鲜度，轻档走轻档门（验完成门留痕：独立复核基线新鲜 + 锁定测试绿 + manual 确认记录）。轻模式收口负责在完成门通过后立即触发；其他上下文（主控 / 用户）持完成门留痕直接调 /eo-archive 亦可，门槛不因入口减免。判档规则见 [granularity.md](granularity.md) §5。
 
 用户的确认动作发生在对话里（回复确认，或按 [questioning.md](questioning.md) §4 封闭选择协议选择），skill 负责落盘。
 
