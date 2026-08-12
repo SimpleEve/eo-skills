@@ -7,7 +7,7 @@ status: confirmed
 tier: light
 type: enhance
 base_commit: d7c6d328f95d8e9ffca030b427e94c505050e955
-test_lock_commit: d5d58442742e8f76f25ffed7d731b34513de7aa5
+test_lock_commit: 7b1f42ed8012d2f156f9b7cbe185fe6e927861d1
 commits: []
 issue: ~
 created: 2026-08-12
