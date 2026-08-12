@@ -1,7 +1,7 @@
 ---
 title: cli/eo-board 只读看板 CLI
 type: agent
-tags: [cli, eo-board, serve, cache, rendering, routing, gates, journal, mdBlock]
+tags: [cli, eo-board, serve, cache, rendering, routing, gates, journal, mdBlock, search]
 created: 2026-07-24
 updated: 2026-08-12
 scope: 改动看板呈现、门禁判定、serve 缓存、聚合页视图与下钻路由、泳道卡详情 tab 时
@@ -10,7 +10,8 @@ source: cli/eo-board
 summary: >
   零第三方依赖的单文件只读看板（约 3500 行）：默认全局 dashboard（终端聚合流 / --html 双视图首页快照 / --serve 轮询服务），`--all` 已退役；
   消费 eo_lib 解析层，board 专属逻辑为门禁判定、stage_progress、journal/frontmatter 投影、详情五 tab 与 HTTP 服务（含每项目单飞缓存）；
-  `--project` 为显式下钻（终端单项目摘要；html 内嵌 + initial_route 直落；serve 首开 /p/<key>），泳道页顶栏项目 chip 是可切换项目的下拉。
+  `--project` 为显式下钻（终端单项目摘要；html 内嵌 + initial_route 直落；serve 首开 /p/<key>），泳道页顶栏项目 chip 是可切换项目的下拉；
+  泳道页版面定格为列内滚动（sticky 列头），列可折叠为窄条并按项目记忆，Cmd/Ctrl+K 定位搜索面板支持 `#seq` 直跳与全文片段命中。
 conclusions:
   - 宪法四条：只读铁律（绝不写项目文件）、不做清单（无 SSE/无观测/无写操作/零第三方依赖）、性能靠缓存、GitHub 实时状态仅可选旗标
   - serve 缓存：每配置槽一构建锁（_BOARD_BUILD_LOCKS），锁内重算键+二次查表，同槽单飞、跨槽并行
@@ -21,6 +22,10 @@ conclusions:
   - build_data 用 scan_all_changes_split（分叉感知扫描）：同 id 折叠为一张卡——一致副本合并维持旧口径；实质分叉时按「git 末次提交 + 目录 mtime」取最新变体出卡，其余变体收进 forks（diverged=True），与出卡同走附加管道；以 main worktree 为基准过滤状态更低的过期候选（先于折叠，过期副本不进 forks）；卡面/聚合流带「分叉×N」徽标，详情概览列出 forks 可切换（CARD_INDEX 键 ch:<id>@<worktree_name>）
   - mdBlock：先 esc 后白名单；safeHref 仅 http/https/mailto；台账未决 = open|fixed
   - route_key = `<URL 编码显示名>~<项目根 realpath 的 sha256 前 8 位>`；显示名不承担唯一性，路由映射逐请求重建
+  - 泳道版面定格：`.wrap` 100vh flex 列 + `.board-scroll` 只吃横向，`.col` 列内纵向滚动（sticky `.col-head`，列尾 col-note 随内容）；`.prov` 数据来源区收进 `<details>` 默认收起，页面整体不滚
+  - 列折叠：`setColumnCollapsed` 切 `.collapsed` 窄条（竖排列名+计数），localStorage 键 `eo-board:collapsed:<PROJECT_KEY>`；PROJECT_KEY 取 mount opts.projectKey（下钻 enterProject 传 `row.route_key`），回退 DATA_URL/data 指纹
+  - 定位搜索：Cmd/Ctrl+K 与 `/`（输入态豁免）唤起面板，Esc 按「搜索→详情抽屉→定位态」逐层消费；`searchCards` 做 `#seq` 精确与 title/summary/full_text（backlog 用 body）不区分大小写子串匹配，按 STATUS_ORDER 分组出片段；选中 `locateSearchResult` 关面板、折叠列自动展开并持久、scrollIntoView + `located` 脉冲、他卡 dim，Esc/点空白 `clearLocate`
+  - `buildBoard` 热刷新重建前显式 `clearLocate()`，定位态不留半残；mount 的全局监听为 `keyHandler`+`clickHandler`（取代旧 escHandler），unmount 全量解绑并复位全部模块态
 ---
 
 eo-skills 的默认呈现层。数据全部派生自 change.md frontmatter、质量门报告与 backlog/roadmap 文件（不读 Obsidian stub）。
@@ -50,7 +55,7 @@ eo-skills 的默认呈现层。数据全部派生自 change.md frontmatter、质
 | `parse_review_gate` | 轮次近似、历史标题计数 + `open_p0`/`open_p1` 与 titles |
 | `parse_test_gate` | 完全通过时 `fail_titles` 清空（不算当前未决） |
 | `compute_gates` | 填 `rec["gates"]` 与 `rec["blocker"]`；review 未决 P0/P1 也会成 blocker（含有保留通过） |
-| `derive_stage_progress` | 返回 `{stage, label, rounds, warn}` 或仅 warn 对象 / `None`；archived 无阶段可有 warn |
+| `derive_stage_progress` | 返回 `{stage, label, rounds, warn}` 或仅 warn 对象 / `None`；review 未决时 label 并列组合（如 `review P0×1 P1×2`）；archived 无阶段可有 warn |
 | `attach_card_progress` | `full_text` / `frontmatter` / `journal_*` / `stage_progress` |
 
 **当前阶段优先级（简化）**：review 未决（不通过或 open/fixed P0|P1）> test 失败 > change_review 未决 > acceptance（仅 `status=reviewed`）> 进行中弱信号。
@@ -66,7 +71,25 @@ eo-skills 的默认呈现层。数据全部派生自 change.md frontmatter、质
 | `renderJournal` | journal 条目 `mdBlock`；顺序依赖数据层逆序 |
 | `mdBlock` / `applyInline` / `safeHref` | 迷你 markdown：标题 #~####、表、fenced code、列表/checkbox、hr、粗体/code/链接；**safeHref** 仅 http/https/mailto |
 | `bindDetailTabs` / `openDetail(..., isRefresh)` | tab 点击；热刷新时恢复活动 `data-tab` |
-| `changeCard` | 卡面阶段标签 + `card-warn`（`stage_progress.warn`） |
+| `changeCard` | 卡面阶段标签独立一行 `.card-stage-line` + `card-warn`（`stage_progress.warn`）；summary 走 `mdInline` |
+
+## 泳道搜索、列显隐与版面（PROJECT_JS）
+
+| 函数 | 职责 |
+|------|------|
+| `collapsedStorageKey` / `loadCollapsedColumns` / `saveCollapsedColumns` | localStorage 键 `eo-board:collapsed:<PROJECT_KEY>`，读回容错为空集 |
+| `setColumnCollapsed(status, collapsed)` | 切 `.collapsed` 窄条 + toggle 按钮文案/aria，随即持久；点窄条任意处展开 |
+| `searchCards(query)` | `#<num>` 走 seq 精确（backlog 不参与）；否则 title/summary/full_text（backlog 卡用 body）不区分大小写子串匹配；按 STATUS_ORDER 顺序产出 `{key, status, card, snippet}` |
+| `searchSnippet` / `markSnippet` | 命中词前后截取上下文片段；`<mark>` 高亮前先 `esc` |
+| `renderSearchResults` | 空查询引导文案 / 无匹配空态；按泳道分组渲染，`activeSearchIndex` 随结果数收敛 |
+| `openSearch` / `closeSearch` | 面板开关；打开即聚焦输入框并重置活动下标 |
+| `locateSearchResult(index)` / `clearLocate` | 关面板 → 折叠列自动展开（并持久）→ 目标卡 `located` + board `locating`（他卡降透明）+ scrollIntoView；`clearLocate` 幂等清除 |
+| `isTextInput` | `/` 唤起豁免：input/textarea/select/contentEditable 聚焦时不触发 |
+
+- 键盘交互集中在 mount 的 `keyHandler`：面板开时 ↑/↓ 移动、Enter 定位、Esc 关面板；面板关时 Esc 依次消费详情抽屉、定位态；Cmd/Ctrl+K 与 `/` 唤起。`clickHandler` 负责点面板外关面板、点非卡空白 `clearLocate`
+- mount 新增 `opts.projectKey`（下钻 `enterProject` 传 `row.route_key`；单项目直开时回退 DATA_URL 的 `/p/<key>` 或 `name~project_root` 指纹）；`buildBoard()` 开头无条件 `clearLocate()`，热刷新重建后定位态不残留
+- 模块导出新增 `searchCards` / `searchSnippet`（测试挂钩）
+- 版面 CSS：body 禁滚，`.wrap` 100vh flex 列；`.col` `overflow-y: auto` + sticky `.col-head`；`.col.collapsed` 48px 窄条竖排列名；`.prov` 改 `<details>/<summary>` 折叠入口（`.prov-body` 限高内滚）；搜索面板 `.search-backdrop/.search-panel` 与定位脉冲 `locate-pulse`（`prefers-reduced-motion` 内）
 
 ## 三形态入口
 
@@ -89,3 +112,5 @@ eo-skills 的默认呈现层。数据全部派生自 change.md frontmatter、质
 - install.sh — 符号链接安装入口
 - `tests/test_eo_board_cache.py` — 缓存/路由/聚合与终端兼容基线；视图层 node 垫片
 - `tests/test_board_card_progress.py` — 泳道卡进度：journal 逆序、stage_progress 当前性、tab 刷新、mdBlock/safeHref、质量门当前状态、XSS
+- `tests/test_board_swimlane_search.py` — 泳道定位搜索（唤起/解绑生命周期、`#seq`/关键词/空态、backlog body 命中、折叠按项目键记忆、折叠列定位自动展开、serve 热刷新经真实 polling 接线清定位态）
+- `tests/test_board_switcher_style.py` — change #18 轻档锁定测试（自绘下拉 RED + 跳转/XSS 表征），实现未落地前保持红
