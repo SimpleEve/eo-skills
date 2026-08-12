@@ -51,6 +51,18 @@ class HelperMenuMapTests(unittest.TestCase):
         for item in self.helper.MENU:
             self.assertNotIn("投影", item["label"])
 
+    def test_readme_faq_menu_numbers_match_helper_map(self):
+        """README FAQ 的菜单编号必须与 helper MENU 下标一致（watch=4 / sync=3）。"""
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        by_label = {label: idx for idx, (label, _, _) in enumerate(EXPECTED_MENU, start=1)}
+        watch_n = by_label["看板自动跟手（常驻）"]
+        sync_n = by_label["同步看板卡片（跑一次）"]
+        self.assertEqual((watch_n, sync_n), (4, 3))
+        faq = next(line for line in readme.splitlines() if "看板卡片怎么不动了" in line)
+        self.assertIn(f"菜单 {watch_n}", faq)
+        self.assertIn(f"菜单 {sync_n}", faq)
+        self.assertIn("看板自动跟手", faq)
+
 
 class HelperInteractiveTests(unittest.TestCase):
     def setUp(self):

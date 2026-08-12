@@ -2062,6 +2062,106 @@ class BoardGlobalDashboardTests(MultiProjectFixture):
         self.assertIn("eo board · alpha", r.stdout)
         self.assertNotIn("全局 dashboard", r.stdout)
 
+    def _register_main_and_linked_worktree(self, name="alpha", statuses=("implementing",)):
+        """注册主 worktree，并在同仓开 linked worktree（路径不同、repo identity 相同）。"""
+        main = self.make_project(name, statuses=statuses)
+        self.register(main)
+        linked = self.root / f"{name}-linked"
+        run_git(main, "worktree", "add", "-q", str(linked), "-b", f"{name}-linked-br")
+        return main, linked
+
+    def test_project_html_linked_worktree_sets_initial_route_for_explicit_path(self):
+        """注册主 worktree 后 --project <linked 路径> --html 的 initial_route 必须命中 linked。"""
+        main, linked = self._register_main_and_linked_worktree()
+        board = self.load_board_module()
+        main_key = board.make_route_key("alpha", main)
+        linked_key = board.make_route_key("alpha", linked)
+        self.assertNotEqual(main_key, linked_key)
+
+        out = self.root / "linked.html"
+        r = self.run_board("--project", str(linked), "--html", "-o", str(out), "--no-open")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        html = out.read_text(encoding="utf-8")
+        marker = 'id="eo-board-all-data">'
+        start = html.index(marker) + len(marker)
+        agg = json.loads(html[start:html.index("</script>", start)])
+        self.assertEqual(agg.get("initial_route"), linked_key)
+        by_path = {row.get("path"): row for row in agg["rows"] if not row.get("error")}
+        self.assertIn(str(linked.resolve()), by_path)
+        self.assertEqual(by_path[str(linked.resolve())]["route_key"], linked_key)
+        self.assertIsNotNone(by_path[str(linked.resolve())].get("board"))
+
+    def test_project_serve_linked_worktree_route_and_data_are_reachable(self):
+        """--project <linked 路径> --serve 时 /p/<linked_key> 与 data.json 可达。"""
+        main, linked = self._register_main_and_linked_worktree()
+        board = self.load_board_module()
+        linked_key = board.make_route_key("alpha", linked)
+        main_key = board.make_route_key("alpha", main)
+        self.assertNotEqual(main_key, linked_key)
+
+        linked_root = str(linked.resolve())
+        handler = type(
+            "ExplicitHandler",
+            (board.AllBoardRequestHandler,),
+            {"scan_dir": None, "cwd_dir": linked_root, "explicit_dir": linked_root},
+        )
+        with self.env_patch():
+            server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            self.addCleanup(thread.join, 5)
+            self.addCleanup(server.server_close)
+            self.addCleanup(server.shutdown)
+            base = f"http://127.0.0.1:{server.server_port}"
+            with urlopen(f"{base}/p/{linked_key}", timeout=5) as response:
+                self.assertEqual(response.status, 200)
+                page = response.read().decode("utf-8")
+            with urlopen(f"{base}/p/{linked_key}/data.json", timeout=5) as response:
+                self.assertEqual(response.status, 200)
+                data = json.loads(response.read().decode("utf-8"))
+            with urlopen(f"{base}/data.json", timeout=5) as response:
+                home = json.loads(response.read().decode("utf-8"))
+
+        self.assertEqual(data["project"]["name"], "alpha")
+        # board DATA 不携带 repo 路径字段；路由表才是 serve 下钻身份来源
+        with self.env_patch():
+            routes = board.build_route_map(explicit_dir=linked_root)
+        self.assertEqual(Path(routes[linked_key]["repo_root"]).resolve(), linked.resolve())
+        self.assertIn(f'"href": "/p/{linked_key}"', page)
+        home_keys = {row["route_key"] for row in home["rows"] if row.get("route_key")}
+        self.assertIn(linked_key, home_keys)
+
+    def test_default_aggregate_still_dedups_same_repo_without_explicit_dir(self):
+        """默认聚合（无 explicit_dir）仍按 repo identity 去重：注册主 + cwd linked 不双行。"""
+        main, linked = self._register_main_and_linked_worktree()
+        board = self.load_board_module()
+        with self.env_patch():
+            without = board.build_all_data()
+            with_cwd = board.build_all_data(cwd_dir=str(linked.resolve()))
+            with_explicit = board.build_all_data(explicit_dir=str(linked.resolve()))
+
+        def alpha_paths(agg):
+            return sorted(
+                str(Path(r["path"]).resolve())
+                for r in agg["rows"]
+                if not r.get("error") and r.get("label") == "alpha"
+            )
+
+        self.assertEqual(alpha_paths(without), [str(main.resolve())])
+        self.assertEqual(alpha_paths(with_cwd), [str(main.resolve())])  # cwd 同仓被 known 挡掉
+        # 显式目标必须进集合（可与注册主并存，route_key 不同）
+        self.assertIn(str(linked.resolve()), alpha_paths(with_explicit))
+
+    def test_backlog_note_renders_as_escaped_plain_text_not_mdinline(self):
+        """backlog 卡片正文摘要保持 esc 纯文本，不走 mdInline。"""
+        src = BOARD_PATH.read_text(encoding="utf-8")
+        start = src.index("function backlogCard(d)")
+        end = src.index("\nfunction ", start + 1)
+        body = src[start:end]
+        self.assertIn("bl-note", body)
+        self.assertRegex(body, r"bl-note.*>'\s*\+\s*esc\(")
+        self.assertNotRegex(body, r"bl-note.*>'\s*\+\s*mdInline\(")
+
 
 if __name__ == "__main__":
     unittest.main()
