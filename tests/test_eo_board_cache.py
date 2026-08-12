@@ -419,17 +419,17 @@ const keys=[];
 const re=/data-detail="(ch:[^"]+)"/g;
 let m;
 while((m=re.exec(pBoard.innerHTML||''))!==null){keys.push(m[1].replace(/&quot;/g,'"'));}
+const extra=JSON.parse(process.argv[5]||'[]');
 const details=[];
 if(api.__test&&api.__test.openDetail){
-  for(const key of keys){api.__test.openDetail(key);details.push({key:key,body:pBody.innerHTML});}
+  for(const key of keys.concat(extra)){api.__test.openDetail(key);details.push({key:key,body:pBody.innerHTML});}
 }
 process.stdout.write(JSON.stringify({keys:keys,details:details}));
 """
 
 
-@unittest.skipUnless(NODE, "缺少 node，无法渲染泳道页验证分叉卡详情")
-class BoardWorktreeSplitTests(BoardCacheServeTests):
-    """看板按 worktree 拆分并行 change 卡（change #14）。"""
+class BoardForkCollapseTests(BoardCacheServeTests):
+    """多 worktree 下同 id change 折叠为单卡：最近活动最新者出卡，其余内容变体收进 forks。"""
 
     def add_side_worktree(self, branch="side"):
         side = self.root / "side-wt"
@@ -441,40 +441,78 @@ class BoardWorktreeSplitTests(BoardCacheServeTests):
         sc.write_text(sc.read_text(encoding="utf-8").replace(old, new), encoding="utf-8")
         return sc
 
-    def test_ac1_diverged_change_shows_multiple_cards(self):
-        """AC-1: 实质分叉时 board 显示多张卡，各卡展示自己的状态与进度。"""
+    @staticmethod
+    def _pin_mtime(path, epoch):
+        os.utime(path, (epoch, epoch))
+
+    def test_diverged_copies_collapse_to_latest_single_card(self):
+        """分叉副本折叠为一张卡：动静最新的 side 副本出卡，main 副本进 forks。"""
         side = self.add_side_worktree()
-        self.diverge_side_change(side)
+        sc = self.diverge_side_change(side)
+        now = time.time()
+        self._pin_mtime(self.change_path, now + 100)
+        self._pin_mtime(sc, now + 200)
         data = self.board.build_data(self.cfg)
         cards = [c for c in data["changes"] if c["id"] == "fixture"]
-        self.assertEqual(len(cards), 2)
-        self.assertTrue(all(c.get("diverged") for c in cards))
-        self.assertEqual({c["status"] for c in cards}, {"draft", "confirmed"})
-        # 各卡来自不同 worktree
-        self.assertEqual(len({c["worktree"] for c in cards}), 2)
+        self.assertEqual(len(cards), 1)
+        card = cards[0]
+        self.assertEqual(card["worktree"], str(side))
+        self.assertEqual(card["status"], "confirmed")
+        self.assertTrue(card.get("diverged"))
+        self.assertEqual(len(card["forks"]), 1)
+        fork = card["forks"][0]
+        self.assertEqual(fork["worktree"], str(self.repo))
+        self.assertEqual(fork["status"], "draft")
 
-    def test_ac2_identical_copies_merge_to_one_card(self):
-        """AC-2: 内容一致的副本只出一张卡，无 diverged 标记。"""
+    def test_latest_wins_regardless_of_worktree(self):
+        """main 副本动静更新时由 main 出卡：归属不看主从，只看动静先后。"""
+        side = self.add_side_worktree()
+        sc = self.diverge_side_change(side)
+        now = time.time()
+        self._pin_mtime(sc, now + 100)
+        self._pin_mtime(self.change_path, now + 200)
+        data = self.board.build_data(self.cfg)
+        cards = [c for c in data["changes"] if c["id"] == "fixture"]
+        self.assertEqual(len(cards), 1)
+        self.assertEqual(cards[0]["worktree"], str(self.repo))
+        self.assertEqual(cards[0]["status"], "draft")
+        self.assertEqual([f["status"] for f in cards[0]["forks"]], ["confirmed"])
+
+    def test_identical_copies_merge_to_one_card(self):
+        """内容一致的副本只出一张卡，无分叉标记、无 forks。"""
         self.add_side_worktree()  # 继承相同 change.md
         data = self.board.build_data(self.cfg)
         cards = [c for c in data["changes"] if c["id"] == "fixture"]
         self.assertEqual(len(cards), 1)
         self.assertFalse(cards[0].get("diverged", False))
+        self.assertFalse(cards[0].get("forks"))
 
-    def test_ac3_diverged_main_worktree_card_carries_marker_data(self):
-        """AC-3 数据层：分叉场景下主 worktree 那张卡也带 diverged 标记。"""
+    def test_shown_card_and_forks_carry_attribution_data(self):
+        """出卡与 forks 都带归属数据（branch/worktree/status/activity），徽标计数有据。"""
         side = self.add_side_worktree()
-        self.diverge_side_change(side)
+        sc = self.diverge_side_change(side)
+        now = time.time()
+        self._pin_mtime(self.change_path, now + 100)
+        self._pin_mtime(sc, now + 200)
         data = self.board.build_data(self.cfg)
-        cards = [c for c in data["changes"] if c["id"] == "fixture"]
-        main_card = [c for c in cards if c.get("is_default_worktree")]
-        self.assertEqual(len(main_card), 1)
-        self.assertTrue(main_card[0].get("diverged"))
+        card = [c for c in data["changes"] if c["id"] == "fixture"][0]
+        self.assertTrue(card.get("diverged"))
+        self.assertEqual(card["branch"], "side")
+        self.assertEqual(card["worktree_name"], "side-wt")
+        fork = card["forks"][0]
+        self.assertEqual(fork["branch"], "main")
+        self.assertEqual(fork["worktree_name"], "repo")
+        self.assertEqual(fork["status"], "draft")
+        self.assertTrue(fork.get("activity_at"))
 
-    def test_ac4_diverged_cards_have_unique_keys_and_distinct_detail(self):
-        """AC-4: 分叉卡可独立打开详情，详情内容对应该 worktree 那份 change.md。"""
+    @unittest.skipUnless(NODE, "缺少 node，无法渲染泳道页验证分叉卡详情")
+    def test_single_card_key_and_fork_switch_in_detail(self):
+        """分叉折叠后页面只渲染一张卡；详情带分叉徽标与副本列表，fork 键可切到对应副本详情。"""
         side = self.add_side_worktree()
-        self.diverge_side_change(side)
+        sc = self.diverge_side_change(side)
+        now = time.time()
+        self._pin_mtime(self.change_path, now + 100)
+        self._pin_mtime(sc, now + 200)
         data = self.board.build_data(self.cfg)
         html = self.board.render_html(data)
         m_js = re.search(r'<script>\s*(window\.EO_PROJECT[\s\S]*?)</script>', html)
@@ -490,38 +528,41 @@ class BoardWorktreeSplitTests(BoardCacheServeTests):
         markup_file = self.root / "markup.html"
         markup_file.write_text(m_markup.group(1), encoding="utf-8")
         proc = subprocess.run(
-            [NODE, str(runner), str(js_file), str(data_file), str(markup_file)],
+            [NODE, str(runner), str(js_file), str(data_file), str(markup_file),
+             json.dumps(["ch:fixture@repo"])],
             capture_output=True, text=True,
         )
         self.assertEqual(proc.returncode, 0, proc.stderr)
         result = json.loads(proc.stdout)
-        keys = result["keys"]
-        self.assertEqual(len(keys), 2)
-        self.assertEqual(len(set(keys)), 2)  # _key 唯一，CARD_INDEX 不碰撞
-        # 两张卡详情内容不同（对应各自 worktree 的 change.md）
-        bodies = [d["body"] for d in result["details"]]
-        self.assertEqual(len(bodies), 2)
-        self.assertNotEqual(bodies[0], bodies[1])
-        # 一张含 draft、另一张含 confirmed（frontmatter 差异体现在全文 tab）
-        joined = "\n".join(bodies)
-        self.assertIn("draft", joined)
-        self.assertIn("confirmed", joined)
+        # 折叠后只渲染一张卡
+        self.assertEqual(result["keys"], ["ch:fixture"])
+        details = {d["key"]: d["body"] for d in result["details"]}
+        main_body = details["ch:fixture"]
+        # 出卡详情带分叉徽标（计数 = 其余内容变体数）
+        self.assertIn("分叉×1", main_body)
+        self.assertIn("status: confirmed", main_body)
+        # fork 键切换到 main 副本的详情，内容对应其 change.md
+        fork_body = details["ch:fixture@repo"]
+        self.assertNotEqual(main_body, fork_body)
+        self.assertIn("status: draft", fork_body)
 
-    def test_ac5_serve_refreshes_divergence_within_three_seconds(self):
-        """AC-5: serve 挂起时任一 worktree 修改 change.md，3 秒内拆分状态正确刷新。"""
+    def test_serve_refreshes_latest_attribution_after_divergence(self):
+        """serve 挂起时制造分叉：一个轮询周期内仍只出一张卡，归属刷新为最新副本。"""
         side = self.add_side_worktree()  # 初始一致 -> 1 card
         self.start_server()
         first = self.get_json()
         self.assertEqual(len([c for c in first["changes"] if c["id"] == "fixture"]), 1)
-        self.diverge_side_change(side)  # 制造分叉
+        sc = self.diverge_side_change(side)  # 制造分叉
+        self.bump_mtime(sc)
         time.sleep(3.1)
         second = self.get_json()
         cards = [c for c in second["changes"] if c["id"] == "fixture"]
-        self.assertEqual(len(cards), 2)
-        self.assertTrue(all(c.get("diverged") for c in cards))
+        self.assertEqual(len(cards), 1)
+        self.assertEqual(cards[0]["worktree"], str(side))
+        self.assertEqual(len(cards[0]["forks"]), 1)
 
     def test_ac6_stale_lower_status_filtered(self):
-        """AC-6: 基准状态更高时，状态更低的过期版本被过滤。"""
+        """基准状态更高时，状态更低的过期版本被过滤：不出卡也不进 forks。"""
         side = self.add_side_worktree()
         # main=archived（基准，高），side=implementing（过期，低）
         self.change_path.write_text(
@@ -538,9 +579,10 @@ class BoardWorktreeSplitTests(BoardCacheServeTests):
         self.assertEqual(len(cards), 1)
         self.assertEqual(cards[0]["status"], "archived")
         self.assertFalse(cards[0].get("diverged", False))
+        self.assertFalse(cards[0].get("forks"))
 
-    def test_ac6_base_lower_does_not_filter_higher(self):
-        """AC-6: 基准状态更低时不误杀--状态更高的 worktree 保留。"""
+    def test_base_lower_keeps_higher_via_collapse(self):
+        """基准状态更低时不误杀：高状态副本经折叠出卡，低状态基准副本进 forks。"""
         side = self.add_side_worktree()
         # main=implementing（基准，低），side=reviewed（高，不误杀）
         self.change_path.write_text(
@@ -552,11 +594,15 @@ class BoardWorktreeSplitTests(BoardCacheServeTests):
             side_change.read_text(encoding="utf-8").replace("status: draft", "status: reviewed"),
             encoding="utf-8",
         )
+        now = time.time()
+        self._pin_mtime(self.change_path, now + 100)
+        self._pin_mtime(side_change, now + 200)
         data = self.board.build_data(self.cfg)
         cards = [c for c in data["changes"] if c["id"] == "fixture"]
-        self.assertEqual(len(cards), 2)
-        self.assertTrue(all(c.get("diverged") for c in cards))
-        self.assertEqual({c["status"] for c in cards}, {"implementing", "reviewed"})
+        self.assertEqual(len(cards), 1)
+        self.assertEqual(cards[0]["status"], "reviewed")
+        self.assertEqual(cards[0]["worktree"], str(side))
+        self.assertEqual([f["status"] for f in cards[0]["forks"]], ["implementing"])
 
     def test_ac6_base_missing_change_no_filter(self):
         """AC-6: 基准没有该 change 时无阈值不过滤。"""
