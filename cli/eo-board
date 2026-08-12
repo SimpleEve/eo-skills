@@ -610,8 +610,6 @@ def derive_stage_progress(gates, status=None):
             parts.append(f"P0×{rv_open_p0}")
         if rv_open_p1 > 0:
             parts.append(f"P1×{rv_open_p1}")
-        if rv_open_p2 > 0:
-            parts.append(f"P2×{rv_open_p2}")
         if parts:
             label = "review " + " ".join(parts)
         else:
