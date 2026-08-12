@@ -4,7 +4,9 @@ import hashlib
 import re
 from pathlib import Path
 
+from .freshness import tree_max_mtime
 from .frontmatter import split_frontmatter
+from .gitio import run_git
 
 CHANGE_STATUS_ORDER = ["draft", "confirmed", "implementing", "reviewed", "archived"]
 
@@ -257,11 +259,25 @@ def group_changes_by_divergence(recs):
     return [groups[d] for d in order]
 
 
+def _change_activity_epoch(rec, doc_root):
+    """change 目录的动静尺子：git 末次提交时间与目录树 max-mtime 取大（epoch 秒）。"""
+    rel_dir = str(Path(doc_root) / "changes" / rec["dirname"])
+    stamps = []
+    out = run_git(["log", "--all", "-1", "--format=%ct", "--", rel_dir], cwd=rec["worktree"]).strip()
+    if out.isdigit():
+        stamps.append(int(out))
+    mtime = tree_max_mtime(Path(rec["worktree"]) / rel_dir)
+    if mtime:
+        stamps.append(mtime)
+    return max(stamps) if stamps else 0
+
+
 def scan_all_changes_split(cfg, worktrees, warnings, base_worktree=None):
-    """scan_all_changes 的分叉感知变体：同 id 候选按 change.md 内容实质分叉时各出一卡，一致副本合并。
-    diverged 标记仅在真分叉时置 True（无分叉场景数据与 scan_all_changes 一致）。
+    """scan_all_changes 的分叉感知变体：同 id 折叠为一张卡。
+    内容一致副本维持旧口径（状态最高代表、单卡、无标记）；实质分叉时由最近活动最新的变体出卡，
+    其余变体代表收进 ``forks`` 并置 ``diverged``——分叉信号收敛到徽标而不是多张卡。
     base_worktree 指定基准 worktree 路径时，状态严格低于基准的候选视为过期（被基准超越）并过滤；
-    状态 >= 基准的保留（含同状态不同内容的有意义分叉）；基准没有该 change 时无阈值不过滤。
+    状态 >= 基准的保留；基准没有该 change 时无阈值不过滤。过滤先于折叠，过期副本不进 forks。
     """
     by_id = scan_changes_grouped(cfg, worktrees, warnings)
     base_path = str(Path(base_worktree).resolve()) if base_worktree else None
@@ -274,12 +290,25 @@ def scan_all_changes_split(cfg, worktrees, warnings, base_worktree=None):
                 threshold = status_rank(max(base_recs, key=status_rank))
                 pool = [r for r in recs if status_rank(r) >= threshold]
         groups = group_changes_by_divergence(pool)
-        diverged = len(groups) > 1
-        for group in groups:
-            rep = pick_change_winner(group)
-            if diverged:
-                rep["diverged"] = True
-            cards.append(rep)
+        if len(groups) == 1:
+            cards.append(pick_change_winner(groups[0]))
+            continue
+
+        keys = {}
+
+        def key_of(r):
+            k = id(r)
+            if k not in keys:
+                # 平手回退：状态高者 → 路径字典序，保证跨轮确定性
+                keys[k] = (_change_activity_epoch(r, cfg["doc_root"]), status_rank(r), r["path"])
+            return keys[k]
+
+        reps = [max(g, key=key_of) for g in groups]
+        reps.sort(key=key_of, reverse=True)
+        card = reps[0]
+        card["diverged"] = True
+        card["forks"] = reps[1:]
+        cards.append(card)
 
     seq_map = {}
     for c in cards:

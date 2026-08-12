@@ -845,10 +845,12 @@ def build_data(cfg):
 
     changes = scan_all_changes_split(cfg, worktrees, warnings, base_worktree=main_wt["path"])
     for rec in changes:
-        probe_change_artifacts(rec, cfg["doc_root"])
-        compute_change_git_stats(rec, cfg["doc_root"], main_wt["path"])
-        compute_gates(rec, cfg["doc_root"], warnings)
-        attach_card_progress(rec, warnings)
+        # 分叉副本（forks）与出卡走同一条附加管道：详情可整体切换到任一副本
+        for r in [rec] + list(rec.get("forks") or []):
+            probe_change_artifacts(r, cfg["doc_root"])
+            compute_change_git_stats(r, cfg["doc_root"], main_wt["path"])
+            compute_gates(r, cfg["doc_root"], warnings)
+            attach_card_progress(r, warnings)
     changes.sort(key=lambda c: (c.get("seq") is None, c.get("seq") or 0))
 
     if cfg["mode"] == "vault":
@@ -944,6 +946,9 @@ def render_terminal(data):
             branch = "-"
             if not c.get("is_default_worktree"):
                 branch = f"⎇{c.get('branch') or '?'}@{c.get('worktree_name')}"
+            if c.get("forks"):
+                marker = f"分叉×{len(c['forks'])}"
+                branch = f"{branch} {marker}" if branch != "-" else marker
             warn_parts = []
             if c.get("stale"):
                 warn_parts.append(f"⚠ {c['stale_days']}天未动")
@@ -1193,6 +1198,10 @@ PROJECT_CSS = r"""
   .tag.branch { background: var(--st-implementing-soft); border-color: transparent; color: var(--st-implementing); }
   .tag.branch.wt-split { flex-direction: column; align-items: flex-start; gap: 0; line-height: 1.35; padding: 2px 6px; }
   .tag.branch.wt-split .wt-line { display: block; }
+  .fork-list { display: flex; flex-direction: column; gap: 6px; }
+  .fork-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: none; cursor: pointer; text-align: left; font: inherit; }
+  .fork-row:hover { border-color: var(--st-implementing); }
+  .fork-row .fork-when { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
   .tag.stage { background: var(--st-implementing-soft); border-color: transparent; color: var(--st-implementing); font-weight: 600; }
   .date { font-family: var(--mono); font-size: 10.5px; color: var(--faint); margin-left: auto; }
 
@@ -1873,6 +1882,19 @@ function renderChange(d) {
   h += renderFrontmatter(d);
   h += '<div class="d-section"><div class="d-label">派生信息 <span class="src">git / 运行时</span></div>'
     + '<dl class="meta-grid">' + meta + '</dl></div>';
+  if (d.forks && d.forks.length) {
+    var forkRows = d.forks.map(function (f) {
+      return '<button type="button" class="fork-row" data-fork="' + esc(f._key) + '">'
+        + '<span class="tag branch wt-split"><span class="wt-line">⎇ ' + esc(f.branch || '?') + '</span>'
+        + '<span class="wt-line">' + esc(f.worktree_name || '?') + '</span></span>'
+        + stPill(f.status)
+        + '<span class="fork-when">' + esc(f.last_touch || '-') + '</span>'
+        + '</button>';
+    }).join('');
+    h += '<div class="d-section"><div class="d-label">分叉×' + d.forks.length
+      + ' <span class="src">同 id 其余内容变体 · 当前出卡为最近活动最新一份</span></div>'
+      + '<div class="fork-list">' + forkRows + '</div></div>';
+  }
   h += '<div class="d-section"><div class="d-label">意图 §1 <span class="src">正文解析</span></div>'
     + '<div class="md-block">' + (d.intent ? mdBlock(d.intent) : '<p style="color: var(--faint)">（未解析到意图正文）</p>') + '</div>';
   if (d.decisions && d.decisions.length) {
@@ -1958,6 +1980,8 @@ function changeCard(d) {
   }
   if ((d.branch || d.worktree_name) && (d.diverged || !d.is_default_worktree))
     foot += '<span class="tag branch wt-split"><span class="wt-line">⎇ ' + esc(d.branch || '?') + '</span><span class="wt-line">' + esc(d.worktree_name || '?') + '</span></span>';
+  if (d.forks && d.forks.length)
+    foot += '<span class="tag branch" title="同 id 其余内容变体，详情内可切换查看">分叉×' + d.forks.length + '</span>';
   if (d.commit_count) foot += '<span class="tag">' + d.commit_count + ' commits</span>';
   if (d.issue !== null && d.issue !== undefined) foot += '<span class="tag ok">issue #' + esc(d.issue) + '</span>';
   if (d.pr) foot += '<span class="tag ok">PR ↗</span>';
@@ -2058,8 +2082,11 @@ function buildBoard() {
     }
     col.forEach(function (d) {
       d._key = (status === 'backlog' ? 'bl:' : 'ch:') + (d.id || d.path);
-      if (d.diverged) d._key += '@' + (d.worktree_name || '?');
       CARD_INDEX[d._key] = d;
+      (d.forks || []).forEach(function (f) {
+        f._key = 'ch:' + (f.id || f.path) + '@' + (f.worktree_name || '?');
+        CARD_INDEX[f._key] = f;
+      });
       html += status === 'backlog' ? backlogCard(d) : changeCard(d);
     });
     html += '</div>';
@@ -2120,6 +2147,9 @@ function openDetail(key, isRefresh) {
   root.querySelector('#p-title').textContent = d.title;
   body.innerHTML = d.kind === 'change' ? renderChange(d) : renderBacklog(d);
   if (d.kind === 'change') bindDetailTabs(body, restoreTab);
+  body.querySelectorAll('.fork-row').forEach(function (row) {
+    row.addEventListener('click', function () { openDetail(row.getAttribute('data-fork')); });
+  });
   if (!isRefresh) body.scrollTop = 0;
   drawer.classList.add('open');
   backdrop.classList.add('open');
@@ -2393,6 +2423,7 @@ def _stream_change(rec, project_label, route_key):
         "worktree_name": rec.get("worktree_name"),
         "is_default_worktree": bool(rec.get("is_default_worktree", True)),
         "diverged": bool(rec.get("diverged", False)),
+        "fork_count": len(rec.get("forks") or []),
         "activity_at": rec.get("activity_at"),
         "active": is_recent(rec.get("activity_at")),
         "project": project_label,
@@ -2912,6 +2943,7 @@ function changeRow(c) {
   if (c.diverged || !c.is_default_worktree) {
     line1 += '<span class="tag branch wt-split"><span class="wt-line">⎇ ' + esc(c.branch || '?') + '</span><span class="wt-line">' + esc(c.worktree_name || '?') + '</span></span>';
   }
+  if (c.fork_count) line1 += '<span class="tag branch">分叉×' + esc(c.fork_count) + '</span>';
   if (c.blocker) line1 += '<span class="tag warn">⛔ ' + esc(c.blocker) + '</span>';
   return '<a class="row' + (c.active ? '' : ' dim') + '" href="' + esc(href)
     + '" title="→ 下钻 ' + esc(c.project) + ' 泳道页">'

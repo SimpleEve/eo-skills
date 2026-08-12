@@ -3,11 +3,11 @@ id: board-fork-collapse
 seq: 15
 title: 看板分叉副本折叠为单卡
 summary: 同 change 多 worktree 副本只出最新一卡，分叉副本收进徽标可下钻
-status: confirmed
+status: implementing
 tier: light
 type: enhance
 base_commit: a1766935ebd564b368978c87a35737bf209d2ede
-test_lock_commit: d26265995e7f7687b64c4b2bc8f7c3ad4b24b12c
+test_lock_commit: 8197f9b3ea180a3ba8d59017439d72d501f94a0b
 commits: []
 issue: ~
 created: 2026-08-12
