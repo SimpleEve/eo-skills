@@ -2092,44 +2092,91 @@ class BoardGlobalDashboardTests(MultiProjectFixture):
         self.assertIsNotNone(by_path[str(linked.resolve())].get("board"))
 
     def test_project_serve_linked_worktree_route_and_data_are_reachable(self):
-        """--project <linked 路径> --serve 时 /p/<linked_key> 与 data.json 可达。"""
+        """真实 CLI：--project <linked 路径> --serve 的首开 URL 与 /p/<key>/data 接线。
+
+        必须走 main → cmd_all_serve(args, cfg)，不能手工拼 AllBoardRequestHandler，
+        否则 cfg=cfg / explicit_dir / 首开路由退化时用例仍会绿。
+        """
         main, linked = self._register_main_and_linked_worktree()
         board = self.load_board_module()
         linked_key = board.make_route_key("alpha", linked)
         main_key = board.make_route_key("alpha", main)
         self.assertNotEqual(main_key, linked_key)
 
-        linked_root = str(linked.resolve())
-        handler = type(
-            "ExplicitHandler",
-            (board.AllBoardRequestHandler,),
-            {"scan_dir": None, "cwd_dir": linked_root, "explicit_dir": linked_root},
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+        env = dict(os.environ)
+        env["EO_HOME"] = str(self.eo_home)
+        env["PYTHONUNBUFFERED"] = "1"
+        process = subprocess.Popen(
+            [
+                sys.executable, str(BOARD_PATH),
+                "--project", str(linked),
+                "--serve", "--port", str(port), "--no-open",
+            ],
+            cwd=self.root, env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
-        with self.env_patch():
-            server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-            thread = threading.Thread(target=server.serve_forever, daemon=True)
-            thread.start()
-            self.addCleanup(thread.join, 5)
-            self.addCleanup(server.server_close)
-            self.addCleanup(server.shutdown)
-            base = f"http://127.0.0.1:{server.server_port}"
-            with urlopen(f"{base}/p/{linked_key}", timeout=5) as response:
-                self.assertEqual(response.status, 200)
-                page = response.read().decode("utf-8")
-            with urlopen(f"{base}/p/{linked_key}/data.json", timeout=5) as response:
-                self.assertEqual(response.status, 200)
-                data = json.loads(response.read().decode("utf-8"))
-            with urlopen(f"{base}/data.json", timeout=5) as response:
-                home = json.loads(response.read().decode("utf-8"))
+        try:
+            # 首开 URL 由 cmd_all_serve 在 serve_forever 前打印：.../p/<linked_key>
+            banner = ""
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                line = process.stdout.readline()
+                if not line:
+                    if process.poll() is not None:
+                        self.fail(
+                            f"eo-board --project --serve exited early: "
+                            f"rc={process.returncode} stderr={process.stderr.read()}"
+                        )
+                    continue
+                banner += line
+                if "http://127.0.0.1:" in line:
+                    break
+            expected_open = f"http://127.0.0.1:{port}/p/{linked_key}"
+            self.assertIn(expected_open, banner)
 
-        self.assertEqual(data["project"]["name"], "alpha")
-        # board DATA 不携带 repo 路径字段；路由表才是 serve 下钻身份来源
-        with self.env_patch():
-            routes = board.build_route_map(explicit_dir=linked_root)
-        self.assertEqual(Path(routes[linked_key]["repo_root"]).resolve(), linked.resolve())
-        self.assertIn(f'"href": "/p/{linked_key}"', page)
-        home_keys = {row["route_key"] for row in home["rows"] if row.get("route_key")}
-        self.assertIn(linked_key, home_keys)
+            # 等服务真正接受请求后再取数（打印 banner 后仍可能略有延迟）
+            page = None
+            data = None
+            home = None
+            wait_until = time.monotonic() + 5
+            while True:
+                try:
+                    with urlopen(expected_open, timeout=1) as response:
+                        self.assertEqual(response.status, 200)
+                        page = response.read().decode("utf-8")
+                    with urlopen(f"{expected_open}/data.json", timeout=5) as response:
+                        self.assertEqual(response.status, 200)
+                        data = json.loads(response.read().decode("utf-8"))
+                    with urlopen(f"http://127.0.0.1:{port}/data.json", timeout=5) as response:
+                        self.assertEqual(response.status, 200)
+                        home = json.loads(response.read().decode("utf-8"))
+                    break
+                except OSError:
+                    if time.monotonic() >= wait_until:
+                        self.fail(
+                            "eo-board --project <linked> --serve did not accept "
+                            "linked route requests within five seconds"
+                        )
+                    time.sleep(0.05)
+
+            self.assertEqual(data["project"]["name"], "alpha")
+            self.assertIn(f'"href": "/p/{linked_key}"', page)
+            home_keys = {row["route_key"] for row in home["rows"] if row.get("route_key")}
+            self.assertIn(linked_key, home_keys)
+            # 注册主 worktree 的 route 不应被误当成首开目标
+            self.assertNotIn(f"http://127.0.0.1:{port}/p/{main_key}", banner.splitlines()[0] if banner else "")
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+            process.stdout.close()
+            process.stderr.close()
 
     def test_default_aggregate_still_dedups_same_repo_without_explicit_dir(self):
         """默认聚合（无 explicit_dir）仍按 repo identity 去重：注册主 + cwd linked 不双行。"""
