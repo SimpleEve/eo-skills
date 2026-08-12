@@ -8,7 +8,7 @@ scope: 改动看板呈现、门禁判定、serve 缓存、聚合页视图与下�
 status: active
 source: cli/eo-board
 summary: >
-  零第三方依赖的单文件只读看板（约 3500 行）：默认全局 dashboard（终端聚合流 / --html 双视图首页快照 / --serve 轮询服务），`--all` 已退役；
+  零第三方依赖的单文件只读看板（约 4000 行）：默认全局 dashboard（终端聚合流 / --html 双视图首页快照 / --serve 轮询服务），`--all` 已退役；
   消费 eo_lib 解析层，board 专属逻辑为门禁判定、stage_progress、journal/frontmatter 投影、详情五 tab 与 HTTP 服务（含每项目单飞缓存）；
   `--project` 为显式下钻（终端单项目摘要；html 内嵌 + initial_route 直落；serve 首开 /p/<key>），泳道页顶栏项目切换器是自绘 button+listbox 下拉（无原生 select，键盘可达）；
   泳道页版面定格为列内滚动（sticky 列头），列可折叠为窄条并按项目记忆（整列头点击即折叠/展开），顶栏有可见搜索触发框，Cmd/Ctrl+K 定位搜索面板支持 `#seq` 直跳与全文片段命中。

@@ -3,12 +3,12 @@ title: cli/eo-sync 投影同步核与内置适配器
 type: agent
 tags: [cli, sync, adapter, projection, lock]
 created: 2026-07-25
-updated: 2026-07-25
+updated: 2026-08-12
 scope: 改动投影同步、适配器协议、簿记/锁/回写逻辑时
 status: active
 source: cli/eo-sync
 summary: >
-  单命令投影同步：eo-sync 核（826 行，发现/启用/持锁编排/簿记/回写）+ 内置 obsidian（199 行，stub 投影）与
+  单命令投影同步：eo-sync 核（1062 行，发现/启用/持锁编排/簿记/回写）+ 内置 obsidian（199 行，stub 投影）与
   github（308 行，issue/PR 投影）适配器；协议 v1 契约见 docs/sync-adapter-protocol.md。
 conclusions:
   - 严格单向：适配器 plan 是纯函数、apply 只写自己的目标介质，永不写仓库文件；SoT 回写（identity_fields）与簿记由核统一执行
@@ -38,7 +38,7 @@ conclusions:
 
 ## 测试
 
-`tests/test_eo_sync.py`（801 行，unittest 标准库）：协议往返/发现启用/兼容映射/dry-run 零写入/锁互斥与陈锁/簿记幂等/快照完整性 fail-safe/回写校验矩阵。`tests/test_eo_sync_watch_lock.py`（真实进程级）：watch 作用域锁五断言（同域互斥/跨域告警/陈锁接管/信号释放/异仓不互斥）。`EO_HOME` 一律临时目录隔离。
+`tests/test_eo_sync.py`（1081 行，unittest 标准库）：协议往返/发现启用/兼容映射/dry-run 零写入/锁互斥与陈锁/簿记幂等/快照完整性 fail-safe/回写校验矩阵。`tests/test_eo_sync_watch_lock.py`（真实进程级）：watch 作用域锁五断言（同域互斥/跨域告警/陈锁接管/信号释放/异仓不互斥）。`EO_HOME` 一律临时目录隔离。
 
 ## 来源
 

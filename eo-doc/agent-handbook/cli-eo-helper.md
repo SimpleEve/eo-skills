@@ -3,12 +3,12 @@ title: cli/eo-helper 单一交互入口
 type: agent
 tags: [cli, helper, menu, ux]
 created: 2026-07-26
-updated: 2026-07-26
+updated: 2026-08-12
 scope: 改动菜单条目、命令转发语义时
 status: active
 source: cli/eo-helper
 summary: >
-  数字菜单薄壳：7 条固定 argv 映射（看板/注册/同步/watch），选前回显底层命令（菜单即教学）；
+  数字菜单薄壳：5 条固定 argv 映射（看板/注册/同步/watch），选前回显底层命令（菜单即教学）；
   不复制业务逻辑、错误码透传。
 conclusions:
   - 薄壳边界：不解析业务输出、不加旗标翻译、不吞错误码；底层 CLI 缺失给 install.sh 指引
