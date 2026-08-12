@@ -18,7 +18,7 @@
 - [项目管理 skill](#项目管理-skill)
 - [文档体系（eo-doc-manager）](#文档体系eo-doc-manager)
 - [看板与 GitHub 联动（opt-in）](#看板与-github-联动opt-in)
-- [多项目总览与生态注册表（eo-board --all）](#多项目总览与生态注册表eo-board---all)
+- [全局 dashboard 与生态注册表（eo-board）](#全局-dashboard-与生态注册表eo-board)
 - [Skill 安装结构](#skill-安装结构)
 
 ---
@@ -256,15 +256,15 @@ eo-doc/changes/
 
 ---
 
-## 多项目总览与生态注册表（eo-board --all）
+## 全局 dashboard 与生态注册表（eo-board）
 
 多项目枚举基于用户级注册表 `${EO_HOME:-$HOME/.eo}/projects.json`（schema v1：`{"version": 1, "projects": [{"name", "path", "registered_at"}]}`），eo-board 与 `eo-sync watch --all` 共用同一张表。终端侧日常入口是 `eo-helper` 数字菜单（README 口径：只需记这一条命令，选项回显底层命令即学习路径）；全量旗标见 [cli-reference.md](cli-reference.md)：
 
 - **登记**：`/eo-project-init` 成功时顺手注册（失败不阻塞 init，输出补注册指引）；`eo-board --register [path]` / `--unregister [path]` 手工维护（缺省 path=当前目录）。去重键 = 规范化 repo identity（git common dir realpath），同一仓库任意 worktree 重复 register 幂等；注册表写入不破 eo-board 只读铁律（铁律管项目仓库文件，注册表是用户级生态文件、仅显式动作写入）。
-- **聚合**：`eo-board --all` 任意目录一屏总览——每注册项目一行（项目名 + draft/confirmed/implementing/reviewed 计数 + archived 总数 + backlog 数 + as-of 新鲜度戳），失效/非法条目行内报错不中断；三形态齐备——终端行、`--all --html` 一页快照、`--all --serve` 实时一页看板（每次请求重读注册表，serve 挂起期间新注册项目无需重启即出现；复用每项目缓存槽与单飞，仅绑 127.0.0.1、3 秒轮询热刷新）。
-- **一页看板双视图**：`--all --html` / `--all --serve` 的首页默认是跨项目「进行中 change 流」（非 archived change 按最近活动倒序，行内可见状态 / tier·type / summary / TODO·AC 进度 / 非主 worktree 标记 / 质量门 blocker / 最近动静；3 天无动静降权区隔但不消失），顶部卡区可切回概要卡视图，视图态记在 URL hash 刷新不丢。
+- **聚合**：`eo-board` 任意目录默认一屏总览——每注册项目一行（项目名 + draft/confirmed/implementing/reviewed 计数 + archived 总数 + backlog 数 + as-of 新鲜度戳），失效/非法条目行内报错不中断；三形态齐备——终端行、`--html` 一页快照、`--serve` 实时一页看板（每次请求重读注册表，serve 挂起期间新注册项目无需重启即出现；复用每项目缓存槽与单飞，仅绑 127.0.0.1、3 秒轮询热刷新）。`--all` 已退役，传入会提示直接移除旗标。
+- **一页看板双视图**：`--html` / `--serve` 的首页默认是跨项目「进行中 change 流」（非 archived change 按最近活动倒序，行内可见状态 / tier·type / summary / TODO·AC 进度 / 非主 worktree 标记 / 质量门 blocker / 最近动静；3 天无动静降权区隔但不消失），顶部卡区可切回概要卡视图，视图态记在 URL hash 刷新不丢。
 - **下钻**：聚合页里点项目条卡、change 行或概要卡直达该项目泳道页（`--serve` 走 `/p/<route_key>`，`--html` 走同一套 key 的 `#/p/<route_key>`，泳道数据内嵌单文件），页头「← 返回首页」回默认视图，浏览器返回键按历史恢复；`--scan` 临时并入的未注册项目同样可点。命令行等价入口 `eo-board --project <路径|注册名>`，注册名命中多个项目时报歧义并列候选路径（不静默取第一项）。
-- **扫描兜底**：`eo-board --all --scan <父目录>` 把含 `.eo-project.json` 的一层子目录临时并入本次聚合并提示可注册，**不写注册表**。
+- **扫描兜底**：cwd 本身含 `.eo-project.json` 且未注册时会自动临时并入；`eo-board --scan <父目录>` 还可把含配置的一层子目录临时并入本次聚合并提示可注册，**都不写注册表**。
 
 ---
 

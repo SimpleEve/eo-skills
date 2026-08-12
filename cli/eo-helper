@@ -14,13 +14,11 @@ import sys
 # mode: "run" = 前台跑完回菜单（stdio 直通，非零退出码回显）；
 #       "exec" = os.exec* 替换进程（serve/watch 长驻，信号与退出码归底层 CLI）
 MENU = [
-    {"label": "本项目实时看板", "argv": ["eo-board", "--serve"], "mode": "exec"},
-    {"label": "所有项目一页看板", "argv": ["eo-board", "--all", "--serve"], "mode": "exec"},
+    {"label": "全局实时看板", "argv": ["eo-board", "--serve"], "mode": "exec"},
     {"label": "注册本项目到多项目看板", "argv": ["eo-board", "--register"], "mode": "run"},
     {"label": "同步看板卡片（跑一次）", "argv": ["eo-sync", "run"], "mode": "run"},
     {"label": "看板自动跟手（常驻）", "argv": ["eo-sync", "watch", "--all"], "mode": "exec"},
-    {"label": "终端速览：本项目", "argv": ["eo-board"], "mode": "run"},
-    {"label": "终端速览：所有项目", "argv": ["eo-board", "--all"], "mode": "run"},
+    {"label": "全局终端速览", "argv": ["eo-board"], "mode": "run"},
 ]
 
 INSTALL_HINT = "未找到命令 {cmd}——请先运行 sh install.sh 安装 CLI（或确认 ~/.local/bin 在 PATH 中）。"

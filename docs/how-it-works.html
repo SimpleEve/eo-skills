@@ -291,7 +291,7 @@
   </div>
   <div class="proj reveal">
     <span class="tag">投影层 · OPT-IN</span>
-    <p>change 的 frontmatter 由 <b>eo-sync 单命令</b>投影成 <b>Obsidian 看板卡片</b>和 <b>GitHub issue / PR</b>（AC 全勾才 <span class="mono">Closes</span>）——归档时自动跑一次，平时挂 <span class="mono">eo-sync watch --all</span> 状态一变几秒内自动追平；投影目标是插件化的（PATH 放一个 <span class="mono">eo-sync-&lt;name&gt;</span> 即可接 Notion 等）。本地文件永远是唯一真相源，投影只读不回写——GitHub 上关了 issue 而本地没归档？只会收到一行告警。终端侧另有 <span class="mono">eo-board --all</span>：所有注册项目一屏总览。</p>
+    <p>change 的 frontmatter 由 <b>eo-sync 单命令</b>投影成 <b>Obsidian 看板卡片</b>和 <b>GitHub issue / PR</b>（AC 全勾才 <span class="mono">Closes</span>）——归档时自动跑一次，平时挂 <span class="mono">eo-sync watch --all</span> 状态一变几秒内自动追平；投影目标是插件化的（PATH 放一个 <span class="mono">eo-sync-&lt;name&gt;</span> 即可接 Notion 等）。本地文件永远是唯一真相源，投影只读不回写——GitHub 上关了 issue 而本地没归档？只会收到一行告警。终端侧直接运行 <span class="mono">eo-board</span>：所有注册项目一屏总览。</p>
   </div>
 
   <div style="margin-top:44px" class="reveal">
@@ -304,7 +304,7 @@
       <tr><td>设计口径</td><td>DESIGN.md（token + 决策日志）</td><td class="who">eo-design</td><td>一切 UI 改动前必读 · review 一致性维度</td></tr>
       <tr><td>教训</td><td>&lt;项目&gt;/lessons/ + INDEX</td><td class="who">eo-project-record</td><td>change / implement / fix 启动时按 trigger 命中</td></tr>
       <tr><td>待办与灵感</td><td>&lt;项目&gt;/backlog/（每条一张卡）</td><td class="who">eo-backlog</td><td>上看板 backlog 列；被 change 采纳时归档留痕</td></tr>
-      <tr><td>项目注册表</td><td>~/.eo/projects.json</td><td class="who">eo-project-init / eo-board --register</td><td>eo-board --all 多项目总览 · eo-sync watch --all 自动同步</td></tr>
+      <tr><td>项目注册表</td><td>~/.eo/projects.json</td><td class="who">eo-project-init / eo-board --register</td><td>eo-board 全局 dashboard · eo-sync watch --all 自动同步</td></tr>
       <tr><td>临时现场</td><td>tmp/eo/{handoff,fix,design}/</td><td class="who">各 skill</td><td>用完即弃，永不当信源</td></tr>
     </table>
   </div>
@@ -469,7 +469,7 @@ const CAT=[
   ["eo-loop","总控调度","圈状态机线段（入口 → 出口 → 收敛标准），派发到可插拔基底（子 agent / codex / orca）循环推进至收敛；<b>互不干扰的并行组</b>（Batch 2a/2b、可并行 change）多 worker 并行——worktree 隔离 + 文件集机械校验 + 合流 checkpoint；每 ≤30 分钟主动观测出进度报告。","跨节点循环 · journal 进 tmp/eo/loop/"],
   ["eo-handoff","会话交接","/clear 前把「状态 + 口径 + 下一步」写成开机指令，新会话 5 分钟接上。","tmp/eo/handoff/<topic>.md"]]],
  ["CLI · 终端里敲的",[
-  ["eo-board","只读看板 CLI","单项目：终端摘要 / <span class=\"mono\">--html</span> 快照 / <span class=\"mono\">--serve</span> 实时看板（有缓存）。多项目：<span class=\"mono\">--all</span> 注册项目一屏总览（状态计数 + 新鲜度戳）、<span class=\"mono\">--project</span> 任意目录下钻、<span class=\"mono\">--scan</span> 临时扫描兜底。<b>永远只读</b>，绝不写项目文件。","cli/eo-board · 注册表 ~/.eo/projects.json"],
+  ["eo-board","只读看板 CLI","终端 / <span class=\"mono\">--html</span> / <span class=\"mono\">--serve</span> 默认都是全局 dashboard；<span class=\"mono\">--project</span> 任意目录直达单项目，<span class=\"mono\">--scan</span> 临时扫描兜底，<span class=\"mono\">--all</span> 已退役。泳道页可用项目下拉切换。<b>永远只读</b>，绝不写项目文件。","cli/eo-board · 注册表 ~/.eo/projects.json"],
   ["eo-sync","投影同步 CLI","<span class=\"mono\">run</span> 一次跑完全部投影（幂等）、<span class=\"mono\">--dry-run</span> 只看计划、<span class=\"mono\">watch --all</span> 常驻自动追平（新鲜度键短路，无变化零成本）。适配器插件化：内置 obsidian / github，第三方放一个 <span class=\"mono\">eo-sync-&lt;name&gt;</span> 可执行即可接入。","cli/eo-sync · 协议见 docs/sync-adapter-protocol.md"]]],
  ["项目管理 · 落在管理侧",[
   ["eo-backlog","待办池","一句话灵感 / 以后再说的事，一条一张卡进 backlog/（上看板 backlog 列）；被 change 采纳时三件套归档留痕。","backlog/ 卡片目录"],
