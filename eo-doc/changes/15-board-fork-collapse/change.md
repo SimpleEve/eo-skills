@@ -26,7 +26,9 @@ created: 2026-08-12
 
 ## 2. 验收清单
 
-- [ ] AC-1 同一 change 在多个 worktree 存在副本时（含内容分叉），泳道卡面与聚合 change 流各只出现一张卡，且为最近活动最新的那份；内容一致副本场景与现状一致（单卡、无徽标）（锁定：tests/test_eo_board_cache.py#BoardForkCollapseTests.test_diverged_copies_collapse_to_latest_single_card + test_latest_wins_regardless_of_worktree + test_identical_copies_merge_to_one_card（characterization））
-- [ ] AC-2 分叉场景下该卡带「分叉×N」徽标（N = 其余内容变体数），卡详情内列出各副本归属（branch@worktree、状态、最近活动）并可切换查看任一副本的详情内容（人工：构造双 worktree 分叉 → 过目徽标计数与副本切换；数据层基质锚定：BoardForkCollapseTests.test_shown_card_and_forks_carry_attribution_data + test_single_card_key_and_fork_switch_in_detail）
-- [ ] AC-3 基准过滤不回归：主 worktree 状态更高时，状态更低的过期副本不出卡、不计入徽标 N；基准没有该 change 时不过滤（锁定：BoardForkCollapseTests.test_ac6_stale_lower_status_filtered + test_base_lower_keeps_higher_via_collapse + test_ac6_base_missing_change_no_filter）
-- [ ] AC-4 终端 / --html / --serve / --all 四处折叠口径一致；--serve 挂起时修改某 worktree 的 change.md，一个轮询周期内「最新卡」归属正确刷新（锁定：BoardForkCollapseTests.test_serve_refreshes_latest_attribution_after_divergence + 既有缓存/基线等价用例 characterization）
+- [x] AC-1 同一 change 在多个 worktree 存在副本时（含内容分叉），泳道卡面与聚合 change 流各只出现一张卡，且为最近活动最新的那份；内容一致副本场景与现状一致（单卡、无徽标）（锁定：tests/test_eo_board_cache.py#BoardForkCollapseTests.test_diverged_copies_collapse_to_latest_single_card + test_latest_wins_regardless_of_worktree + test_identical_copies_merge_to_one_card（characterization））
+- [x] AC-2 分叉场景下该卡带「分叉×N」徽标（N = 其余内容变体数），卡详情内列出各副本归属（branch@worktree、状态、最近活动）并可切换查看任一副本的详情内容（人工：构造双 worktree 分叉 → 过目徽标计数与副本切换；数据层基质锚定：BoardForkCollapseTests.test_shown_card_and_forks_carry_attribution_data + test_single_card_key_and_fork_switch_in_detail）（确认：card-platform 真实快照过目徽标与副本切换，原话"已过目，可以"，2026-08-12，基线 ff8482f）
+- [x] AC-3 基准过滤不回归：主 worktree 状态更高时，状态更低的过期副本不出卡、不计入徽标 N；基准没有该 change 时不过滤（锁定：BoardForkCollapseTests.test_ac6_stale_lower_status_filtered + test_base_lower_keeps_higher_via_collapse + test_ac6_base_missing_change_no_filter）
+- [x] AC-4 终端 / --html / --serve / --all 四处折叠口径一致；--serve 挂起时修改某 worktree 的 change.md，一个轮询周期内「最新卡」归属正确刷新（锁定：BoardForkCollapseTests.test_serve_refreshes_latest_attribution_after_divergence + 既有缓存/基线等价用例 characterization）
+
+独立复核：通过，2026-08-12，基线 ff8482f（本地只读 reviewer subagent；P2 注释辩护两条已修 @4285dea，P3 锁定缺口两条——终端/聚合流徽标直接断言、fork 点击绑定触发——按回归资产分层接受不补）
