@@ -456,12 +456,12 @@ class BoardForkCollapseTests(BoardCacheServeTests):
         cards = [c for c in data["changes"] if c["id"] == "fixture"]
         self.assertEqual(len(cards), 1)
         card = cards[0]
-        self.assertEqual(card["worktree"], str(side))
+        self.assertEqual(Path(card["worktree"]).resolve(), side.resolve())
         self.assertEqual(card["status"], "confirmed")
         self.assertTrue(card.get("diverged"))
         self.assertEqual(len(card["forks"]), 1)
         fork = card["forks"][0]
-        self.assertEqual(fork["worktree"], str(self.repo))
+        self.assertEqual(Path(fork["worktree"]).resolve(), self.repo.resolve())
         self.assertEqual(fork["status"], "draft")
 
     def test_latest_wins_regardless_of_worktree(self):
@@ -474,7 +474,7 @@ class BoardForkCollapseTests(BoardCacheServeTests):
         data = self.board.build_data(self.cfg)
         cards = [c for c in data["changes"] if c["id"] == "fixture"]
         self.assertEqual(len(cards), 1)
-        self.assertEqual(cards[0]["worktree"], str(self.repo))
+        self.assertEqual(Path(cards[0]["worktree"]).resolve(), self.repo.resolve())
         self.assertEqual(cards[0]["status"], "draft")
         self.assertEqual([f["status"] for f in cards[0]["forks"]], ["confirmed"])
 
@@ -558,7 +558,7 @@ class BoardForkCollapseTests(BoardCacheServeTests):
         second = self.get_json()
         cards = [c for c in second["changes"] if c["id"] == "fixture"]
         self.assertEqual(len(cards), 1)
-        self.assertEqual(cards[0]["worktree"], str(side))
+        self.assertEqual(Path(cards[0]["worktree"]).resolve(), side.resolve())
         self.assertEqual(len(cards[0]["forks"]), 1)
 
     def test_ac6_stale_lower_status_filtered(self):
@@ -601,7 +601,7 @@ class BoardForkCollapseTests(BoardCacheServeTests):
         cards = [c for c in data["changes"] if c["id"] == "fixture"]
         self.assertEqual(len(cards), 1)
         self.assertEqual(cards[0]["status"], "reviewed")
-        self.assertEqual(cards[0]["worktree"], str(side))
+        self.assertEqual(Path(cards[0]["worktree"]).resolve(), side.resolve())
         self.assertEqual([f["status"] for f in cards[0]["forks"]], ["implementing"])
 
     def test_ac6_base_missing_change_no_filter(self):
