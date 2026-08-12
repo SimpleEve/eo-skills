@@ -104,7 +104,7 @@ class HelperPtyTests(unittest.TestCase):
         self.write_command("eo-sync", 'echo "sync-output:$*"\nexit 7\n')
         self.start_helper()
         self.read_until("> ")
-        os.write(self.master, b"4\n")
+        os.write(self.master, b"3\n")
         output = self.read_until("↑ eo-sync run 退出码 7")
         self.assertIn("→ 正在执行：eo-sync run", output)
         self.assertIn("sync-output:run", output)
@@ -121,9 +121,9 @@ class HelperPtyTests(unittest.TestCase):
         self.start_helper()
         helper_pid = self.pid
         self.read_until("> ")
-        os.write(self.master, b"2\n")
-        output = self.read_until("args:--all --serve")
-        self.assertIn("→ 正在执行：eo-board --all --serve", output)
+        os.write(self.master, b"1\n")
+        output = self.read_until("args:--serve")
+        self.assertIn("→ 正在执行：eo-board --serve", output)
         self.assertIn(f"board-pid:{helper_pid}", output)
         os.write(self.master, b"\x03")
         self.read_until("board-int")
@@ -147,7 +147,7 @@ class HelperInstallTests(unittest.TestCase):
             self.assertIn("日常只需记一条命令——eo-helper", result.stdout)
             menu = subprocess.run([str(helper)], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=10)
             self.assertEqual(menu.returncode, 0, menu.stderr)
-            self.assertIn("eo-board --all --serve", menu.stdout)
+            self.assertIn("eo-board --serve", menu.stdout)
 
 
 if __name__ == "__main__":

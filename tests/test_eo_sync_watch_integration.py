@@ -223,7 +223,7 @@ class WatchIntegrationTests(unittest.TestCase):
         ghost = self.root / "ghost"
         data["projects"].append({"name": "ghost", "path": str(ghost), "registered_at": "2026-07-25"})
         registry.write_text(json.dumps(data), encoding="utf-8")
-        board = subprocess.run([sys.executable, str(EO_BOARD), "--all"], cwd=self.outside,
+        board = subprocess.run([sys.executable, str(EO_BOARD)], cwd=self.outside,
                                env=self._env(), capture_output=True, text=True)
         self.assertEqual(board.returncode, 0, board.stderr)
         self.assertIn("valid", board.stdout)

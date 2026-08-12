@@ -245,13 +245,19 @@ class BoardCacheServeTests(unittest.TestCase):
         self.assertEqual(calls, 1)
 
     def test_cli_serve_exposes_change_to_the_next_three_second_client_poll(self):
+        """默认 --serve 是全局 dashboard；cwd 未注册项目会临时并入，下钻 /p/<key> 仍热刷新。"""
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.bind(("127.0.0.1", 0))
             port = sock.getsockname()[1]
 
+        eo_home = self.root / "eo-home-cli-serve"
+        eo_home.mkdir()
+        env = dict(os.environ)
+        env["EO_HOME"] = str(eo_home)
         process = subprocess.Popen(
             [sys.executable, str(BOARD_PATH), "--serve", "--port", str(port), "--no-open"],
             cwd=self.repo,
+            env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -269,13 +275,17 @@ class BoardCacheServeTests(unittest.TestCase):
                     time.sleep(0.05)
 
             self.assertIn("setInterval(refreshLoop, 3000)", html)
+            with urlopen(f"http://127.0.0.1:{port}/data.json", timeout=5) as response:
+                home = json.loads(response.read().decode("utf-8"))
+            self.assertEqual(home["scanned_count"], 1)
+            route_key = home["rows"][0]["route_key"]
             self.change_path.write_text(
                 self.change_path.read_text(encoding="utf-8").replace("status: draft", "status: reviewed"),
                 encoding="utf-8",
             )
             self.bump_mtime(self.change_path)
             time.sleep(3.1)
-            with urlopen(f"http://127.0.0.1:{port}/data.json", timeout=5) as response:
+            with urlopen(f"http://127.0.0.1:{port}/p/{route_key}/data.json", timeout=5) as response:
                 data = json.loads(response.read().decode("utf-8"))
             self.assertEqual(data["changes"][0]["status"], "reviewed")
         finally:
@@ -642,13 +652,20 @@ class BoardForkCollapseTests(BoardCacheServeTests):
 
 
 class MultiProjectFixture(unittest.TestCase):
-    """多项目 fixture 基座。EO_HOME 一律临时目录，不触碰真实 ~/.eo。"""
+    """多项目 fixture 基座。EO_HOME 一律临时目录，不触碰真实 ~/.eo。
+
+    默认 cwd 切到临时 root：全局 dashboard 会把含 .eo-project.json 的 cwd 临时并入，
+    若不隔离，加载测试的真实仓库会被扫进聚合结果。
+    """
 
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.tempdir.cleanup)
         self.root = Path(self.tempdir.name).resolve()
         self.eo_home = self.root / "eo-home"
+        self._orig_cwd = os.getcwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, self._orig_cwd)
 
     def make_project(self, name, statuses=(), backlog_cards=0, parent=None):
         repo = (parent or self.root) / name
@@ -748,9 +765,9 @@ class MultiProjectFixture(unittest.TestCase):
 
     def snapshot_html(self, *extra, scan=None):
         out = self.root / "all.html"
-        args = ["--all", "--html", "-o", str(out), "--no-open", *extra]
+        args = ["--html", "-o", str(out), "--no-open", *extra]
         if scan:
-            args = ["--all", "--scan", str(scan), "--html", "-o", str(out), "--no-open", *extra]
+            args = ["--scan", str(scan), "--html", "-o", str(out), "--no-open", *extra]
         r = self.run_board(*args)
         self.assertEqual(r.returncode, 0, r.stderr)
         return out
@@ -824,14 +841,14 @@ class MultiProjectFixture(unittest.TestCase):
 
 
 class BoardMultiProjectTests(MultiProjectFixture):
-    """--all / --project / --scan 多项目聚合与下钻（终端形态）。"""
+    """默认全局 dashboard / --project / --scan 多项目聚合与下钻（终端形态）。"""
 
     def test_all_one_row_per_project_with_counts_and_as_of(self):
         a = self.make_project("alpha", statuses=("confirmed", "implementing", "archived"), backlog_cards=2)
         b = self.make_project("beta", statuses=("draft",))
         self.register(a)
         self.register(b)
-        r = self.run_board("--all")
+        r = self.run_board()
         self.assertEqual(r.returncode, 0, r.stderr)
         lines = [l for l in r.stdout.splitlines() if l.strip()]
         row_a = next(l for l in lines if l.strip().startswith("alpha"))
@@ -846,7 +863,7 @@ class BoardMultiProjectTests(MultiProjectFixture):
         data = json.loads(self.registry_file().read_text(encoding="utf-8"))
         data["projects"].append({"name": "ghost", "path": str(self.root / "gone"), "registered_at": "2026-07-25"})
         self.registry_file().write_text(json.dumps(data), encoding="utf-8")
-        r = self.run_board("--all")
+        r = self.run_board()
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("alpha", r.stdout)
         self.assertIn("ghost", r.stdout)
@@ -858,7 +875,7 @@ class BoardMultiProjectTests(MultiProjectFixture):
         data = json.loads(self.registry_file().read_text(encoding="utf-8"))
         data["projects"].append({"name": "bad", "path": 123})
         self.registry_file().write_text(json.dumps(data), encoding="utf-8")
-        r = self.run_board("--all")
+        r = self.run_board()
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("alpha", r.stdout)  # 有效项目照常输出
         self.assertIn("非法", r.stdout)
@@ -869,13 +886,13 @@ class BoardMultiProjectTests(MultiProjectFixture):
         parent = self.root / "scan-parent"
         orphan = self.make_project("orphan", statuses=("draft",), parent=parent)
         run_git(orphan, "worktree", "add", "-q", str(parent / "orphan-wt"), "-b", "side")
-        r = self.run_board("--all", "--scan", str(parent))
+        r = self.run_board("--scan", str(parent))
         self.assertEqual(r.returncode, 0, r.stderr)
         rows = [l for l in r.stdout.splitlines() if "(未注册)" in l and not l.startswith("提示")]
         self.assertEqual(len(rows), 1)  # 同仓主/linked worktree 只一行
 
     def test_all_empty_registry_prints_guidance(self):
-        r = self.run_board("--all")
+        r = self.run_board()
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("--register", r.stdout)
 
@@ -912,14 +929,27 @@ class BoardMultiProjectTests(MultiProjectFixture):
         before = self.registry_file().read_bytes()
         parent = self.root / "scan-parent"
         self.make_project("orphan", statuses=("draft",), parent=parent)
-        r = self.run_board("--all", "--scan", str(parent))
+        r = self.run_board("--scan", str(parent))
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("orphan (未注册)", r.stdout)
         self.assertIn("--register", r.stdout)
         self.assertEqual(self.registry_file().read_bytes(), before)
 
-    def test_scan_requires_all(self):
-        r = self.run_board("--scan", str(self.root))
+    def test_all_flag_is_retired_with_guidance(self):
+        r = self.run_board("--all")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("已退役", r.stderr)
+        self.assertIn("去掉该旗标", r.stderr)
+
+    def test_scan_works_on_default_dashboard_without_all(self):
+        parent = self.root / "scan-parent"
+        self.make_project("orphan", statuses=("draft",), parent=parent)
+        r = self.run_board("--scan", str(parent))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("orphan (未注册)", r.stdout)
+
+    def test_scan_rejects_with_project(self):
+        r = self.run_board("--scan", str(self.root), "--project", "x")
         self.assertNotEqual(r.returncode, 0)
 
 
@@ -1375,7 +1405,7 @@ class BoardAllRouteTests(MultiProjectFixture):
 
 
 class BoardAllSnapshotRouteTests(MultiProjectFixture):
-    """--all --html 快照：内嵌全量泳道数据、同一套 route_key、零外部请求。"""
+    """默认 --html 快照：内嵌全量泳道数据、同一套 route_key、零外部请求。"""
 
     def test_snapshot_embeds_full_board_for_every_project_including_scanned(self):
         alpha = self.make_project("alpha", statuses=("implementing", "archived"), backlog_cards=1)
@@ -1383,7 +1413,7 @@ class BoardAllSnapshotRouteTests(MultiProjectFixture):
         parent = self.root / "scan-parent"
         orphan = self.make_project("orphan", statuses=("draft",), parent=parent)
         out = self.root / "all.html"
-        r = self.run_board("--all", "--scan", str(parent), "--html", "-o", str(out), "--no-open")
+        r = self.run_board("--scan", str(parent), "--html", "-o", str(out), "--no-open")
         self.assertEqual(r.returncode, 0, r.stderr)
         html = out.read_text(encoding="utf-8")
 
@@ -1423,15 +1453,22 @@ class BoardAllSnapshotRouteTests(MultiProjectFixture):
         self.assertIn("alpha", mounted["projectStrip"])
 
     @unittest.skipUnless(NODE, "缺少 node，无法在无浏览器环境执行挂载路径")
-    def test_single_project_page_mounts_the_same_shared_board_without_home_link(self):
+    def test_project_html_opens_swimlane_via_initial_route_with_home_link(self):
         alpha = self.make_project("alpha", statuses=("implementing", "archived"), backlog_cards=1)
-        out = self.root / "single.html"
-        r = self.run_board("--html", "-o", str(out), "--no-open", cwd=alpha)
+        self.register(alpha)
+        beta = self.make_project("beta", statuses=("draft",))
+        self.register(beta)
+        board = self.load_board_module()
+        key = board.make_route_key("alpha", alpha)
+        out = self.root / "project.html"
+        r = self.run_board("--project", "alpha", "--html", "-o", str(out), "--no-open")
         self.assertEqual(r.returncode, 0, r.stderr)
 
-        mounted = self.mount_project_board(out, "eo-board-data", "eo-root")
+        # --project --html 走聚合快照壳 + initial_route，挂载点仍是 projRoot
+        mounted = self.mount_snapshot_project(out, key)
         self.assert_swimlane_rendered(mounted, "C1")
-        self.assertNotIn("返回首页", mounted["projectTopbar"])  # 单项目页没有聚合首页可回
+        self.assertIn("← 返回首页", mounted["projectTopbar"])
+        self.assertIn('class="project-switch"', mounted["projectTopbar"])
         self.assertIn("alpha", mounted["projectStrip"])
 
     def test_snapshot_is_self_contained_with_no_outbound_requests(self):
@@ -1484,7 +1521,7 @@ class BoardAllRegressionTests(MultiProjectFixture):
             self.assertEqual(content.count('class="row'), 1)
             self.assertEqual(content.count('class="proj-err"'), 2)
 
-    def test_all_terminal_output_is_unchanged_against_the_compat_baseline(self):
+    def test_all_terminal_table_body_stays_compatible_aside_from_global_header(self):
         self.register(self.make_project("alpha", statuses=("confirmed", "implementing", "archived"), backlog_cards=2))
         self.register(self.make_project("beta", statuses=("draft",)))
         baseline_path = self.root / "eo_board_base.py"
@@ -1495,11 +1532,21 @@ class BoardAllRegressionTests(MultiProjectFixture):
         board = self.load_board_module()
 
         def normalized(text):
-            return re.sub(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", "<as-of>", text)
+            # 表头从 "eo board --all ·" 收敛为 "eo board · 全局 dashboard ·"；只锁表体与指引尾
+            text = re.sub(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", "<as-of>", text)
+            lines = text.splitlines()
+            if lines:
+                lines[0] = re.sub(
+                    r"^eo board(?: --all)? · (?:全局 dashboard · )?注册",
+                    "eo board · 注册",
+                    lines[0],
+                )
+            return "\n".join(lines)
 
         with self.env_patch():
             before = baseline.render_all_terminal(baseline.build_all_data())
             after = board.render_all_terminal(board.build_all_data())
+        self.assertIn("全局 dashboard", after.splitlines()[0])
         self.assertEqual(normalized(after), normalized(before))
 
     def test_stays_on_stdlib_only_and_binds_loopback_only(self):
@@ -1533,7 +1580,7 @@ class BoardAllRegressionTests(MultiProjectFixture):
 
 
 class BoardAllAggregateTests(MultiProjectFixture):
-    """--all 的 --html / --serve 聚合形态：数据层注入、缓存单飞、逐请求重读注册表、参数矩阵。"""
+    """默认 --html / --serve 聚合形态：数据层注入、缓存单飞、逐请求重读注册表、参数矩阵。"""
 
     def load_board(self):
         board = load_module(f"eo_board_all_{id(self)}", BOARD_PATH)
@@ -1612,7 +1659,7 @@ class BoardAllAggregateTests(MultiProjectFixture):
         # 缓存命中时 as-of 保持构建时刻，不按请求时刻重打
         self.assertEqual(second["rows"][0]["as_of"], first["rows"][0]["as_of"])
 
-    # ---------- --all --html ----------
+    # ---------- 默认 --html ----------
 
     def test_all_html_with_output_path_contains_blocks_and_inline_errors(self):
         a = self.make_project("alpha", statuses=("confirmed", "implementing"), backlog_cards=1)
@@ -1623,7 +1670,7 @@ class BoardAllAggregateTests(MultiProjectFixture):
         data["projects"].append({"name": "ghost", "path": str(self.root / "gone"), "registered_at": "2026-07-25"})
         self.registry_file().write_text(json.dumps(data), encoding="utf-8")
         out = self.root / "sub" / "all.html"
-        r = self.run_board("--all", "--html", "-o", str(out), "--no-open")
+        r = self.run_board("--html", "-o", str(out), "--no-open")
         self.assertEqual(r.returncode, 0, r.stderr)
         html = out.read_text(encoding="utf-8")
         self.assertIn("eo board · 所有项目", html)
@@ -1643,7 +1690,7 @@ class BoardAllAggregateTests(MultiProjectFixture):
         env["EO_HOME"] = str(self.eo_home)
         env["TMPDIR"] = str(tmp_home)
         r = subprocess.run(
-            [sys.executable, str(BOARD_PATH), "--all", "--html", "--no-open"],
+            [sys.executable, str(BOARD_PATH), "--html", "--no-open"],
             cwd=self.root, env=env, capture_output=True, text=True,
         )
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -1651,7 +1698,7 @@ class BoardAllAggregateTests(MultiProjectFixture):
         self.assertEqual(len(generated), 1)
         self.assertIn(str(generated[0]), r.stdout)
 
-    # ---------- --all --serve ----------
+    # ---------- 默认 --serve ----------
 
     def test_all_serve_single_flight_per_slot_and_stable_key_no_rebuild(self):
         self.register(self.make_project("alpha", statuses=("confirmed",)))
@@ -1739,7 +1786,7 @@ class BoardAllAggregateTests(MultiProjectFixture):
         env = dict(os.environ)
         env["EO_HOME"] = str(self.eo_home)
         process = subprocess.Popen(
-            [sys.executable, str(BOARD_PATH), "--all", "--serve", "--port", str(port), "--no-open"],
+            [sys.executable, str(BOARD_PATH), "--serve", "--port", str(port), "--no-open"],
             cwd=self.root, env=env,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
@@ -1752,7 +1799,7 @@ class BoardAllAggregateTests(MultiProjectFixture):
                     break
                 except OSError:
                     if time.monotonic() >= deadline:
-                        self.fail("eo-board --all --serve did not accept requests within five seconds")
+                        self.fail("eo-board --serve did not accept requests within five seconds")
                     time.sleep(0.05)
             self.assertIn("setInterval(refreshLoop, 3000)", html)  # 3 秒轮询热刷新沿用
             with urlopen(f"http://127.0.0.1:{port}/data.json", timeout=5) as response:
@@ -1779,7 +1826,7 @@ class BoardAllAggregateTests(MultiProjectFixture):
         env = dict(os.environ)
         env["EO_HOME"] = str(self.eo_home)
         process = subprocess.Popen(
-            [sys.executable, str(BOARD_PATH), "--all", "--serve", "--port", str(port), "--no-open"],
+            [sys.executable, str(BOARD_PATH), "--serve", "--port", str(port), "--no-open"],
             cwd=self.root, env=env,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
@@ -1792,7 +1839,7 @@ class BoardAllAggregateTests(MultiProjectFixture):
                     break
                 except OSError:
                     if time.monotonic() >= deadline:
-                        self.fail("eo-board --all --serve did not accept requests within five seconds")
+                        self.fail("eo-board --serve did not accept requests within five seconds")
                     time.sleep(0.05)
             self.assertIn("setInterval(refreshLoop, 3000)", html)
             self.assertEqual(self.get_all_status(port), "draft")
@@ -1823,7 +1870,7 @@ class BoardAllAggregateTests(MultiProjectFixture):
         env = dict(os.environ)
         env["EO_HOME"] = str(self.eo_home)
         process = subprocess.Popen(
-            [sys.executable, str(BOARD_PATH), "--all", "--serve", "--port", str(port), "--no-open"],
+            [sys.executable, str(BOARD_PATH), "--serve", "--port", str(port), "--no-open"],
             cwd=self.root, env=env,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
@@ -1858,18 +1905,19 @@ class BoardAllAggregateTests(MultiProjectFixture):
 
     def test_argparse_matrix_rejections(self):
         for combo in (
+            ["--all"],  # 已退役
             ["--all", "--project", "somewhere"],
+            ["--all", "--html", "--no-open"],
             ["--register", "--all"],
             ["--register", "--html"],
             ["--unregister", "--serve"],
-            ["--all", "-o", "x.html"],  # -o 仅在 --html 下有效
-            ["-o", "x.html"],
-            ["--all", "--port", "7444"],  # --port 仅在 --serve 下有效
-            ["--html", "--port", "7444"],
+            ["--scan", str(self.root), "--project", "somewhere"],
+            ["-o", "x.html"],  # -o 仅在 --html 下有效
+            ["--html", "--port", "7444"],  # --port 仅在 --serve 下有效
             ["--port", "7444"],
             ["--register", "--no-open"],  # --no-open 仅在 --html/--serve 下有效
             ["--no-open"],
-            ["--all", "--html", "--port", "7444", "-o", "x.html", "--no-open"],
+            ["--html", "--port", "7444", "-o", "x.html", "--no-open"],
         ):
             r = self.run_board(*combo)
             self.assertNotEqual(r.returncode, 0, f"应当拒绝：{combo}")
@@ -1878,11 +1926,141 @@ class BoardAllAggregateTests(MultiProjectFixture):
         parent = self.root / "scan-parent"
         self.make_project("orphan", statuses=("draft",), parent=parent)
         out = self.root / "scan.html"
-        r = self.run_board("--all", "--scan", str(parent), "--html", "-o", str(out), "--no-open")
+        r = self.run_board("--scan", str(parent), "--html", "-o", str(out), "--no-open")
         self.assertEqual(r.returncode, 0, r.stderr)
         html = out.read_text(encoding="utf-8")
         self.assertIn('"orphan"', html)
         self.assertIn('"scanned_count": 1', html)
+
+
+class BoardGlobalDashboardTests(MultiProjectFixture):
+    """全局 dashboard 收敛：默认入口、cwd 并入、项目下拉数据与跳转。"""
+
+    def env_patch(self):
+        return mock.patch.dict(os.environ, {"EO_HOME": str(self.eo_home)})
+
+    def test_default_terminal_is_global_dashboard_without_all_flag(self):
+        self.register(self.make_project("alpha", statuses=("confirmed",)))
+        self.register(self.make_project("beta", statuses=("draft",)))
+        r = self.run_board()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("全局 dashboard", r.stdout)
+        self.assertIn("alpha", r.stdout)
+        self.assertIn("beta", r.stdout)
+        self.assertNotIn("eo board · alpha", r.stdout.splitlines()[0] if r.stdout else "")
+
+    def test_default_html_is_aggregate_home_not_single_project(self):
+        alpha = self.make_project("alpha", statuses=("implementing",))
+        self.register(alpha)
+        out = self.root / "home.html"
+        r = self.run_board("--html", "-o", str(out), "--no-open", cwd=alpha)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        html = out.read_text(encoding="utf-8")
+        self.assertIn('id="eo-board-all-data"', html)
+        self.assertIn("eo board · 所有项目", html)
+        self.assertNotIn('id="eo-board-data"', html)
+
+    def test_cwd_unregistered_project_is_merged_like_scan(self):
+        orphan = self.make_project("orphan", statuses=("draft",))
+        before = self.registry_file().read_bytes() if self.registry_file().exists() else b""
+        r = self.run_board(cwd=orphan)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("orphan (未注册)", r.stdout)
+        self.assertIn("全局 dashboard", r.stdout)
+        after = self.registry_file().read_bytes() if self.registry_file().exists() else b""
+        self.assertEqual(after, before)
+
+    def test_empty_registry_and_non_project_cwd_prints_register_guidance(self):
+        elsewhere = self.root / "nowhere"
+        elsewhere.mkdir()
+        r = self.run_board(cwd=elsewhere)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("注册表为空", r.stdout)
+        self.assertIn("--register", r.stdout)
+
+    def test_build_all_data_injects_dashboard_projects_into_each_embedded_board(self):
+        alpha = self.make_project("alpha", statuses=("implementing",))
+        beta = self.make_project("beta", statuses=("draft",))
+        self.register(alpha)
+        self.register(beta)
+        board = self.load_board_module()
+        with self.env_patch():
+            agg = board.build_all_data(embed_board=True)
+        by_label = {row["label"]: row for row in agg["rows"]}
+        alpha_projects = by_label["alpha"]["board"]["dashboard_projects"]
+        names = [p["name"] for p in alpha_projects]
+        self.assertEqual(sorted(names), ["alpha", "beta"])
+        current = next(p for p in alpha_projects if p["name"] == "alpha")
+        other = next(p for p in alpha_projects if p["name"] == "beta")
+        self.assertTrue(current["current"])
+        self.assertFalse(other["current"])
+        self.assertTrue(current["href"].startswith("#/p/"))
+        self.assertTrue(other["href"].startswith("#/p/"))
+        self.assertNotEqual(current["href"], other["href"])
+
+    @unittest.skipUnless(NODE, "缺少 node，无法在无浏览器环境执行挂载路径")
+    def test_snapshot_project_switch_lists_all_drillable_and_uses_hash_hrefs(self):
+        alpha = self.make_project("alpha", statuses=("implementing",))
+        beta = self.make_project("beta", statuses=("draft",))
+        self.register(alpha)
+        self.register(beta)
+        parent = self.root / "scan-parent"
+        orphan = self.make_project("orphan", statuses=("confirmed",), parent=parent)
+        board = self.load_board_module()
+        alpha_key = board.make_route_key("alpha", alpha)
+        beta_key = board.make_route_key("beta", beta)
+        orphan_key = board.make_route_key("orphan", orphan)
+
+        mounted = self.mount_snapshot_project(self.snapshot_html(scan=parent), alpha_key)
+        top = mounted["projectTopbar"]
+        self.assertIn('class="project-switch"', top)
+        self.assertIn(f'value="#/p/{alpha_key}"', top)
+        self.assertIn(f'value="#/p/{beta_key}"', top)
+        self.assertIn(f'value="#/p/{orphan_key}"', top)
+        self.assertIn("selected", top)
+
+    def test_serve_project_page_switch_lists_all_with_path_hrefs(self):
+        alpha = self.make_project("alpha", statuses=("implementing",))
+        beta = self.make_project("beta", statuses=("draft",))
+        self.register(alpha)
+        self.register(beta)
+        board = self.load_board_module()
+        alpha_key = board.make_route_key("alpha", alpha)
+        beta_key = board.make_route_key("beta", beta)
+        handler = type("DashHandler", (board.AllBoardRequestHandler,), {"scan_dir": None})
+        with self.env_patch():
+            server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            self.addCleanup(thread.join, 5)
+            self.addCleanup(server.server_close)
+            self.addCleanup(server.shutdown)
+            with urlopen(f"http://127.0.0.1:{server.server_port}/p/{alpha_key}", timeout=5) as response:
+                html = response.read().decode("utf-8")
+            with urlopen(f"http://127.0.0.1:{server.server_port}/p/{alpha_key}/data.json", timeout=5) as response:
+                data = json.loads(response.read().decode("utf-8"))
+            with urlopen(f"http://127.0.0.1:{server.server_port}/p/{beta_key}", timeout=5) as response:
+                self.assertEqual(response.status, 200)
+
+        projects = data["dashboard_projects"]
+        by_name = {p["name"]: p for p in projects}
+        self.assertEqual(sorted(by_name), ["alpha", "beta"])
+        self.assertEqual(by_name["alpha"]["href"], f"/p/{alpha_key}")
+        self.assertEqual(by_name["beta"]["href"], f"/p/{beta_key}")
+        self.assertTrue(by_name["alpha"]["current"])
+        self.assertFalse(by_name["beta"]["current"])
+        # 页面内嵌 JSON 带齐 href；下拉 markup 由 JS 渲染，跳转写 location.href = option.value
+        self.assertIn(f'"href": "/p/{beta_key}"', html)
+        self.assertIn('class="project-switch"', html)
+        self.assertIn("window.location.href = switcher.value", html)
+
+    def test_project_terminal_still_directs_to_single_project_summary(self):
+        alpha = self.make_project("alpha", statuses=("confirmed", "implementing"))
+        self.register(alpha)
+        r = self.run_board("--project", "alpha")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("eo board · alpha", r.stdout)
+        self.assertNotIn("全局 dashboard", r.stdout)
 
 
 if __name__ == "__main__":

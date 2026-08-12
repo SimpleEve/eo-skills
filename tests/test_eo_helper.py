@@ -13,13 +13,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 HELPER_PATH = REPO_ROOT / "cli" / "eo-helper"
 
 EXPECTED_MENU = [
-    ("本项目实时看板", ["eo-board", "--serve"], "exec"),
-    ("所有项目一页看板", ["eo-board", "--all", "--serve"], "exec"),
+    ("全局实时看板", ["eo-board", "--serve"], "exec"),
     ("注册本项目到多项目看板", ["eo-board", "--register"], "run"),
     ("同步看板卡片（跑一次）", ["eo-sync", "run"], "run"),
     ("看板自动跟手（常驻）", ["eo-sync", "watch", "--all"], "exec"),
-    ("终端速览：本项目", ["eo-board"], "run"),
-    ("终端速览：所有项目", ["eo-board", "--all"], "run"),
+    ("全局终端速览", ["eo-board"], "run"),
 ]
 
 
@@ -38,7 +36,7 @@ class HelperMenuMapTests(unittest.TestCase):
     def setUp(self):
         self.helper = load_helper()
 
-    def test_menu_is_exactly_the_seven_pinned_entries(self):
+    def test_menu_is_exactly_the_pinned_entries(self):
         actual = [(i["label"], i["argv"], i["mode"]) for i in self.helper.MENU]
         self.assertEqual(actual, EXPECTED_MENU)
 
@@ -82,7 +80,7 @@ class HelperInteractiveTests(unittest.TestCase):
         return code, out.getvalue(), run_calls, exec_calls
 
     def test_short_command_echoes_then_forwards_and_returns_to_menu(self):
-        code, out, run_calls, exec_calls = self.run_main(["4", "q"])
+        code, out, run_calls, exec_calls = self.run_main(["3", "q"])
         self.assertEqual(code, 0)
         self.assertIn("→ 正在执行：eo-sync run", out)
         self.assertEqual(run_calls, [((["eo-sync", "run"]), {})])  # stdio 直通：不带捕获参数
@@ -91,14 +89,14 @@ class HelperInteractiveTests(unittest.TestCase):
         self.assertGreaterEqual(out.count("eo-helper · eo-skills 日常入口"), 2)
 
     def test_long_running_command_execs_and_replaces_process(self):
-        code, out, run_calls, exec_calls = self.run_main(["2", "q"])
+        code, out, run_calls, exec_calls = self.run_main(["1", "q"])
         self.assertEqual(code, 0)
-        self.assertIn("→ 正在执行：eo-board --all --serve", out)
-        self.assertEqual(exec_calls, [("eo-board", ["eo-board", "--all", "--serve"])])
+        self.assertIn("→ 正在执行：eo-board --serve", out)
+        self.assertEqual(exec_calls, [("eo-board", ["eo-board", "--serve"])])
         self.assertEqual(run_calls, [])
 
     def test_nonzero_exit_status_is_visible_not_silent(self):
-        code, out, run_calls, _ = self.run_main(["4", "q"], run_rc=1)
+        code, out, run_calls, _ = self.run_main(["3", "q"], run_rc=1)
         self.assertEqual(code, 0)  # helper 自身菜单循环正常退出返回 0
         self.assertIn("↑ eo-sync run 退出码 1", out)
 
@@ -164,7 +162,7 @@ class HelperCliTests(unittest.TestCase):
     def test_help_flag_prints_table(self):
         r = self.run_helper("-h")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("eo-board --all --serve", r.stdout)
+        self.assertIn("eo-board --serve", r.stdout)
 
     def test_unknown_argument_rejected(self):
         r = self.run_helper("--bogus")
