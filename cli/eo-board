@@ -5,7 +5,7 @@
   eo-board                终端摘要
   eo-board --html [-o P]  生成自包含静态 HTML 快照
   eo-board --serve        本地只读 HTTP 服务（仅绑 127.0.0.1）
-多项目聚合（--all）同样支持三形态：终端 / --html / --serve。
+全局 dashboard 同样支持三形态：终端 / --html / --serve。
 
 只用标准库，零第三方依赖。不写入项目仓库任何文件。
 """
@@ -2483,16 +2483,29 @@ def _aggregate_row(kind, obj, get_entry=_fresh_entry, embed_board=False):
     return row
 
 
-def collect_sources(scan_dir=None):
-    """当前聚合来源（注册条目 + --scan 兜底并入），返回 (sources, entries, scanned)。"""
+def collect_sources(scan_dir=None, cwd_dir=None):
+    """当前聚合来源（注册条目 + cwd 项目 + --scan 兜底并入），返回 (sources, entries, scanned)。"""
     reg = load_registry()
     entries = list(reg.get("projects") or [])
+    known = {repo_identity(p) for p in map(entry_path, entries) if p}
     scanned = []
+    start = Path(cwd_dir or Path.cwd()).expanduser().resolve()
+    cwd_cfg = find_project_config(start)
+    if cwd_cfg is not None:
+        cwd_project = cwd_cfg.parent
+        ident = repo_identity(cwd_project)
+        if ident not in known:
+            known.add(ident)
+            scanned.append(cwd_project)
     if scan_dir:
         parent = Path(scan_dir).expanduser().resolve()
         if not parent.is_dir():
             raise ConfigError(f"--scan 目录不存在：{parent}")
-        scanned = _scan_parent_dir(parent, entries)
+        for project_dir in _scan_parent_dir(parent, entries):
+            ident = repo_identity(project_dir)
+            if ident not in known:
+                known.add(ident)
+                scanned.append(project_dir)
     sources = [("registry", e) for e in entries] + [("scan", p) for p in scanned]
     return sources, entries, scanned
 
@@ -2575,7 +2588,7 @@ def _scan_parent_dir(parent, entries):
 
 def render_all_terminal(agg):
     rows, reg_count, scanned_count = agg["rows"], agg["reg_count"], agg["scanned_count"]
-    out = [f"eo board --all · 注册 {reg_count} 项目"
+    out = [f"eo board · 全局 dashboard · 注册 {reg_count} 项目"
            + (f"（另扫描并入 {scanned_count}）" if scanned_count else "")
            + f" · {agg['registry_path']}", ""]
     header = ["项目", "draft", "confirmed", "implementing", "reviewed", "archived", "backlog", "as-of"]
@@ -3064,7 +3077,7 @@ function buildTopbar(view) {
     return '<a class="vs-btn" href="' + href + '"' + (on ? ' aria-current="page"' : '') + '>' + label + '</a>';
   }
   document.getElementById('topbar').innerHTML =
-    '<div class="wordmark">eo<span class="tail"> board --all</span></div>'
+    '<div class="wordmark">eo<span class="tail"> board</span></div>'
     + '<div class="topmeta">'
     + '<div class="viewswitch" role="navigation" aria-label="首页视图切换">'
     + tab('#/', 'change 流', view.name !== 'cards') + tab('#/cards', '概要卡', view.name === 'cards')
@@ -3150,7 +3163,7 @@ def cmd_all(args):
     if not agg["reg_count"] and not agg["scanned_count"]:
         print(f"注册表为空（{agg['registry_path']}）。")
         print("  在项目目录运行 eo-board --register 注册项目；")
-        print("  或用 eo-board --all --scan <父目录> 临时聚合未注册项目（不写注册表）。")
+        print("  或用 eo-board --scan <父目录> 临时聚合未注册项目（不写注册表）。")
         return 0
     print(render_all_terminal(agg))
     return 0
@@ -3323,7 +3336,7 @@ def resolve_project_token(token):
         if hit_path is None:
             die(f"❌ 注册名 {token} 对应条目非法（path 缺失或不是字符串），请修复注册表或改用路径")
         return Path(hit_path)
-    die(f"❌ --project {token} 既不是存在的目录，也不是注册名（eo-board --all 查看已注册项目）")
+    die(f"❌ --project {token} 既不是存在的目录，也不是注册名（eo-board 查看已注册项目）")
 
 
 # ============================================================
@@ -3356,7 +3369,7 @@ def cmd_unregister(path_str):
     except ConfigError as e:
         die(f"❌ {e}")
     if removed is None:
-        die(f"未命中任何注册条目：{target}（用 eo-board --all 查看当前注册项目）")
+        die(f"未命中任何注册条目：{target}（用 eo-board 查看当前注册项目）")
     print(f"✓ 已移除注册：{removed.get('name')} → {removed.get('path')}")
     return 0
 
@@ -3371,13 +3384,10 @@ def build_arg_parser():
         description="eo-skills 工作流的只读项目看板：从 .eo-project.json 出发，汇总多 worktree 的 change / backlog / roadmap。",
         epilog=(
             "示例：\n"
-            "  eo-board                 终端摘要\n"
-            "  eo-board --html          生成静态 HTML 快照（写到 tmp 并自动打开）\n"
+            "  eo-board                 全局 dashboard 终端摘要\n"
+            "  eo-board --html          全局 dashboard 静态快照（写到 tmp 并自动打开）\n"
             "  eo-board --html -o a.html 生成到指定路径\n"
-            "  eo-board --serve         本地只读服务（仅 127.0.0.1，默认 7333 端口）\n"
-            "  eo-board --all           多项目聚合总览（读 ${EO_HOME:-$HOME/.eo}/projects.json）\n"
-            "  eo-board --all --html    多项目一页看板静态快照\n"
-            "  eo-board --all --serve   多项目一页看板本地服务（3 秒热刷新）\n"
+            "  eo-board --serve         全局 dashboard 本地服务（仅 127.0.0.1，默认 7333 端口）\n"
             "  eo-board --project X     下钻指定项目（路径或注册名），无需 cd\n"
             "  eo-board --register      把当前项目注册进用户级注册表\n"
         ),
@@ -3386,18 +3396,17 @@ def build_arg_parser():
     )
     parser.add_argument("-h", "--help", action="help", default=argparse.SUPPRESS, help="显示本帮助信息并退出")
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--html", action="store_true", help="生成自包含静态 HTML 快照（可与 --all 组合）")
-    mode.add_argument("--serve", action="store_true", help="启动本地只读 HTTP 服务（仅绑 127.0.0.1，可与 --all 组合）")
+    mode.add_argument("--html", action="store_true", help="生成全局 dashboard 自包含静态 HTML 快照")
+    mode.add_argument("--serve", action="store_true", help="启动全局 dashboard 本地只读 HTTP 服务（仅绑 127.0.0.1）")
     mode.add_argument("--register", nargs="?", const=".", metavar="PATH",
                       help="把项目注册进用户级注册表 ${EO_HOME:-$HOME/.eo}/projects.json（缺省 PATH=当前目录）")
     mode.add_argument("--unregister", nargs="?", const=".", metavar="PATH",
                       help="从用户级注册表移除项目（缺省 PATH=当前目录）")
-    parser.add_argument("--all", action="store_true",
-                        help="多项目聚合总览（终端形态；配 --html/--serve 得多项目一页看板）")
+    parser.add_argument("--all", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--project", metavar="路径|注册名",
                         help="下钻指定项目（等价于在该目录运行，三形态通用），无需 cd")
     parser.add_argument("--scan", metavar="父目录",
-                        help="--all 模式下把含 .eo-project.json 的一层子目录临时并入聚合（不写注册表）")
+                        help="把含 .eo-project.json 的一层子目录临时并入全局 dashboard（不写注册表）")
     parser.add_argument("-o", "--output", metavar="PATH", help="--html 模式下指定输出文件路径（默认写到系统 tmp 目录）")
     parser.add_argument("--port", type=int, default=None, help="--serve 模式下监听端口（默认 7333）")
     parser.add_argument("--no-open", action="store_true", help="--html/--serve 模式下生成/启动后不自动打开浏览器")
@@ -3410,16 +3419,16 @@ def main():
     args = parser.parse_args()
     if args.output and not args.html:
         parser.error("-o/--output 仅在 --html 模式下有效")
-    if args.scan and not args.all:
-        parser.error("--scan 仅在 --all 模式下有效")
-    if args.project and args.all:
-        parser.error("--project 与 --all 互斥（--project 是单项目下钻）")
+    if args.all:
+        parser.error("--all 已退役：全局 dashboard 已是默认形态，去掉该旗标即可")
+    if args.scan and args.project:
+        parser.error("--scan 只用于默认全局 dashboard，不与 --project 混用")
     if args.port is not None and not args.serve:
         parser.error("--port 仅在 --serve 模式下有效")
     if args.no_open and not (args.html or args.serve):
         parser.error("--no-open 仅在 --html/--serve 模式下有效")
-    if (args.register is not None or args.unregister is not None) and (args.all or args.project or args.output):
-        parser.error("--register/--unregister 是注册表维护动作，不与 --all/--project/-o 混用")
+    if (args.register is not None or args.unregister is not None) and (args.project or args.scan or args.output):
+        parser.error("--register/--unregister 是注册表维护动作，不与 --project/--scan/-o 混用")
     if args.port is None:
         args.port = 7333
 
@@ -3427,10 +3436,10 @@ def main():
         sys.exit(cmd_register(args.register))
     if args.unregister is not None:
         sys.exit(cmd_unregister(args.unregister))
-    if args.all:
+    if not args.project:
         sys.exit(cmd_all(args))
 
-    start = resolve_project_token(args.project) if args.project else Path.cwd()
+    start = resolve_project_token(args.project)
     cfg_path = find_project_config(start)
     if cfg_path is None:
         print("❌ 未找到 .eo-project.json", file=sys.stderr)
