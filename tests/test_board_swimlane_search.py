@@ -296,12 +296,43 @@ globalThis.document = {
   _listenerCount(type) { return (docListeners[type] || []).length; },
 };
 globalThis.window = {};
-globalThis.setInterval = () => 0;
-globalThis.clearInterval = () => {};
-globalThis.fetch = undefined;
+// 可驱动的 fake timer/fetch：serve 热刷新必须走 startPolling → setInterval(refreshLoop) → fetch → buildBoard
+const intervals = [];
+globalThis.setInterval = (fn, ms) => {
+  const handle = { fn, ms, cleared: false };
+  intervals.push(handle);
+  return handle;
+};
+globalThis.clearInterval = (handle) => {
+  if (handle && typeof handle === 'object') handle.cleared = true;
+};
+let nextFetchText = null;
+const fetchLog = [];
+globalThis.fetch = (url, opts) => {
+  fetchLog.push({ url: String(url), opts: opts || {} });
+  const text = nextFetchText != null ? nextFetchText : JSON.stringify(payload.data);
+  return Promise.resolve({
+    ok: true,
+    text: () => Promise.resolve(text),
+  });
+};
 
 (0, eval)(projectJs);
 const api = window.EO_PROJECT;
+
+function activeInterval() {
+  return intervals.find((h) => !h.cleared) || null;
+}
+
+async function tickPolling(bodyText) {
+  const handle = activeInterval();
+  if (!handle) throw new Error('no active polling interval — mount with DATA.serve and fetch');
+  nextFetchText = bodyText;
+  handle.fn(); // 生产 refreshLoop：fetch(DATA_URL).then(...).then(buildBoard)
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
 
 function snapshot() {
   const located = (pBoard._cards || []).filter(c => c.classList.contains('located')).map(c => c.getAttribute('data-detail'));
@@ -342,90 +373,124 @@ function fireDocClick(target) {
 }
 
 const out = [];
-for (const step of scenarios) {
-  const op = step.op;
-  if (op === 'mount') {
-    api.mount({
-      root, data: JSON.parse(JSON.stringify(payload.data)),
-      dataUrl: step.dataUrl || '/data.json',
-      homeUrl: step.homeUrl || '',
-      projectKey: step.projectKey || 'demo~key',
-    });
-    out.push({ op, ...snapshot() });
-  } else if (op === 'unmount') {
-    api.unmount();
-    out.push({ op, keydownListeners: document._listenerCount('keydown'), clickListeners: document._listenerCount('click') });
-  } else if (op === 'key') {
-    fireKey(step.event || {});
-    out.push({ op, ...snapshot() });
-  } else if (op === 'focusInput') {
-    document.activeElement = pSearchInput;
-    out.push({ op, active: 'input' });
-  } else if (op === 'blur') {
-    const body = el('body');
-    body.tagName = 'BODY';
-    document.activeElement = body;
-    out.push({ op, active: 'body' });
-  } else if (op === 'typeSearch') {
-    pSearchInput.value = step.value || '';
-    pSearchInput.dispatch('input', { target: pSearchInput });
-    out.push({ op, value: pSearchInput.value, ...snapshot() });
-  } else if (op === 'clickBackdrop') {
-    pSearchBackdrop.dispatch('click', { target: pSearchBackdrop });
-    out.push({ op, ...snapshot() });
-  } else if (op === 'clickBlank') {
-    const blank = el('blank');
-    blank.parentNode = root;
-    fireDocClick(blank);
-    out.push({ op, ...snapshot() });
-  } else if (op === 'collapse') {
-    const col = (pBoard._cols || []).find(c => c.getAttribute('data-status') === step.status);
-    const toggle = col && col._toggles && col._toggles[0];
-    if (toggle) {
-      const listeners = toggle._listeners.click || [];
-      for (const fn of listeners) fn({ stopPropagation() {}, target: toggle });
+
+async function runScenarios() {
+  for (const step of scenarios) {
+    const op = step.op;
+    if (op === 'mount') {
+      const data = JSON.parse(JSON.stringify(payload.data));
+      if (step.serve) data.serve = true;
+      fetchLog.length = 0;
+      api.mount({
+        root, data,
+        dataUrl: step.dataUrl || '/data.json',
+        homeUrl: step.homeUrl || '',
+        projectKey: step.projectKey || 'demo~key',
+      });
+      out.push({
+        op, ...snapshot(),
+        polling: !!activeInterval(),
+        fetchCalls: fetchLog.length,
+      });
+    } else if (op === 'unmount') {
+      api.unmount();
+      out.push({
+        op,
+        keydownListeners: document._listenerCount('keydown'),
+        clickListeners: document._listenerCount('click'),
+        polling: !!activeInterval(),
+      });
+    } else if (op === 'key') {
+      fireKey(step.event || {});
+      out.push({ op, ...snapshot() });
+    } else if (op === 'focusInput') {
+      document.activeElement = pSearchInput;
+      out.push({ op, active: 'input' });
+    } else if (op === 'blur') {
+      const body = el('body');
+      body.tagName = 'BODY';
+      document.activeElement = body;
+      out.push({ op, active: 'body' });
+    } else if (op === 'typeSearch') {
+      pSearchInput.value = step.value || '';
+      pSearchInput.dispatch('input', { target: pSearchInput });
+      out.push({ op, value: pSearchInput.value, ...snapshot() });
+    } else if (op === 'clickBackdrop') {
+      pSearchBackdrop.dispatch('click', { target: pSearchBackdrop });
+      out.push({ op, ...snapshot() });
+    } else if (op === 'clickBlank') {
+      const blank = el('blank');
+      blank.parentNode = root;
+      fireDocClick(blank);
+      out.push({ op, ...snapshot() });
+    } else if (op === 'collapse') {
+      const col = (pBoard._cols || []).find(c => c.getAttribute('data-status') === step.status);
+      const toggle = col && col._toggles && col._toggles[0];
+      if (toggle) {
+        const listeners = toggle._listeners.click || [];
+        for (const fn of listeners) fn({ stopPropagation() {}, target: toggle });
+      }
+      out.push({ op, status: step.status, ...snapshot() });
+    } else if (op === 'searchCards') {
+      const hits = api.__test.searchCards(step.query);
+      out.push({
+        op, query: step.query,
+        keys: hits.map(h => h.key),
+        statuses: hits.map(h => h.status),
+        count: hits.length,
+        titles: hits.map(h => h.card.title),
+      });
+    } else if (op === 'rebuildBoard') {
+      // 折叠记忆跨 remount（localStorage），与 serve 热刷新路径分离
+      const key = step.projectKey || 'demo~key';
+      const collapsedBefore = snapshot().collapsed;
+      api.unmount();
+      api.mount({
+        root, data: JSON.parse(JSON.stringify(payload.data)),
+        dataUrl: '/data.json', homeUrl: '', projectKey: key,
+      });
+      out.push({ op, collapsedBefore, ...snapshot() });
+    } else if (op === 'hotRefreshPoll') {
+      // 生产路径：startPolling 注册的 refreshLoop → fetch(DATA_URL) → buildBoard → clearLocate
+      // 禁止 unmount/mount（那会由 unmount 自行清 locatedKey，测不到接线）
+      const before = snapshot();
+      const listenersBefore = {
+        keydown: document._listenerCount('keydown'),
+        click: document._listenerCount('click'),
+      };
+      const dataUrl = step.dataUrl || '/p/demo~key/data.json';
+      const next = JSON.parse(JSON.stringify(payload.data));
+      next.serve = true;
+      next.generated_at = step.stamp || '2026-08-12 12:00:01'; // 保证 hash 变化
+      const callsBefore = fetchLog.length;
+      await tickPolling(JSON.stringify(next));
+      const lastFetch = fetchLog[fetchLog.length - 1] || null;
+      out.push({
+        op,
+        beforeLocate: before.locating,
+        beforeLocated: before.located,
+        beforeCollapsed: before.collapsed,
+        ...snapshot(),
+        fetchCalls: fetchLog.length - callsBefore,
+        fetchUrl: lastFetch && lastFetch.url,
+        fetchCache: lastFetch && lastFetch.opts && lastFetch.opts.cache,
+        listenersBefore,
+        keydownListeners: document._listenerCount('keydown'),
+        clickListeners: document._listenerCount('click'),
+        stillPolling: !!activeInterval(),
+      });
+    } else {
+      out.push({ op, error: 'unknown' });
     }
-    out.push({ op, status: step.status, ...snapshot() });
-  } else if (op === 'searchCards') {
-    const hits = api.__test.searchCards(step.query);
-    out.push({
-      op, query: step.query,
-      keys: hits.map(h => h.key),
-      statuses: hits.map(h => h.status),
-      count: hits.length,
-      titles: hits.map(h => h.card.title),
-    });
-  } else if (op === 'rebuildBoard') {
-    // 模拟热刷新：DATA 不变时调用内部 buildBoard 的效果——通过再次 mount 同数据会清 locating
-    // 更贴近：unmount 不合适；直接再 mount 会重绑。使用第二份 mount 前先 unmount。
-    const key = step.projectKey || 'demo~key';
-    const collapsedBefore = snapshot().collapsed;
-    api.unmount();
-    api.mount({
-      root, data: JSON.parse(JSON.stringify(payload.data)),
-      dataUrl: '/data.json', homeUrl: '', projectKey: key,
-    });
-    out.push({ op, collapsedBefore, ...snapshot() });
-  } else if (op === 'hotRefreshBuildBoard') {
-    // serve 热刷新路径：buildBoard 在 refresh 时直接调用并 clearLocate
-    // 通过再次 type+locate 后强制 innerHTML 重建：调用 collapse 不会清 locate。
-    // 使用 __test 无法调 buildBoard；用 unmount/mount 会读 localStorage 保留折叠。
-    // 这里：locate 后直接触发与 refresh 相同的序列——重新 mount 同 projectKey（折叠保留，定位清）。
-    const key = step.projectKey || 'demo~key';
-    const before = snapshot();
-    api.unmount();
-    api.mount({
-      root, data: JSON.parse(JSON.stringify(payload.data)),
-      dataUrl: step.dataUrl || '/p/demo~key/data.json',
-      homeUrl: '', projectKey: key,
-    });
-    out.push({ op, beforeLocate: before.locating, beforeLocated: before.located, ...snapshot() });
-  } else {
-    out.push({ op, error: 'unknown' });
   }
 }
 
-process.stdout.write(JSON.stringify(out));
+runScenarios().then(() => {
+  process.stdout.write(JSON.stringify(out));
+}).catch((err) => {
+  process.stderr.write(String(err && err.stack || err));
+  process.exit(1);
+});
 """
 
 
@@ -638,22 +703,42 @@ class SwimlaneSearchInteractionTests(unittest.TestCase):
         self.assertEqual(located["located"], ["bl:bl1"])
 
     def test_hot_refresh_clears_locate_state_but_keeps_collapse(self):
+        """serve 热刷新必须走 setInterval(refreshLoop)→fetch→buildBoard，不能 unmount/mount。"""
         steps = self.run_scenarios([
-            {"op": "mount", "projectKey": "demo~a"},
+            {
+                "op": "mount",
+                "projectKey": "demo~a",
+                "serve": True,
+                "dataUrl": "/p/demo~a/data.json",
+            },
             {"op": "collapse", "status": "draft"},
+            {"op": "blur"},
             {"op": "key", "event": {"key": "/"}},
             {"op": "typeSearch", "value": "#21"},
             {"op": "key", "event": {"key": "Enter"}},
-            {"op": "hotRefreshBuildBoard", "projectKey": "demo~a"},
+            {
+                "op": "hotRefreshPoll",
+                "dataUrl": "/p/demo~a/data.json",
+                "stamp": "2026-08-12 12:00:01",
+            },
         ])
-        before = steps[4]
+        mounted = steps[0]
+        self.assertTrue(mounted["polling"], "DATA.serve 时应注册 refreshLoop 定时器")
+        before = steps[5]
         self.assertTrue(before["locating"])
         self.assertIn("draft", before["collapsed"])
-        after = steps[5]
+        after = steps[6]
         self.assertTrue(after["beforeLocate"])
         self.assertFalse(after["locating"])
         self.assertEqual(after["located"], [])
         self.assertIn("draft", after["collapsed"])
+        # 接线证据：真实 fetch 到 DATA_URL，且未拆掉 document 监听 / 定时器
+        self.assertEqual(after["fetchCalls"], 1)
+        self.assertEqual(after["fetchUrl"], "/p/demo~a/data.json")
+        self.assertEqual(after["fetchCache"], "no-store")
+        self.assertEqual(after["keydownListeners"], after["listenersBefore"]["keydown"])
+        self.assertGreater(after["keydownListeners"], 0)
+        self.assertTrue(after["stillPolling"])
 
 
 class SwimlaneSearchLogicAndSurfaceTests(unittest.TestCase):
@@ -663,7 +748,7 @@ class SwimlaneSearchLogicAndSurfaceTests(unittest.TestCase):
         self.board = load_module(f"eo_board_surface_{id(self)}", BOARD_PATH)
 
     def test_project_js_exposes_search_and_collapse_surface(self):
-        js = self.board.PROJECT_JS
+        js = self.board.PROJECT_JS.replace("\r\n", "\n")
         for needle in (
             "function openSearch",
             "function closeSearch",
@@ -675,8 +760,15 @@ class SwimlaneSearchLogicAndSurfaceTests(unittest.TestCase):
             "document.addEventListener('keydown', keyHandler)",
             "document.removeEventListener('keydown', keyHandler)",
             "buildBoard() {\n  clearLocate()",
+            "function startPolling()",
+            "timer = setInterval(refreshLoop, 3000)",
+            "buildHeader();\n      buildBoard();",
         ):
-            self.assertIn(needle, js.replace("\r\n", "\n"))
+            self.assertIn(needle, js)
+        # 生产 refreshLoop 必须把 fetch 结果接到 buildBoard（字符串锁 + 交互测双保险）
+        refresh = js.split("function refreshLoop()")[1].split("timer = setInterval")[0]
+        self.assertIn("fetch(DATA_URL", refresh)
+        self.assertIn("buildBoard()", refresh)
         markup = self.board.PROJECT_MARKUP
         self.assertIn('id="p-search-backdrop"', markup)
         self.assertIn('id="p-search-input"', markup)
