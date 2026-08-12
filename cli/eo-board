@@ -605,10 +605,15 @@ def derive_stage_progress(gates, status=None):
     if rv_active:
         stage = "review"
         rounds = int(rv.get("rounds_approx") or 1)
+        parts = []
         if rv_open_p0 > 0:
-            label = f"review P0×{rv_open_p0}"
-        elif rv_open_p1 > 0:
-            label = f"review P1×{rv_open_p1}"
+            parts.append(f"P0×{rv_open_p0}")
+        if rv_open_p1 > 0:
+            parts.append(f"P1×{rv_open_p1}")
+        if rv_open_p2 > 0:
+            parts.append(f"P2×{rv_open_p2}")
+        if parts:
+            label = "review " + " ".join(parts)
         else:
             label = f"review ≈{rounds} 轮"
     elif ts_active:
@@ -1071,12 +1076,16 @@ PROJECT_CSS = r"""
   body {
     margin: 0; background: var(--bg); color: var(--ink);
     font-family: var(--sans); font-size: 14.5px; line-height: 1.55;
+    overflow: hidden;
   }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  .wrap { max-width: min(94vw, 1800px); margin: 0 auto; padding: 0 24px 64px; }
+  .wrap {
+    max-width: min(94vw, 1800px); height: 100vh; margin: 0 auto; padding: 0 24px 14px;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
 
   .topbar { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; padding: 20px 0 0; }
   .wordmark { font-family: var(--mono); font-size: 18.5px; font-weight: 700; letter-spacing: -0.02em; }
@@ -1134,10 +1143,11 @@ PROJECT_CSS = r"""
     color: var(--warn); border-radius: 8px; padding: 10px 14px; font-size: 13px; line-height: 1.7;
   }
 
-  .board-scroll { overflow-x: auto; margin-top: 20px; padding-bottom: 8px; }
-  .board { display: flex; gap: 14px; min-width: max-content; align-items: flex-start; }
-  .col { width: 268px; flex: none; }
+  .board-scroll { flex: 1 1 auto; min-height: 0; overflow-x: auto; overflow-y: hidden; margin-top: 20px; padding-bottom: 8px; }
+  .board { display: flex; gap: 14px; min-width: max-content; height: 100%; align-items: stretch; }
+  .col { width: 268px; height: 100%; flex: none; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
   .col-head {
+    position: sticky; top: 0; z-index: 2; background: var(--bg);
     display: flex; align-items: baseline; gap: 8px; padding: 4px 6px 8px;
     border-bottom: 2px solid var(--col-color, var(--line)); margin-bottom: 10px;
   }
@@ -1190,6 +1200,7 @@ PROJECT_CSS = r"""
   .bar > i { display: block; height: 100%; border-radius: 2px; background: var(--bar-color, var(--st-implementing)); }
   .prog-num { font-family: var(--mono); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; width: 68px; flex: none; text-align: right; }
 
+  .card-stage-line { margin-top: 9px; }
   .card-foot { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; align-items: center; }
   .tag {
     display: inline-flex; align-items: center; gap: 4px;
@@ -1377,7 +1388,13 @@ PROJECT_CSS = r"""
   .oq-list li { font-size: 12.5px; color: var(--muted); line-height: 1.55; padding-left: 14px; position: relative; }
   .oq-list li::before { content: "?"; position: absolute; left: 0; color: var(--st-confirmed); font-family: var(--mono); font-weight: 700; font-size: 11.5px; }
 
-  .prov { margin-top: 36px; }
+  .prov { flex: none; margin-top: 6px; border-top: 1px solid var(--line); }
+  .prov > summary {
+    width: fit-content; padding: 7px 2px 2px; color: var(--muted); font-size: 12px;
+    font-family: var(--mono); cursor: pointer; user-select: none;
+  }
+  .prov > summary:hover { color: var(--accent); }
+  .prov-body { max-height: min(38vh, 420px); overflow: auto; padding: 10px 2px 2px; }
   .prov h2 { font-size: 16.5px; letter-spacing: -0.01em; margin: 0 0 4px; }
   .prov .lede { color: var(--muted); font-size: 13.5px; margin: 0 0 16px; max-width: 62ch; }
   .prov-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
@@ -1403,10 +1420,12 @@ PROJECT_MARKUP = r"""<div class="wrap">
 
   <div class="board-scroll"><main class="board" id="p-board"></main></div>
 
-  <section class="prov">
-    <h2>这块板的每一格数据从哪来</h2>
-    <p class="lede">打开右上角「标注数据来源」可逐元素查看来源标注；点任意卡片看详情抽屉。数据分三档：直接可读、现场推导、拿不到（需要新约定）。</p>
-    <div class="prov-grid">
+  <details class="prov">
+    <summary>数据来源说明</summary>
+    <div class="prov-body">
+      <h2>这块板的每一格数据从哪来</h2>
+      <p class="lede">打开右上角「标注数据来源」可逐元素查看来源标注；点任意卡片看详情抽屉。数据分三档：直接可读、现场推导、拿不到（需要新约定）。</p>
+      <div class="prov-grid">
       <div class="prov-card">
         <h3><span class="badge a">直接可读</span>frontmatter / .eo-project.json 一行解析</h3>
         <ul>
@@ -1437,8 +1456,9 @@ PROJECT_MARKUP = r"""<div class="wrap">
           <li>review 问题的核销状态——review.md 只有产出时快照</li>
         </ul>
       </div>
+      </div>
     </div>
-  </section>
+  </details>
 </div>
 
 <div class="backdrop" id="p-backdrop"></div>
@@ -1454,7 +1474,7 @@ PROJECT_MARKUP = r"""<div class="wrap">
 </aside>"""
 
 PROJECT_JS = r"""window.EO_PROJECT = (function () {
-var DATA_URL = '/data.json', HOME_URL = '', timer = null, escHandler = null;
+var DATA_URL = '/data.json', HOME_URL = '', PROJECT_KEY = '', timer = null, escHandler = null;
 var STATUS = {
   backlog:      { zh: '待办池',  cssVar: '--st-backlog' },
   draft:        { zh: '草稿',    cssVar: '--st-draft' },
@@ -2004,13 +2024,14 @@ function changeCard(d) {
     + '<span class="tier ' + esc(d.tier) + '">' + esc(d.tier) + '</span>'
     + '<span class="type">' + esc(d.type) + '</span><span class="src">frontmatter</span></div>'
     + '<div class="card-title">' + mdInline(d.title) + '</div>'
-    + (d.summary ? '<div class="card-summary">' + esc(d.summary) + '</div>' : '')
+    + (d.summary ? '<div class="card-summary">' + mdInline(d.summary) + '</div>' : '')
     + '<div class="slug">' + esc(d.dirname || d.id) + '/</div>'
     + '<div class="progress">'
     + '<div class="prog-row" style="--bar-color: var(--st-reviewed)"><span class="prog-lbl">AC</span><span class="bar"><i style="width:' + acPct + '%"></i></span><span class="prog-num">' + acDone + '/' + acTotal + '</span></div>'
     + todoHtml
     + '<span class="src">正文 checkbox 现场计数</span>'
     + '</div>'
+    + stageHtml
     + '<div class="card-foot">' + foot + '<span class="date">' + esc(d.last_touch || '') + '</span></div>'
     + '</article>';
 }
@@ -2090,9 +2111,13 @@ function buildBoard() {
       ? DATA.backlog
       : DATA.changes.filter(function (c) { return c.status === status; });
     var st = STATUS[status];
-    html += '<section class="col" style="--col-color: var(' + st.cssVar + ')">'
+    html += '<section class="col' + (collapsedColumns[status] ? ' collapsed' : '') + '" data-status="' + status
+      + '" style="--col-color: var(' + st.cssVar + ')">'
       + '<div class="col-head"><span class="dot"></span><span class="name">' + st.zh + '</span>'
-      + '<span class="en">' + status + '</span><span class="count">' + col.length + '</span></div><div class="cards">';
+      + '<span class="en">' + status + '</span><span class="count">' + col.length + '</span>'
+      + '<button class="col-toggle" type="button" aria-label="' + (collapsedColumns[status] ? '展开' : '折叠') + st.zh
+      + '列" aria-expanded="' + (collapsedColumns[status] ? 'false' : 'true') + '">'
+      + (collapsedColumns[status] ? '◉' : '◌') + '</button></div><div class="cards">';
     if (!col.length) {
       html += '<div class="empty-hint">（无）</div>';
     }
@@ -2115,6 +2140,18 @@ function buildBoard() {
   });
   root.querySelector('#p-board').innerHTML = html;
   bindCardEvents();
+  root.querySelectorAll('.col-toggle').forEach(function (button) {
+    button.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var col = button.closest('.col');
+      setColumnCollapsed(col.getAttribute('data-status'), !col.classList.contains('collapsed'));
+    });
+  });
+  root.querySelectorAll('.col.collapsed').forEach(function (col) {
+    col.addEventListener('click', function () {
+      setColumnCollapsed(col.getAttribute('data-status'), false);
+    });
+  });
 }
 
 var lastFocus = null;
@@ -2218,6 +2255,9 @@ function mount(opts) {
   DATA = opts.data;
   DATA_URL = opts.dataUrl || '/data.json';
   HOME_URL = opts.homeUrl || '';
+  PROJECT_KEY = opts.projectKey || DATA_URL.match(/\/p\/([^/]+)/)?.[1]
+    || (DATA.project.name + '~' + DATA.project.project_root);
+  loadCollapsedColumns();
   root.innerHTML = document.getElementById('eo-project-markup').textContent;
   drawer = root.querySelector('#p-drawer');
   backdrop = root.querySelector('#p-backdrop');
@@ -2235,7 +2275,7 @@ function unmount() {
   if (escHandler) { document.removeEventListener('keydown', escHandler); escHandler = null; }
   document.documentElement.classList.remove('show-src');
   if (root) root.innerHTML = '';
-  root = null; drawer = null; backdrop = null; DATA = null;
+  root = null; drawer = null; backdrop = null; DATA = null; PROJECT_KEY = '';
   CARD_INDEX = {}; openDetailId = null; lastFocus = null;
 }
 
