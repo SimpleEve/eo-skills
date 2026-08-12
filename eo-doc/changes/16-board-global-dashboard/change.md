@@ -3,14 +3,14 @@ id: board-global-dashboard
 seq: 16
 title: board 收敛为全局 dashboard
 summary: 移除单项目默认入口，三形态默认全局 dashboard；泳道页项目 chip 改下拉切换
-status: implementing
+status: archived
 tier: full
 type: enhance
 base_commit: 4c89b569658f043c7b144be64e27ae9543d92b89
 plan_revision: 1
 fix_rounds: 0
 fix_consumed: []
-commits: []
+commits: ["8e2e5c1", "b880f4e", "5679e2e", "1a508da", "98de445", "b7ec6ed", "98a11cc", "917ef5f"]
 issue: ~
 pr: ~
 created: 2026-08-12

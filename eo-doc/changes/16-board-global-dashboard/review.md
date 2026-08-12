@@ -6,7 +6,7 @@ created: 2026-08-12
 updated: 2026-08-12
 status: active
 summary: >
-  首轮审查发现 --project 指向同仓 linked worktree 时 html/serve 不能直达、1 处范围外卡面行为新增及 1 处菜单文档错误，共 3 条 P1；测试证据需复验。
+  第 4 轮核销 P1-4：917ef5f 的真实 CLI 子进程用例已覆盖 linked-worktree serve 入口、首开 URL 与数据路由；台账清零，Review 覆盖当前 H。
 ---
 
 # board 收敛为全局 dashboard 代码审查报告
@@ -26,9 +26,10 @@ summary: >
 
 | ID | 级别 | 摘要 | 位置 | 状态 | 根因 | 首见/最近轮 | 基线/修复 commit |
 |----|------|------|------|------|------|-------------|------------------|
-| P1-1 | P1 | `--project` 指向同仓 linked worktree 时 html/serve 不能直达该路径 | `cli/eo-board:2514`; `cli/eo-board:3227`; `cli/eo-board:3354` | fixed | implementation | 1/1 | `5679e2e` / `98de445` |
-| P1-2 | P1 | Batch 2 夹带未映射到 AC/TODO 的 backlog 摘要 Markdown 行为变化 | `cli/eo-board:2022` | fixed | implementation | 1/1 | `5679e2e` / `98de445` |
-| P1-3 | P1 | README 仍按旧七项菜单编号指引同步与 watch | `README.md:189` | fixed | implementation | 1/1 | `5679e2e` / `98de445` |
+| P1-1 | P1 | `--project` 指向同仓 linked worktree 时 html/serve 不能直达该路径 | `cli/eo-board:2514`; `cli/eo-board:3227`; `cli/eo-board:3354` | verified | implementation | 1/2 | `5679e2e` / `98de445` |
+| P1-2 | P1 | Batch 2 夹带未映射到 AC/TODO 的 backlog 摘要 Markdown 行为变化 | `cli/eo-board:2022` | verified | implementation | 1/2 | `5679e2e` / `98de445` |
+| P1-3 | P1 | README 仍按旧七项菜单编号指引同步与 watch | `README.md:189` | verified | implementation | 1/2 | `5679e2e` / `98de445` |
+| P1-4 | P1 | linked-worktree serve 回归用例绕过真实 CLI 入口与首开 URL 接线 | `tests/test_eo_board_cache.py:2094` | verified | test-asset | 3/4 | `98a11cc` / `917ef5f` |
 
 ## 审查总结（首轮快照）
 
@@ -112,14 +113,42 @@ summary: >
 - 依据：Test 虽在当前 revision 的 H 上完整通过，但没有覆盖同仓 linked-worktree 的显式路径组合，静态审查已发现该组合上的实质 AC-2 回归，故不能以「覆盖 H」免除修复后的复验。
 - 本轮结论：有保留通过（P1 3 条）；`status` 保持 `implementing`。
 
+## 第 2 轮记录（revision 1 · 2026-08-12）
+
+- 审查基线：`revision 1 @ 98de44534c02b1918f2607a459c3305e8d3c7555`
+- 核销：P1-1 verified（修复 commit `98de445`：显式目标经 `explicit_dir` 进入 html initial route、serve route map、首页与 data.json；默认聚合不传该参数，原有 repo identity 去重口径未变）；P1-2 verified（修复 commit `98de445`：backlog 摘要恢复 `esc` 纯文本）；P1-3 verified（修复 commit `98de445`：README 菜单编号更新为 watch 4 / sync 3，与 `cli/eo-helper` 一致）
+- reopen：无
+- 新增：无
+- 测试证据处置：复验
+- 既有通过 Test：第 1 轮 @ `5679e2e58a4e831ea5802487964f29785e9dc823`；当前交付基线：`98de44534c02b1918f2607a459c3305e8d3c7555`
+- 受影响 AC / 测试：AC-2；linked-worktree 路径的 `--project --html` initial route、`--project --serve` 首开与 `/p/<key>/data.json`，默认 `build_all_data` 同仓去重回归；backlog 摘要纯文本与 README↔helper 菜单映射静态断言
+- 依据：`T=5679e2e` 是 `H=98de445` 的祖先且 Test 台账无阻塞项，但 `T..H` 改动了 AC-2 的 html/serve 外部路径，而既有 Test 明确未覆盖 linked-worktree 组合，H 上也没有新增测试资产或复验记录，故旧证据不可沿用。
+- 本轮结论：通过（未决 P0 0 条，P1 0 条，P2 0 条）；`status` 由 `implementing` 流转为 `reviewed`。
+
+## 第 3 轮记录（revision 1 · 2026-08-12）
+
+- 审查基线：`revision 1 @ 98a11cc40ba7a8c7ee9274d2ab5eada065d43826`
+- 核销：无（P1-1～P1-3 保持 verified）
+- reopen：无
+- 新增：[P1-4] linked-worktree serve 回归用例绕过真实 CLI 入口与首开 URL 接线 — `tests/test_eo_board_cache.py:2094`（根因：test-asset）
+- 增量审计：`98a11cc` 仅新增 `tests/test_eo_board_cache.py`、`tests/test_eo_helper.py` 测试资产（112 行新增、无删除），无业务代码或其他交付物夹带。linked-worktree html 用例走真实 CLI 并核对 initial route/目标 row；默认聚合用例区分普通同仓去重与显式目标；backlog 用例同时锁定 `esc`/排除 `mdInline`；README 用例与 helper 完整菜单映射共同约束编号，这些断言均真实有效，未发现恒绿、弱化、过拟合特判或 flaky 模式。serve 用例存在下述保真缺口。
+- [P1-4] **描述**：`test_project_serve_linked_worktree_route_and_data_are_reachable` 没有执行 `eo-board --project <linked> --serve`，而是在测试内直接构造已带 `cwd_dir`/`explicit_dir` 的 `AllBoardRequestHandler`；因此没有约束生产入口 `main → cmd_all_serve(args, cfg) → handler.explicit_dir`，也没有断言 `cmd_all_serve` 生成的首开 URL 是 linked route。删除 `cli/eo-board:3556` 的 `cfg=cfg`、`cli/eo-board:3394-3398` 的显式目标接线或 `cli/eo-board:3405-3406` 的首开路由时，该测试仍可保持通过，不能真实防住 P1-1 的 serve 原始回归点。**建议**：测试真实 CLI 接线（可对子进程启动 serve 后请求其启动 URL，或在不复制生产接线的前提下替换 server/Timer 并直接调用入口），同时断言首开 URL、`/p/<linked_key>`、`/p/<linked_key>/data.json` 与首页数据。
+- 测试证据处置：不适用（Test 已覆盖 H）
+- 本轮结论：有保留通过（未决 P0 0 条，P1 1 条，P2 0 条）；按控制包不改 `change.md`，其 `status` 暂保持 `reviewed`，但 P1-4 核销前不得归档。
+
+## 第 4 轮记录（revision 1 · 2026-08-12）
+
+- 审查基线：`revision 1 @ 917ef5f362ed53499eb68a784befb75954686bd5`
+- 核销：P1-4 verified（修复 commit `917ef5f`：用例以子进程真实执行 `eo-board --project <linked> --serve`，从 CLI banner 断言首开 URL 为 `/p/<linked_key>`，再请求该项目页、`/p/<linked_key>/data.json` 与首页 `/data.json`；由此覆盖 `main → cmd_all_serve(args, cfg) → explicit_dir` 接线。若删除 `cli/eo-board:3556` 的 `cfg=cfg`，banner 将退化为聚合根 URL并使首开 URL 断言失败；若破坏 `explicit_dir` 注入，linked route/data/home 断言将失败）
+- reopen：无
+- 新增：无
+- 增量审计：`917ef5f` 仅修改 `tests/test_eo_board_cache.py`，无业务代码或其他交付物夹带；用例不再手工构造 handler，未发现恒绿、弱化、过拟合特判或新增 flaky 模式。
+- 测试证据处置：不适用（Test 已覆盖 H）
+- 本轮结论：通过（未决 P0 0 条，P1 0 条，P2 0 条）；`status` 保持 `reviewed`。
+
 ## 速报
 
-结论：有保留通过（P1 3 条）［第 1 轮 · revision 1 · 基线 `5679e2e`］
-测试证据处置：复验
-既有通过 Test：第 1 轮 @ `5679e2e`；当前交付基线：`5679e2e`；受影响 AC / 测试：AC-2，linked-worktree 路径的 html/serve 直达资产，及 TODO-6 的 README↔helper 菜单映射静态校验；依据：当前 H 的 Test 未覆盖 linked-worktree 显式路径，且审查已发现实质回归。
-P1（应修）：
-1. `--project` 指向同仓 linked worktree 时 html/serve 不能直达该路径 — `cli/eo-board:2514`
-2. Batch 2 夹带未映射到 AC/TODO 的 backlog 摘要 Markdown 行为变化 — `cli/eo-board:2022`
-3. README 仍按旧七项菜单编号指引同步与 watch — `README.md:189`
-下一步：3 条 implementation P1 回 `/eo-implement`；修复后由原 reviewer 增量复审，再由原 tester `/eo-test` 复验受影响 AC/资产。
+结论：通过［第 4 轮 · revision 1 · 基线 `917ef5f`］
+测试证据处置：不适用（Test 已覆盖 H）
+下一步：当前 revision/H 的 Test 与 Review 证据均已闭合，可进入 `/eo-archive board-global-dashboard`。
 （详细分析见 `eo-doc/changes/16-board-global-dashboard/review.md`）

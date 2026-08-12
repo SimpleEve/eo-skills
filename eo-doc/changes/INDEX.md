@@ -17,5 +17,5 @@
 | 13 | [loop-risk-triggered-verification](13-loop-risk-triggered-verification/change.md) | full | enhance | archived | 2026-08-02 | eo-loop 仅在出现客观风险信号时升级核查 |
 | 14 | [board-worktree-split](14-board-worktree-split/change.md) | light | enhance | archived | 2026-08-04 | 多 worktree 并行同一 change 且实质分叉时 board 各出一卡，一致副本仍合并；卡面 branch/worktree 分行显示 |
 | 15 | [board-fork-collapse](15-board-fork-collapse/change.md) | light | enhance | archived | 2026-08-12 | 同 change 多 worktree 副本只出最新一卡，分叉副本收进徽标可下钻 |
-| 16 | [board-global-dashboard](16-board-global-dashboard/change.md) | full | enhance | confirmed | 2026-08-12 | 移除单项目默认入口，三形态默认全局 dashboard；泳道页项目 chip 改下拉切换 |
+| 16 | [board-global-dashboard](16-board-global-dashboard/change.md) | full | enhance | archived | 2026-08-12 | 移除单项目默认入口，三形态默认全局 dashboard；泳道页项目 chip 改下拉切换 |
 | 17 | [board-swimlane-search](17-board-swimlane-search/change.md) | full | feature | confirmed | 2026-08-12 | 泳道页新增 Cmd+K 定位搜索（#seq 直跳、全文命中片段）、列内独立滚动、列折叠隐藏并持久记忆 |

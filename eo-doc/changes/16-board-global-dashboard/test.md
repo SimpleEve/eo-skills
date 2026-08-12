@@ -6,8 +6,8 @@ created: 2026-08-12
 updated: 2026-08-12
 status: active
 summary: >
-  首轮完整验证通过：默认三形态全局 dashboard、--all 退役、项目下拉 html/serve 跳转、
-  cwd 并入与空态等既有资产适配+补缺全绿；交付基线 5679e2e。
+  第 2 轮定向复验通过（Review 第 2 轮 @ 98de445）：linked-worktree --project html/serve
+  直达、默认同仓去重、backlog 纯文本、README↔helper 菜单映射全绿；交付基线 98a11cc。
 ---
 
 # board 收敛为全局 dashboard 测试报告
@@ -99,13 +99,33 @@ summary: >
 - 新增：无
 - 本轮结论：通过（失败 0 项）
 
+## 第 2 轮记录（revision 1 · 2026-08-12）
+
+- 测试基线：`98a11cc40ba7a8c7ee9274d2ab5eada065d43826`
+- 验证方式：定向复验
+- 触发来源：Review 第 2 轮 @ `98de445`
+- 来源 Test：第 1 轮 @ `5679e2e`；当前交付基线：`98a11cc40ba7a8c7ee9274d2ab5eada065d43826`
+- 测试资产提交：`98a11cc`（`[board-global-dashboard] 复验补缺：linked-worktree 直达与菜单映射`；触及 `tests/test_eo_board_cache.py`、`tests/test_eo_helper.py`）
+- 重跑范围：
+  - AC-2：`test_project_html_linked_worktree_sets_initial_route_for_explicit_path`、`test_project_serve_linked_worktree_route_and_data_are_reachable`、`test_project_by_name_and_by_path_from_anywhere`、`test_project_html_opens_swimlane_via_initial_route_with_home_link`、`test_project_terminal_still_directs_to_single_project_summary`
+  - 默认同仓去重：`test_default_aggregate_still_dedups_same_repo_without_explicit_dir`、`test_scan_dedups_same_repo_worktrees`
+  - backlog 纯文本：`test_backlog_note_renders_as_escaped_plain_text_not_mdinline`
+  - README↔helper：`HelperMenuMapTests`（含 `test_readme_faq_menu_numbers_match_helper_map`）
+  - 依赖冒烟：`BoardGlobalDashboardTests` 其余用例（默认入口/下拉数据层）
+- 沿用范围：第 1 轮已通过且本轮 I 未弄脏的 AC-1/AC-3/AC-4/AC-5/AC-6/AC-7 证据（含 auto-heavy 三形态与下拉 html/serve、AC-7 计时）；`5679e2e` 为 `98a11cc` 祖先
+- 范围校验：触发影响集 I = {AC-2 linked-worktree html/serve、默认聚合同仓去重、backlog 纯文本、README↔helper} ⊆ 重跑 R；来源证据 E = (R ∩ E) ⊎ 沿用 U（U 为 AC-1/3/4/5/6/7 与未受影响聚合/缓存用例）；未升级完整复验理由：I 可圈定、无 auto-heavy 弄脏、共享路径变更仅为 `explicit_dir` 可选参数默认 None
+- 核销：无（本轮无 FAIL 台账项；Review P1-1..3 已由 implement 标 verified，本轮复测通过）
+- reopen：无
+- 新增：无
+- 本轮结论：通过（失败 0 项）
+
 ## 速报
 
-结论：通过（失败 0 项）［第 1 轮 · revision 1 · 基线 `5679e2e`］
-验证方式：首轮完整
-触发来源：首轮
-来源 Test：无；当前交付基线：`5679e2e`
-测试资产提交：`5679e2e`
-重跑范围：AC-1..AC-7 + board/helper 全量相关用例 + auto-heavy；沿用范围：无
-范围校验：首轮完整（全部证据均在重跑范围）
-下一步：status 仍为 implementing，且最新 Review 尚未覆盖基线 `5679e2e`（含本轮测试资产）→ 回原 reviewer 增量审查 / 进入 `/eo-review`
+结论：通过（失败 0 项）［第 2 轮 · revision 1 · 基线 `98a11cc`］
+验证方式：定向复验
+触发来源：Review 第 2 轮 @ `98de445`
+来源 Test：第 1 轮 @ `5679e2e`；当前交付基线：`98a11cc`
+测试资产提交：`98a11cc`
+重跑范围：AC-2 linked-worktree html/serve + 默认同仓去重 + backlog esc + README↔helper + 相关依赖冒烟；沿用范围：第 1 轮 AC-1/3/4/5/6/7（含 auto-heavy）
+范围校验：I ⊆ R；来源证据 E = (R ∩ E) ⊎ 沿用 U；`5679e2e` 为 `98a11cc` 祖先
+下一步：status=reviewed，但最新 Review 基线为 `98de445`、未覆盖本轮测试资产 `98a11cc` → 回原 reviewer 增量审查覆盖新 H 后可 `/eo-archive`
