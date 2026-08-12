@@ -10,7 +10,7 @@ source: cli/eo-board
 summary: >
   零第三方依赖的单文件只读看板（约 3500 行）：默认全局 dashboard（终端聚合流 / --html 双视图首页快照 / --serve 轮询服务），`--all` 已退役；
   消费 eo_lib 解析层，board 专属逻辑为门禁判定、stage_progress、journal/frontmatter 投影、详情五 tab 与 HTTP 服务（含每项目单飞缓存）；
-  `--project` 为显式下钻（终端单项目摘要；html 内嵌 + initial_route 直落；serve 首开 /p/<key>），泳道页顶栏项目 chip 是可切换项目的下拉；
+  `--project` 为显式下钻（终端单项目摘要；html 内嵌 + initial_route 直落；serve 首开 /p/<key>），泳道页顶栏项目切换器是自绘 button+listbox 下拉（无原生 select，键盘可达）；
   泳道页版面定格为列内滚动（sticky 列头），列可折叠为窄条并按项目记忆，Cmd/Ctrl+K 定位搜索面板支持 `#seq` 直跳与全文片段命中。
 conclusions:
   - 宪法四条：只读铁律（绝不写项目文件）、不做清单（无 SSE/无观测/无写操作/零第三方依赖）、性能靠缓存、GitHub 实时状态仅可选旗标
@@ -24,7 +24,8 @@ conclusions:
   - route_key = `<URL 编码显示名>~<项目根 realpath 的 sha256 前 8 位>`；显示名不承担唯一性，路由映射逐请求重建
   - 泳道版面定格：`.wrap` 100vh flex 列 + `.board-scroll` 只吃横向，`.col` 列内纵向滚动（sticky `.col-head`，列尾 col-note 随内容）；`.prov` 数据来源区收进 `<details>` 默认收起，页面整体不滚
   - 列折叠：`setColumnCollapsed` 切 `.collapsed` 窄条（竖排列名+计数），localStorage 键 `eo-board:collapsed:<PROJECT_KEY>`；PROJECT_KEY 取 mount opts.projectKey（下钻 enterProject 传 `row.route_key`），回退 DATA_URL/data 指纹
-  - 定位搜索：Cmd/Ctrl+K 与 `/`（输入态豁免）唤起面板，Esc 按「搜索→详情抽屉→定位态」逐层消费；`searchCards` 做 `#seq` 精确与 title/summary/full_text（backlog 用 body）不区分大小写子串匹配，按 STATUS_ORDER 分组出片段；选中 `locateSearchResult` 关面板、折叠列自动展开并持久、scrollIntoView + `located` 脉冲、他卡 dim，Esc/点空白 `clearLocate`
+  - 定位搜索：Cmd/Ctrl+K 与 `/`（输入态豁免）唤起面板，Esc 按「搜索→切换器→详情抽屉→定位态」逐层消费；`searchCards` 做 `#seq` 精确与 title/summary/full_text（backlog 用 body）不区分大小写子串匹配，按 STATUS_ORDER 分组出片段；选中 `locateSearchResult` 关面板、折叠列自动展开并持久、scrollIntoView + `located` 脉冲、他卡 dim，Esc/点空白 `clearLocate`
+  - 项目切换器自绘：`buildHeader` 多项目时渲染 `.project-switch`（trigger `role=combobox` + 选项 `role=listbox/option`，href 存 `data-href`），`bindProjectSwitcher` 绑定开合与 `navigateProject` 跳转；↑/↓ `highlightProjectOption` 环形移动、Enter 选中、Esc/点外收起；单项目退化为静态 chip；选项名 `esc` 转义
   - `buildBoard` 热刷新重建前显式 `clearLocate()`，定位态不留半残；mount 的全局监听为 `keyHandler`+`clickHandler`（取代旧 escHandler），unmount 全量解绑并复位全部模块态
 ---
 
@@ -86,7 +87,7 @@ eo-skills 的默认呈现层。数据全部派生自 change.md frontmatter、质
 | `locateSearchResult(index)` / `clearLocate` | 关面板 → 折叠列自动展开（并持久）→ 目标卡 `located` + board `locating`（他卡降透明）+ scrollIntoView；`clearLocate` 幂等清除 |
 | `isTextInput` | `/` 唤起豁免：input/textarea/select/contentEditable 聚焦时不触发 |
 
-- 键盘交互集中在 mount 的 `keyHandler`：面板开时 ↑/↓ 移动、Enter 定位、Esc 关面板；面板关时 Esc 依次消费详情抽屉、定位态；Cmd/Ctrl+K 与 `/` 唤起。`clickHandler` 负责点面板外关面板、点非卡空白 `clearLocate`
+- 键盘交互集中在 mount 的 `keyHandler`：搜索面板开时 ↑/↓ 移动、Enter 定位；切换器开时 ↑/↓ `highlightProjectOption` 环形高亮、Enter `navigateProject` 跳转；Esc 按「搜索面板 → 项目切换器 → 详情抽屉 → 定位态」逐层消费；Cmd/Ctrl+K 与 `/` 唤起。`clickHandler` 负责点切换器外关切换器、点非卡空白 `clearLocate`
 - mount 新增 `opts.projectKey`（下钻 `enterProject` 传 `row.route_key`；单项目直开时回退 DATA_URL 的 `/p/<key>` 或 `name~project_root` 指纹）；`buildBoard()` 开头无条件 `clearLocate()`，热刷新重建后定位态不残留
 - 模块导出新增 `searchCards` / `searchSnippet`（测试挂钩）
 - 版面 CSS：body 禁滚，`.wrap` 100vh flex 列；`.col` `overflow-y: auto` + sticky `.col-head`；`.col.collapsed` 48px 窄条竖排列名；`.prov` 改 `<details>/<summary>` 折叠入口（`.prov-body` 限高内滚）；搜索面板 `.search-backdrop/.search-panel` 与定位脉冲 `locate-pulse`（`prefers-reduced-motion` 内）
@@ -101,7 +102,7 @@ eo-skills 的默认呈现层。数据全部派生自 change.md frontmatter、质
 |--------|------|
 | 首页两视图 | `ALL_HTML_TEMPLATE`：`#/` change 流、`#/cards` 概要卡；`initial_route` 时无 hash 直落 `#/p/<key>` |
 | 下钻 | serve `/p/<route_key>` → `render_html(..., home_url="/")`；html 用 hash `#/p/<key>` + `embed_board` |
-| 项目下拉 | 数据层注入 `dashboard_projects`（`build_all_data` 行内 / `_send_project` 逐请求），`buildHeader` 渲染 `.project-switch` 下拉，href 分形态为 `#/p/<key>` 或 `/p/<key>` |
+| 项目切换器 | 数据层注入 `dashboard_projects`（`build_all_data` 行内 / `_send_project` 逐请求），`buildHeader` 渲染自绘 `.project-switch`（trigger button + listbox 选项，跳转 href 存 `data-href`，分形态为 `#/p/<key>` 或 `/p/<key>`），`bindProjectSwitcher` 绑定交互 |
 | 样式 | 聚合 CSS 与 `PROJECT_CSS` 互斥；泳道 `.wrap` = `min(94vw,1800px)`；`.drawer` = `min(920px,94vw)` |
 | 失效路由 | `render_route_miss` |
 
@@ -113,4 +114,4 @@ eo-skills 的默认呈现层。数据全部派生自 change.md frontmatter、质
 - `tests/test_eo_board_cache.py` — 缓存/路由/聚合与终端兼容基线；视图层 node 垫片
 - `tests/test_board_card_progress.py` — 泳道卡进度：journal 逆序、stage_progress 当前性、tab 刷新、mdBlock/safeHref、质量门当前状态、XSS
 - `tests/test_board_swimlane_search.py` — 泳道定位搜索（唤起/解绑生命周期、`#seq`/关键词/空态、backlog body 命中、折叠按项目键记忆、折叠列定位自动展开、serve 热刷新经真实 polling 接线清定位态）
-- `tests/test_board_switcher_style.py` — change #18 轻档锁定测试（自绘下拉 RED + 跳转/XSS 表征），实现未落地前保持红
+- `tests/test_board_switcher_style.py` — 项目切换器自绘下拉锁定（开合/点外/Esc、方向键+回车跳转、双形态 href、当前项标记、项目名 XSS 转义、单项目静态 chip、无原生 select）
