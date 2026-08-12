@@ -3,12 +3,12 @@ id: board-fork-collapse
 seq: 15
 title: 看板分叉副本折叠为单卡
 summary: 同 change 多 worktree 副本只出最新一卡，分叉副本收进徽标可下钻
-status: implementing
+status: archived
 tier: light
 type: enhance
 base_commit: a1766935ebd564b368978c87a35737bf209d2ede
 test_lock_commit: 8197f9b3ea180a3ba8d59017439d72d501f94a0b
-commits: []
+commits: [d262659, edcc6b2, 8197f9b, ff8482f, 4285dea, 1e11e9e]
 issue: ~
 created: 2026-08-12
 ---
@@ -31,4 +31,4 @@ created: 2026-08-12
 - [x] AC-3 基准过滤不回归：主 worktree 状态更高时，状态更低的过期副本不出卡、不计入徽标 N；基准没有该 change 时不过滤（锁定：BoardForkCollapseTests.test_ac6_stale_lower_status_filtered + test_base_lower_keeps_higher_via_collapse + test_ac6_base_missing_change_no_filter）
 - [x] AC-4 终端 / --html / --serve / --all 四处折叠口径一致；--serve 挂起时修改某 worktree 的 change.md，一个轮询周期内「最新卡」归属正确刷新（锁定：BoardForkCollapseTests.test_serve_refreshes_latest_attribution_after_divergence + 既有缓存/基线等价用例 characterization）
 
-独立复核：通过，2026-08-12，基线 ff8482f（本地只读 reviewer subagent；P2 注释辩护两条已修 @4285dea，P3 锁定缺口两条——终端/聚合流徽标直接断言、fork 点击绑定触发——按回归资产分层接受不补）
+独立复核：通过，2026-08-12，基线 4285dea（本地只读 reviewer subagent；P2 注释辩护两条已修并经原 reviewer 增量核销 @4285dea——0 增行无夹带；P3 锁定缺口两条——终端/聚合流徽标直接断言、fork 点击绑定触发——按回归资产分层接受不补）
