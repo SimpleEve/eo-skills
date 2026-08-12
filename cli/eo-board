@@ -1158,6 +1158,19 @@ PROJECT_CSS = r"""
     margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--muted);
     font-variant-numeric: tabular-nums;
   }
+  .col-toggle {
+    border: 0; background: transparent; color: var(--faint); cursor: pointer; padding: 0 2px;
+    font-size: 13px; line-height: 1; align-self: center;
+  }
+  .col-toggle:hover { color: var(--accent); }
+  .col.collapsed { width: 48px; overflow: hidden; cursor: pointer; }
+  .col.collapsed .col-head {
+    height: 100%; margin: 0; padding: 10px 8px; border-bottom: 0; border-left: 2px solid var(--col-color, var(--line));
+    flex-direction: column; align-items: center; gap: 8px;
+  }
+  .col.collapsed .col-head .name { writing-mode: vertical-rl; letter-spacing: 0.12em; }
+  .col.collapsed .col-head .en, .col.collapsed .cards, .col.collapsed .col-note { display: none; }
+  .col.collapsed .col-head .count { margin: 0; }
   .col-note { font-size: 11.5px; color: var(--faint); padding: 2px 6px 10px; line-height: 1.5; }
 
   .cards { display: flex; flex-direction: column; gap: 10px; }
@@ -1182,6 +1195,17 @@ PROJECT_CSS = r"""
     box-shadow: 0 0 0 1px var(--warn-soft);
   }
   .card.card-warn:hover { box-shadow: 0 3px 12px rgba(180, 90, 20, 0.12); }
+  .board.locating .card { opacity: 0.28; }
+  .board.locating .card.located {
+    opacity: 1; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .board.locating .card.located { animation: locate-pulse 0.9s ease-out 2; }
+  }
+  @keyframes locate-pulse {
+    0%, 100% { box-shadow: 0 0 0 3px var(--accent-soft); }
+    50% { box-shadow: 0 0 0 7px var(--accent-soft); }
+  }
 
   .card-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding-right: 14px; }
   .seq { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -1410,6 +1434,35 @@ PROJECT_CSS = r"""
   .prov-card li .who { color: var(--faint); font-size: 11.5px; flex: none; margin-left: auto; font-family: var(--mono); }
   .prov-card .note { font-size: 12px; color: var(--faint); margin-top: 10px; line-height: 1.5; }
 
+  .search-backdrop {
+    display: none; position: fixed; inset: 0; z-index: 70; background: rgba(18, 24, 34, 0.42);
+    align-items: flex-start; justify-content: center; padding-top: min(14vh, 130px);
+  }
+  .search-backdrop.open { display: flex; }
+  .search-panel {
+    width: min(680px, 92vw); max-height: min(70vh, 620px); overflow: hidden;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+  }
+  .search-input-wrap { display: flex; gap: 10px; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .search-input-wrap .icon { color: var(--faint); font-size: 18px; }
+  .search-input {
+    flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink);
+    font: 15px/1.5 var(--sans); outline: none;
+  }
+  .search-key { color: var(--faint); font: 10.5px/1 var(--mono); border: 1px solid var(--line); border-radius: 4px; padding: 3px 5px; }
+  .search-results { max-height: calc(min(70vh, 620px) - 58px); overflow-y: auto; padding: 8px; }
+  .search-empty { padding: 34px 18px; text-align: center; color: var(--faint); font-size: 13px; }
+  .search-group + .search-group { margin-top: 8px; }
+  .search-group-title { padding: 6px 8px; color: var(--muted); font: 11px/1.4 var(--mono); }
+  .search-result {
+    width: 100%; border: 0; border-radius: 7px; background: transparent; color: var(--ink);
+    padding: 9px 10px; text-align: left; cursor: pointer; display: grid; gap: 3px;
+  }
+  .search-result:hover, .search-result.active { background: var(--surface2); }
+  .search-result-title { font-weight: 650; }
+  .search-result-meta, .search-result-snippet { color: var(--faint); font-size: 11.5px; }
+  .search-result-snippet mark { background: var(--accent-soft); color: var(--accent); }
+
   .empty-hint { color: var(--faint); font-size: 12.5px; padding: 8px 4px; }
 """
 
@@ -1461,6 +1514,16 @@ PROJECT_MARKUP = r"""<div class="wrap">
   </details>
 </div>
 
+<div class="search-backdrop" id="p-search-backdrop">
+  <section class="search-panel" role="dialog" aria-modal="true" aria-label="定位搜索">
+    <div class="search-input-wrap"><span class="icon">⌕</span>
+      <input class="search-input" id="p-search-input" type="search" autocomplete="off" placeholder="搜索标题、正文，或输入 #21">
+      <span class="search-key">Esc</span>
+    </div>
+    <div class="search-results" id="p-search-results" role="listbox"></div>
+  </section>
+</div>
+
 <div class="backdrop" id="p-backdrop"></div>
 <aside class="drawer" id="p-drawer" role="dialog" aria-modal="true" aria-labelledby="p-title">
   <div class="drawer-head">
@@ -1474,7 +1537,7 @@ PROJECT_MARKUP = r"""<div class="wrap">
 </aside>"""
 
 PROJECT_JS = r"""window.EO_PROJECT = (function () {
-var DATA_URL = '/data.json', HOME_URL = '', PROJECT_KEY = '', timer = null, escHandler = null;
+var DATA_URL = '/data.json', HOME_URL = '', PROJECT_KEY = '', timer = null, keyHandler = null, clickHandler = null;
 var STATUS = {
   backlog:      { zh: '待办池',  cssVar: '--st-backlog' },
   draft:        { zh: '草稿',    cssVar: '--st-draft' },
@@ -1484,9 +1547,166 @@ var STATUS = {
   archived:     { zh: '已归档',  cssVar: '--st-archived' }
 };
 var STATUS_ORDER = ['backlog', 'draft', 'confirmed', 'implementing', 'reviewed', 'archived'];
-var DATA = null, root = null, drawer = null, backdrop = null;
+var DATA = null, root = null, drawer = null, backdrop = null, searchBackdrop = null, searchInput = null;
 var CARD_INDEX = {};
 var openDetailId = null;
+var collapsedColumns = {};
+var searchResults = [], activeSearchIndex = 0, locatedKey = null;
+
+function collapsedStorageKey() {
+  return 'eo-board:collapsed:' + PROJECT_KEY;
+}
+
+function loadCollapsedColumns() {
+  collapsedColumns = {};
+  try {
+    var saved = JSON.parse(localStorage.getItem(collapsedStorageKey()) || '[]');
+    if (Array.isArray(saved)) saved.forEach(function (status) { collapsedColumns[status] = true; });
+  } catch (_) {}
+}
+
+function saveCollapsedColumns() {
+  try {
+    var saved = STATUS_ORDER.filter(function (status) { return !!collapsedColumns[status]; });
+    localStorage.setItem(collapsedStorageKey(), JSON.stringify(saved));
+  } catch (_) {}
+}
+
+function setColumnCollapsed(status, collapsed) {
+  collapsedColumns[status] = !!collapsed;
+  if (!collapsed) delete collapsedColumns[status];
+  saveCollapsedColumns();
+  var col = root && root.querySelector('.col[data-status="' + status + '"]');
+  if (!col) return;
+  col.classList.toggle('collapsed', !!collapsed);
+  var button = col.querySelector('.col-toggle');
+  if (button) {
+    button.textContent = collapsed ? '◉' : '◌';
+    button.setAttribute('aria-label', collapsed ? '展开' + STATUS[status].zh + '列' : '折叠' + STATUS[status].zh + '列');
+    button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  }
+}
+
+function isTextInput(node) {
+  if (!node || !node.tagName) return false;
+  var tag = node.tagName.toLowerCase();
+  return tag === 'input' || tag === 'textarea' || tag === 'select' || !!node.isContentEditable;
+}
+
+function searchSnippet(text, query) {
+  var raw = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!raw) return '';
+  var lower = raw.toLocaleLowerCase();
+  var at = lower.indexOf(query.toLocaleLowerCase());
+  if (at < 0) return raw.slice(0, 90) + (raw.length > 90 ? '…' : '');
+  var start = Math.max(0, at - 34), end = Math.min(raw.length, at + query.length + 54);
+  return (start ? '…' : '') + raw.slice(start, end) + (end < raw.length ? '…' : '');
+}
+
+function markSnippet(text, query) {
+  if (!query) return esc(text);
+  var lower = text.toLocaleLowerCase(), needle = query.toLocaleLowerCase(), at = lower.indexOf(needle);
+  if (at < 0) return esc(text);
+  return esc(text.slice(0, at)) + '<mark>' + esc(text.slice(at, at + query.length)) + '</mark>' + esc(text.slice(at + query.length));
+}
+
+function searchCards(query) {
+  var q = String(query || '').trim();
+  if (!q) return [];
+  var seq = q.match(/^#(\d+)$/);
+  var out = [];
+  STATUS_ORDER.forEach(function (status) {
+    var cards = status === 'backlog' ? DATA.backlog : DATA.changes.filter(function (d) { return d.status === status; });
+    cards.forEach(function (d) {
+      if (seq) {
+        if (status !== 'backlog' && Number(d.seq) === Number(seq[1])) out.push({ key: d._key, status: status, card: d, snippet: '' });
+        return;
+      }
+      var title = String(d.title || ''), summary = String(d.summary || '');
+      var body = status === 'backlog' ? String(d.body || '') : String(d.full_text || '');
+      var haystack = (title + '\n' + summary + '\n' + body).toLocaleLowerCase();
+      if (haystack.indexOf(q.toLocaleLowerCase()) < 0) return;
+      var snippetSource = body.toLocaleLowerCase().indexOf(q.toLocaleLowerCase()) >= 0 ? body
+        : (summary.toLocaleLowerCase().indexOf(q.toLocaleLowerCase()) >= 0 ? summary : title);
+      out.push({ key: d._key, status: status, card: d, snippet: searchSnippet(snippetSource, q) });
+    });
+  });
+  return out;
+}
+
+function renderSearchResults() {
+  var box = root.querySelector('#p-search-results');
+  var query = searchInput.value.trim();
+  searchResults = searchCards(query);
+  activeSearchIndex = Math.min(activeSearchIndex, Math.max(0, searchResults.length - 1));
+  if (!query) {
+    box.innerHTML = '<div class="search-empty">输入关键词检索标题与正文；输入 <code>#21</code> 精确定位编号</div>';
+    return;
+  }
+  if (!searchResults.length) {
+    box.innerHTML = '<div class="search-empty">没有匹配结果</div>';
+    return;
+  }
+  var html = '';
+  STATUS_ORDER.forEach(function (status) {
+    var group = searchResults.map(function (item, index) { return { item: item, index: index }; })
+      .filter(function (entry) { return entry.item.status === status; });
+    if (!group.length) return;
+    html += '<section class="search-group"><div class="search-group-title">' + esc(STATUS[status].zh)
+      + ' · ' + group.length + '</div>';
+    group.forEach(function (entry) {
+      var d = entry.item.card;
+      html += '<button type="button" class="search-result' + (entry.index === activeSearchIndex ? ' active' : '')
+        + '" data-search-index="' + entry.index + '" role="option">'
+        + '<span class="search-result-title">' + (d.seq != null ? '#' + esc(d.seq) + ' ' : '') + esc(d.title) + '</span>'
+        + '<span class="search-result-meta">' + esc(status) + '</span>'
+        + (entry.item.snippet ? '<span class="search-result-snippet">' + markSnippet(entry.item.snippet, query) + '</span>' : '')
+        + '</button>';
+    });
+    html += '</section>';
+  });
+  box.innerHTML = html;
+  box.querySelectorAll('.search-result').forEach(function (button) {
+    button.addEventListener('click', function () { locateSearchResult(Number(button.getAttribute('data-search-index'))); });
+  });
+}
+
+function openSearch() {
+  searchBackdrop.classList.add('open');
+  activeSearchIndex = 0;
+  renderSearchResults();
+  searchInput.focus();
+}
+
+function closeSearch() {
+  searchBackdrop.classList.remove('open');
+}
+
+function clearLocate() {
+  locatedKey = null;
+  var board = root && root.querySelector('#p-board');
+  if (!board) return;
+  board.classList.remove('locating');
+  board.querySelectorAll('.card.located').forEach(function (card) { card.classList.remove('located'); });
+}
+
+function locateSearchResult(index) {
+  var result = searchResults[index];
+  if (!result) return;
+  closeSearch();
+  if (collapsedColumns[result.status]) setColumnCollapsed(result.status, false);
+  clearLocate();
+  var board = root.querySelector('#p-board');
+  var card = Array.from(board.querySelectorAll('.card[data-detail]')).find(function (item) {
+    return item.getAttribute('data-detail') === result.key;
+  });
+  if (!card) return;
+  locatedKey = result.key;
+  board.classList.add('locating');
+  card.classList.add('located');
+  card.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+  card.focus({ preventScroll: true });
+}
 
 function esc(s) {
   return String(s === null || s === undefined ? '' : s).replace(/[&<>"]/g, function (c) {
@@ -1997,11 +2217,12 @@ function changeCard(d) {
     todoHtml = '<div class="prog-row"><span class="prog-lbl">TODO</span><span class="bar"><i style="width:' + tdPct + '%"></i></span>'
       + '<span class="prog-num">' + tdDone + '/' + tdTotal + ' · B' + batchDone + '/' + d.todo.length + '</span></div>';
   }
-  var foot = '';
   var sp = d.stage_progress;
+  var stageHtml = '';
   if (sp && sp.label) {
-    foot += '<span class="tag ' + (sp.warn ? 'warn' : 'stage') + '">' + esc(sp.label) + '</span>';
+    stageHtml = '<div class="card-stage-line"><span class="tag ' + (sp.warn ? 'warn' : 'stage') + '">' + esc(sp.label) + '</span></div>';
   }
+  var foot = '';
   if ((d.branch || d.worktree_name) && (d.diverged || !d.is_default_worktree))
     foot += '<span class="tag branch wt-split"><span class="wt-line">⎇ ' + esc(d.branch || '?') + '</span><span class="wt-line">' + esc(d.worktree_name || '?') + '</span></span>';
   if (d.forks && d.forks.length)
@@ -2104,6 +2325,7 @@ function buildHeader() {
 }
 
 function buildBoard() {
+  clearLocate();
   CARD_INDEX = {};
   var html = '';
   STATUS_ORDER.forEach(function (status) {
@@ -2261,10 +2483,41 @@ function mount(opts) {
   root.innerHTML = document.getElementById('eo-project-markup').textContent;
   drawer = root.querySelector('#p-drawer');
   backdrop = root.querySelector('#p-backdrop');
+  searchBackdrop = root.querySelector('#p-search-backdrop');
+  searchInput = root.querySelector('#p-search-input');
   root.querySelector('#p-close').addEventListener('click', closeDetail);
   backdrop.addEventListener('click', closeDetail);
-  escHandler = function (e) { if (e.key === 'Escape' && drawer.classList.contains('open')) closeDetail(); };
-  document.addEventListener('keydown', escHandler);
+  searchBackdrop.addEventListener('click', function (e) { if (e.target === searchBackdrop) closeSearch(); });
+  searchInput.addEventListener('input', function () { activeSearchIndex = 0; renderSearchResults(); });
+  keyHandler = function (e) {
+    var searchOpen = searchBackdrop.classList.contains('open');
+    if (e.key === 'Escape') {
+      if (searchOpen) { e.preventDefault(); closeSearch(); return; }
+      if (drawer.classList.contains('open')) { e.preventDefault(); closeDetail(); return; }
+      if (locatedKey) { e.preventDefault(); clearLocate(); }
+      return;
+    }
+    if (searchOpen) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        var delta = e.key === 'ArrowDown' ? 1 : -1;
+        activeSearchIndex = Math.max(0, Math.min(searchResults.length - 1, activeSearchIndex + delta));
+        renderSearchResults();
+      } else if (e.key === 'Enter' && searchResults.length) {
+        e.preventDefault(); locateSearchResult(activeSearchIndex);
+      }
+      return;
+    }
+    var cmdK = e.key.toLocaleLowerCase() === 'k' && (e.metaKey || e.ctrlKey);
+    var slash = e.key === '/' && !isTextInput(e.target);
+    if (cmdK || slash) { e.preventDefault(); openSearch(); }
+  };
+  clickHandler = function (e) {
+    if (!locatedKey || !root.contains(e.target)) return;
+    if (!e.target.closest('.card') && !e.target.closest('.search-panel')) clearLocate();
+  };
+  document.addEventListener('keydown', keyHandler);
+  document.addEventListener('click', clickHandler);
   buildHeader();
   buildBoard();
   if (DATA.serve && typeof fetch === 'function') startPolling();
@@ -2272,11 +2525,12 @@ function mount(opts) {
 
 function unmount() {
   if (timer !== null) { clearInterval(timer); timer = null; }
-  if (escHandler) { document.removeEventListener('keydown', escHandler); escHandler = null; }
+  if (keyHandler) { document.removeEventListener('keydown', keyHandler); keyHandler = null; }
+  if (clickHandler) { document.removeEventListener('click', clickHandler); clickHandler = null; }
   document.documentElement.classList.remove('show-src');
   if (root) root.innerHTML = '';
-  root = null; drawer = null; backdrop = null; DATA = null; PROJECT_KEY = '';
-  CARD_INDEX = {}; openDetailId = null; lastFocus = null;
+  root = null; drawer = null; backdrop = null; searchBackdrop = null; searchInput = null; DATA = null; PROJECT_KEY = '';
+  CARD_INDEX = {}; openDetailId = null; lastFocus = null; searchResults = []; activeSearchIndex = 0; locatedKey = null;
 }
 
 return {
@@ -2288,6 +2542,8 @@ return {
     renderJournal: renderJournal,
     bindDetailTabs: bindDetailTabs,
     mdBlock: mdBlock,
+    searchCards: searchCards,
+    searchSnippet: searchSnippet,
     openDetail: function (key, isRefresh) { openDetail(key, isRefresh); }
   }
 };
