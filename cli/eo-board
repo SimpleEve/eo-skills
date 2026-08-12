@@ -2315,8 +2315,10 @@ function highlightProjectOption(index) {
   });
 }
 
-function navigateProject(href) {
-  if (href) window.location.href = href;
+function navigateProject(switcher) {
+  if (!switcher) return;
+  if (!switcher.value) switcher.value = switcher.getAttribute('data-href');
+  if (switcher.value) window.location.href = switcher.value;
 }
 
 function bindProjectSwitcher(projects) {
@@ -2339,7 +2341,7 @@ function bindProjectSwitcher(projects) {
       e.stopPropagation();
       activeProjectIndex = index;
       closeProjectSwitcher();
-      navigateProject(option.getAttribute('data-href'));
+      navigateProject(option);
     });
   });
 }
@@ -2358,7 +2360,7 @@ function buildHeader() {
       + '<div class="project-switch-list" role="listbox" aria-label="项目列表">'
       + projects.map(function (item) {
         return '<button class="project-switch-option' + (item.current ? ' is-current' : '') + '" type="button" role="option"'
-          + ' data-href="' + esc(item.href) + '" aria-selected="' + (item.current ? 'true' : 'false') + '">'
+          + ' data-href="' + esc(item.href) + '" value="' + esc(item.href) + '" aria-selected="' + (item.current ? 'true' : 'false') + '">'
           + '<span class="check" aria-hidden="true">✓</span><span>' + esc(item.name) + '</span></button>';
       }).join('') + '</div></div>';
   }
@@ -2598,7 +2600,7 @@ function mount(opts) {
         highlightProjectOption(activeProjectIndex + (e.key === 'ArrowDown' ? 1 : -1));
       } else if (e.key === 'Enter' && projectSwitcherOptions.length) {
         e.preventDefault();
-        navigateProject(projectSwitcherOptions[activeProjectIndex].getAttribute('data-href'));
+        navigateProject(projectSwitcherOptions[activeProjectIndex]);
       }
       return;
     }
