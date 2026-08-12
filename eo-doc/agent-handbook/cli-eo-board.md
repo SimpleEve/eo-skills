@@ -11,7 +11,7 @@ summary: >
   零第三方依赖的单文件只读看板（约 3500 行）：默认全局 dashboard（终端聚合流 / --html 双视图首页快照 / --serve 轮询服务），`--all` 已退役；
   消费 eo_lib 解析层，board 专属逻辑为门禁判定、stage_progress、journal/frontmatter 投影、详情五 tab 与 HTTP 服务（含每项目单飞缓存）；
   `--project` 为显式下钻（终端单项目摘要；html 内嵌 + initial_route 直落；serve 首开 /p/<key>），泳道页顶栏项目切换器是自绘 button+listbox 下拉（无原生 select，键盘可达）；
-  泳道页版面定格为列内滚动（sticky 列头），列可折叠为窄条并按项目记忆，Cmd/Ctrl+K 定位搜索面板支持 `#seq` 直跳与全文片段命中。
+  泳道页版面定格为列内滚动（sticky 列头），列可折叠为窄条并按项目记忆（整列头点击即折叠/展开），顶栏有可见搜索触发框，Cmd/Ctrl+K 定位搜索面板支持 `#seq` 直跳与全文片段命中。
 conclusions:
   - 宪法四条：只读铁律（绝不写项目文件）、不做清单（无 SSE/无观测/无写操作/零第三方依赖）、性能靠缓存、GitHub 实时状态仅可选旗标
   - serve 缓存：每配置槽一构建锁（_BOARD_BUILD_LOCKS），锁内重算键+二次查表，同槽单飞、跨槽并行
@@ -23,8 +23,8 @@ conclusions:
   - mdBlock：先 esc 后白名单；safeHref 仅 http/https/mailto；台账未决 = open|fixed
   - route_key = `<URL 编码显示名>~<项目根 realpath 的 sha256 前 8 位>`；显示名不承担唯一性，路由映射逐请求重建
   - 泳道版面定格：`.wrap` 100vh flex 列 + `.board-scroll` 只吃横向，`.col` 列内纵向滚动（sticky `.col-head`，列尾 col-note 随内容）；`.prov` 数据来源区收进 `<details>` 默认收起，页面整体不滚
-  - 列折叠：`setColumnCollapsed` 切 `.collapsed` 窄条（竖排列名+计数），localStorage 键 `eo-board:collapsed:<PROJECT_KEY>`；PROJECT_KEY 取 mount opts.projectKey（下钻 enterProject 传 `row.route_key`），回退 DATA_URL/data 指纹
-  - 定位搜索：Cmd/Ctrl+K 与 `/`（输入态豁免）唤起面板，Esc 按「搜索→切换器→详情抽屉→定位态」逐层消费；`searchCards` 做 `#seq` 精确与 title/summary/full_text（backlog 用 body）不区分大小写子串匹配，按 STATUS_ORDER 分组出片段；选中 `locateSearchResult` 关面板、折叠列自动展开并持久、scrollIntoView + `located` 脉冲、他卡 dim，Esc/点空白 `clearLocate`
+  - 列折叠：`setColumnCollapsed` 切 `.collapsed` 窄条（竖排列名+计数），localStorage 键 `eo-board:collapsed:<PROJECT_KEY>`；整列头 `.col-head` 点击即折叠/展开（点到 `.col-toggle` 时交还按钮自身处理），小原点 `◌/◉` 按钮保留作视觉指示与 aria 锚点；PROJECT_KEY 取 mount opts.projectKey（下钻 enterProject 传 `row.route_key`），回退 DATA_URL/data 指纹
+  - 定位搜索：顶栏 `.gen` 左侧有可见 `.search-trigger` 触发框（`role=button` tabindex=0，⌕ + 提示文案 + ⌘K/`/` 键帽，样式对齐 chip），点击或聚焦后 Enter/空格 `openSearch()`；Cmd/Ctrl+K 与 `/`（输入态豁免）同样唤起面板，Esc 按「搜索→切换器→详情抽屉→定位态」逐层消费；`searchCards` 做 `#seq` 精确与 title/summary/full_text（backlog 用 body）不区分大小写子串匹配，按 STATUS_ORDER 分组出片段；选中 `locateSearchResult` 关面板、折叠列自动展开并持久、scrollIntoView + `located` 脉冲、他卡 dim，Esc/点空白 `clearLocate`
   - 项目切换器自绘：`buildHeader` 多项目时渲染 `.project-switch`（trigger `role=combobox` + 选项 `role=listbox/option`，href 存 `data-href`），`bindProjectSwitcher` 绑定开合与 `navigateProject` 跳转；↑/↓ `highlightProjectOption` 环形移动、Enter 选中、Esc/点外收起；单项目退化为静态 chip；选项名 `esc` 转义
   - `buildBoard` 热刷新重建前显式 `clearLocate()`，定位态不留半残；mount 的全局监听为 `keyHandler`+`clickHandler`（取代旧 escHandler），unmount 全量解绑并复位全部模块态
 ---
@@ -79,18 +79,19 @@ eo-skills 的默认呈现层。数据全部派生自 change.md frontmatter、质
 | 函数 | 职责 |
 |------|------|
 | `collapsedStorageKey` / `loadCollapsedColumns` / `saveCollapsedColumns` | localStorage 键 `eo-board:collapsed:<PROJECT_KEY>`，读回容错为空集 |
-| `setColumnCollapsed(status, collapsed)` | 切 `.collapsed` 窄条 + toggle 按钮文案/aria，随即持久；点窄条任意处展开 |
+| `setColumnCollapsed(status, collapsed)` | 切 `.collapsed` 窄条 + toggle 按钮文案/aria，随即持久；点窄条任意处展开；`buildBoard` 给每个 `.col-head` 绑整头点击折叠/展开（`e.target.closest('.col-toggle')` 时跳过，避免与按钮重复触发） |
 | `searchCards(query)` | `#<num>` 走 seq 精确（backlog 不参与）；否则 title/summary/full_text（backlog 卡用 body）不区分大小写子串匹配；按 STATUS_ORDER 顺序产出 `{key, status, card, snippet}` |
 | `searchSnippet` / `markSnippet` | 命中词前后截取上下文片段；`<mark>` 高亮前先 `esc` |
 | `renderSearchResults` | 空查询引导文案 / 无匹配空态；按泳道分组渲染，`activeSearchIndex` 随结果数收敛 |
 | `openSearch` / `closeSearch` | 面板开关；打开即聚焦输入框并重置活动下标 |
+| 顶栏搜索触发框 | `buildHeader` 渲染 `#p-search-trigger`（`.search-trigger`，`role=button`/`tabindex=0`/aria-label「打开定位搜索」，内含 ⌕ 图标 + 提示 + ⌘K/`/` 键帽），click 与 keydown（Enter/空格，`preventDefault`）均调 `openSearch()`；`.gen` 的 `margin-left:auto` 已移交触发框 |
 | `locateSearchResult(index)` / `clearLocate` | 关面板 → 折叠列自动展开（并持久）→ 目标卡 `located` + board `locating`（他卡降透明）+ scrollIntoView；`clearLocate` 幂等清除 |
 | `isTextInput` | `/` 唤起豁免：input/textarea/select/contentEditable 聚焦时不触发 |
 
 - 键盘交互集中在 mount 的 `keyHandler`：搜索面板开时 ↑/↓ 移动、Enter 定位；切换器开时 ↑/↓ `highlightProjectOption` 环形高亮、Enter `navigateProject` 跳转；Esc 按「搜索面板 → 项目切换器 → 详情抽屉 → 定位态」逐层消费；Cmd/Ctrl+K 与 `/` 唤起。`clickHandler` 负责点切换器外关切换器、点非卡空白 `clearLocate`
 - mount 新增 `opts.projectKey`（下钻 `enterProject` 传 `row.route_key`；单项目直开时回退 DATA_URL 的 `/p/<key>` 或 `name~project_root` 指纹）；`buildBoard()` 开头无条件 `clearLocate()`，热刷新重建后定位态不残留
 - 模块导出新增 `searchCards` / `searchSnippet`（测试挂钩）
-- 版面 CSS：body 禁滚，`.wrap` 100vh flex 列；`.col` `overflow-y: auto` + sticky `.col-head`；`.col.collapsed` 48px 窄条竖排列名；`.prov` 改 `<details>/<summary>` 折叠入口（`.prov-body` 限高内滚）；搜索面板 `.search-backdrop/.search-panel` 与定位脉冲 `locate-pulse`（`prefers-reduced-motion` 内）
+- 版面 CSS：body 禁滚，`.wrap` 100vh flex 列；`.col` `overflow-y: auto` + sticky `.col-head`（`cursor:pointer` 整头可点折叠）；`.col.collapsed` 48px 窄条竖排列名；`.prov` 改 `<details>/<summary>` 折叠入口（`.prov-body` 限高内滚）；顶栏 `.search-trigger` 为 chip 风搜索框（220px 定宽、hover/focus-visible 边框反馈，键帽 10.5px）；搜索面板 `.search-backdrop/.search-panel` 与定位脉冲 `locate-pulse`（`prefers-reduced-motion` 内）
 
 ## 三形态入口
 
