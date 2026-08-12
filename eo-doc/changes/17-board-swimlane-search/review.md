@@ -6,7 +6,7 @@ created: 2026-08-12
 updated: 2026-08-12
 status: active
 summary: >
-  首轮审查发现 2 个未决 P1：交付基线含一处看板阶段徽标回归，且 serve 热刷新测试未走生产路径；暂不流转 reviewed。
+  第 2 轮已核销首轮 2 个 P1，当前无未决 P0/P1；Review 覆盖基线刷新到 a62ef3c，测试证据需定向复验。
 ---
 
 # 泳道页定位搜索与列显隐 代码审查报告
@@ -26,8 +26,8 @@ summary: >
 
 | ID | 级别 | 摘要 | 位置 | 状态 | 根因 | 首见/最近轮 | 基线/修复 commit |
 |----|------|------|------|------|------|-------------|------------------|
-| P1-1 | P1 | 阶段徽标分支引用未定义的 `rv_open_p2`，含未决 P0/P1 的项目会在扫描时崩溃 | `cli/eo-board:613` | fixed | implementation | 1/1 | `69380cb` / `0e7d75e` |
-| P1-2 | P1 | 热刷新用例以 unmount/mount 代替生产 polling→buildBoard 路径，无法防止接线回归 | `tests/test_board_swimlane_search.py:409` | open | test-asset | 1/1 | `69380cb` / ~ |
+| P1-1 | P1 | 阶段徽标分支引用未定义的 `rv_open_p2`，含未决 P0/P1 的项目会在扫描时崩溃 | `cli/eo-board:613` | verified | implementation | 1/2 | `69380cb` / `0e7d75e` |
+| P1-2 | P1 | 热刷新用例以 unmount/mount 代替生产 polling→buildBoard 路径，无法防止接线回归 | `tests/test_board_swimlane_search.py:409` | verified | test-asset | 1/2 | `69380cb` / `a62ef3c` |
 
 ## 审查总结（首轮快照）
 
@@ -96,9 +96,21 @@ summary: >
 - 依据：纯 H 的活跃 review 门路径会因 `rv_open_p2` 未定义而失败，且热刷新场景用 unmount/mount 绕过生产 polling 接线；现有“完整通过”证据不能覆盖这两个实质问题。
 - 本轮结论：有保留通过（P1 2 条）
 
+## 第 2 轮记录（revision 1 · 2026-08-12）
+
+- 审查基线：`revision 1, a62ef3cd2c84cec9b1dc555b2da3e8620d732733`
+- 核销：P1-1 verified（修复 commit `0e7d75e`：移除未定义 `rv_open_p2` 引用，P0/P1 阶段徽标分支保持）；P1-2 verified（修复 commit `a62ef3c`：fake timer/fetch 驱动真实 `startPolling → refreshLoop → buildBoard`，定位、折叠及接线断言有效）
+- reopen：无
+- 新增：无
+- 测试证据处置：复验
+- 既有通过 Test：第 1 轮 @ `69380cb14eb0a37e75f02d2e3eca133d605f6989`；当前交付基线：`a62ef3cd2c84cec9b1dc555b2da3e8620d732733`
+- 受影响 AC / 测试：AC-7、TODO-5 的 serve 热刷新定位态清除（`tests.test_board_swimlane_search`）；review 未决 P0/P1 阶段徽标与看板扫描回归（`tests.test_board_card_progress`）
+- 依据：`T..H` 修改了阶段徽标业务路径，并重写热刷新测试 harness/断言；静态复审确认修复有效，但既有 Test 未在新 H 执行，按证据新鲜度规则需 tester 定向复验。
+- 本轮结论：通过（未决 P0 0 条，P1 0 条）
+
 ## 速报
 
-结论：有保留通过（P1 2 条）［第 1 轮 · revision 1 · 基线 `69380cb`］
+结论：通过［第 2 轮 · revision 1 · 基线 `a62ef3c`］
 测试证据处置：复验
-既有通过 Test：第 1 轮 @ `69380cb14eb0a37e75f02d2e3eca133d605f6989`；当前交付基线：`69380cb14eb0a37e75f02d2e3eca133d605f6989`；受影响 AC / 测试：AC-7、TODO-5 的 serve 热刷新定位态清除及 review 阶段徽标/看板扫描回归；依据：H 含可触发的未定义变量，热刷新用例又绕过生产 polling 接线。
-下一步：P1-1（implementation）回 `/eo-implement`；P1-2（test-asset）回原 tester `/eo-test`；修复并复验后再执行 `/eo-review` 核销。
+既有通过 Test：第 1 轮 @ `69380cb14eb0a37e75f02d2e3eca133d605f6989`；当前交付基线：`a62ef3cd2c84cec9b1dc555b2da3e8620d732733`；受影响 AC / 测试：AC-7、TODO-5 的 serve 热刷新定位态清除（`tests.test_board_swimlane_search`）及 review 未决 P0/P1 阶段徽标/看板扫描回归（`tests.test_board_card_progress`）；依据：`T..H` 触及业务扫描路径和测试 harness，须在新 H 定向复验。
+下一步：回 `/eo-test` 在 H=`a62ef3c` 定向复验上述范围；证据闭合后可进入人工 AC-6/归档路径。
