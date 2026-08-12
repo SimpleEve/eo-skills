@@ -845,7 +845,6 @@ def build_data(cfg):
 
     changes = scan_all_changes_split(cfg, worktrees, warnings, base_worktree=main_wt["path"])
     for rec in changes:
-        # 分叉副本（forks）与出卡走同一条附加管道：详情可整体切换到任一副本
         for r in [rec] + list(rec.get("forks") or []):
             probe_change_artifacts(r, cfg["doc_root"])
             compute_change_git_stats(r, cfg["doc_root"], main_wt["path"])

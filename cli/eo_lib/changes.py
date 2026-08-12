@@ -299,7 +299,6 @@ def scan_all_changes_split(cfg, worktrees, warnings, base_worktree=None):
         def key_of(r):
             k = id(r)
             if k not in keys:
-                # 平手回退：状态高者 → 路径字典序，保证跨轮确定性
                 keys[k] = (_change_activity_epoch(r, cfg["doc_root"]), status_rank(r), r["path"])
             return keys[k]
 
