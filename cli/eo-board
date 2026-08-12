@@ -3390,7 +3390,7 @@ function enterProject(row) {
   if (projMounted) EO_PROJECT.unmount();
   aggStyle.disabled = true;
   homeWrap.style.display = 'none';
-  EO_PROJECT.mount({ root: document.getElementById('projRoot'), data: row.board, homeUrl: '#/' });
+  EO_PROJECT.mount({ root: document.getElementById('projRoot'), data: row.board, homeUrl: '#/', projectKey: row.route_key });
   projMounted = true;
 }
 
