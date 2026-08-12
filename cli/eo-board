@@ -2019,7 +2019,7 @@ function backlogCard(d) {
   var tags = (d.tags || []).map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join('');
   return '<article class="card" data-detail="' + esc(d._key) + '" tabindex="0" role="button" aria-label="查看详情：' + esc(d.title) + '">'
     + '<div class="bl-title">' + mdInline(d.title) + '</div>'
-    + (d.body ? '<div class="bl-note">' + mdInline(d.body.length > 90 ? d.body.slice(0, 90) + '…' : d.body) + '</div>' : '')
+    + (d.body ? '<div class="bl-note">' + esc(d.body.length > 90 ? d.body.slice(0, 90) + '…' : d.body) + '</div>' : '')
     + '<div class="bl-tags">' + tags + (d.issue ? '<span class="tag ok">外部 issue ↗</span>' : '') + '<span class="date">' + esc((d.created || '').slice(5)) + '</span></div>'
     + '</article>';
 }
@@ -2500,12 +2500,28 @@ def _aggregate_row(kind, obj, get_entry=_fresh_entry, embed_board=False):
     return row
 
 
-def collect_sources(scan_dir=None, cwd_dir=None):
+def collect_sources(scan_dir=None, cwd_dir=None, explicit_dir=None):
     """当前聚合来源（注册条目 + cwd 项目 + --scan 兜底并入），返回 (sources, entries, scanned)。"""
     reg = load_registry()
     entries = list(reg.get("projects") or [])
     known = {repo_identity(p) for p in map(entry_path, entries) if p}
     scanned = []
+    explicit_source = None
+    if explicit_dir is not None:
+        explicit = Path(explicit_dir).expanduser().resolve()
+        exact_index = next(
+            (
+                i for i, entry in enumerate(entries)
+                if entry_path(entry) and Path(entry_path(entry)).expanduser().resolve() == explicit
+            ),
+            None,
+        )
+        if exact_index is not None:
+            entries = [entries[exact_index]] + entries[:exact_index] + entries[exact_index + 1:]
+        else:
+            explicit_source = ("scan", explicit)
+            scanned.append(explicit)
+            known.add(repo_identity(explicit))
     start = Path(cwd_dir or Path.cwd()).expanduser().resolve()
     cwd_cfg = find_project_config(start)
     if cwd_cfg is not None:
@@ -2523,15 +2539,17 @@ def collect_sources(scan_dir=None, cwd_dir=None):
             if ident not in known:
                 known.add(ident)
                 scanned.append(project_dir)
-    sources = [("registry", e) for e in entries] + [("scan", p) for p in scanned]
+    sources = ([explicit_source] if explicit_source else [])
+    sources += [("registry", e) for e in entries]
+    sources += [("scan", p) for p in scanned if explicit_source is None or p != explicit_source[1]]
     return sources, entries, scanned
 
 
-def build_route_map(scan_dir=None, cwd_dir=None):
+def build_route_map(scan_dir=None, cwd_dir=None, explicit_dir=None):
     """当前 sources → {route_key: cfg}。逐请求重建，新注册 / 新 scan 到的项目立即可下钻；
     配置读不出来的条目不进映射，下钻落到指引页而不是 500。"""
     mapping = {}
-    for kind, obj in collect_sources(scan_dir, cwd_dir=cwd_dir)[0]:
+    for kind, obj in collect_sources(scan_dir, cwd_dir=cwd_dir, explicit_dir=explicit_dir)[0]:
         if kind == "registry":
             raw = entry_path(obj)
             if raw is None:
@@ -2561,10 +2579,10 @@ def lookup_route(routes, key):
     return None
 
 
-def build_all_data(scan_dir=None, get_entry=_fresh_entry, embed_board=False, cwd_dir=None):
+def build_all_data(scan_dir=None, get_entry=_fresh_entry, embed_board=False, cwd_dir=None, explicit_dir=None):
     """产出结构化聚合数据（rows/reg_count/scanned_count）。注册表每次调用重读——serve
     逐请求调用即天然纳入新注册项目；--scan 同步逐次重枚举。损坏注册表抛 ConfigError，调用方分流。"""
-    sources, entries, scanned = collect_sources(scan_dir, cwd_dir=cwd_dir)
+    sources, entries, scanned = collect_sources(scan_dir, cwd_dir=cwd_dir, explicit_dir=explicit_dir)
 
     def _safe_row(source):
         kind, obj = source
@@ -3224,16 +3242,25 @@ def cmd_all_html(agg, args):
 
 
 def cmd_project_html(cfg, args):
-    agg = build_all_data(embed_board=True, cwd_dir=cfg["repo_root"])
+    agg = build_all_data(
+        embed_board=True,
+        cwd_dir=cfg["repo_root"],
+        explicit_dir=cfg["repo_root"],
+    )
     target = make_route_key(cfg["project_name"], cfg["repo_root"])
     agg["initial_route"] = target
     return cmd_all_html(agg, args)
 
 
-def build_all_serve_data(scan_dir, cwd_dir=None):
+def build_all_serve_data(scan_dir, cwd_dir=None, explicit_dir=None):
     """serve 逐请求聚合：每次重读注册表、逐项目走缓存槽。注册表级错误落 error 字段行内呈现，不 5xx。"""
     try:
-        agg = build_all_data(scan_dir=scan_dir, get_entry=_get_board_entry_cached, cwd_dir=cwd_dir)
+        agg = build_all_data(
+            scan_dir=scan_dir,
+            get_entry=_get_board_entry_cached,
+            cwd_dir=cwd_dir,
+            explicit_dir=explicit_dir,
+        )
     except ConfigError as e:
         agg = {
             "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -3285,6 +3312,7 @@ def render_route_miss(key, routes):
 class AllBoardRequestHandler(http.server.BaseHTTPRequestHandler):
     scan_dir = None
     cwd_dir = None
+    explicit_dir = None
 
     def log_message(self, fmt, *a):
         pass  # 静默：只读服务不需要逐请求刷屏
@@ -3301,7 +3329,11 @@ class AllBoardRequestHandler(http.server.BaseHTTPRequestHandler):
 
     def _routes(self):
         try:
-            return build_route_map(self.scan_dir, cwd_dir=self.cwd_dir)
+            return build_route_map(
+                self.scan_dir,
+                cwd_dir=self.cwd_dir,
+                explicit_dir=self.explicit_dir,
+            )
         except ConfigError:
             return {}
 
@@ -3332,10 +3364,18 @@ class AllBoardRequestHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?", 1)[0]
         if path == "/":
-            data = build_all_serve_data(self.scan_dir, cwd_dir=self.cwd_dir)
+            data = build_all_serve_data(
+                self.scan_dir,
+                cwd_dir=self.cwd_dir,
+                explicit_dir=self.explicit_dir,
+            )
             self._send(200, "text/html; charset=utf-8", render_all_html(data).encode("utf-8"))
         elif path == "/data.json":
-            data = build_all_serve_data(self.scan_dir, cwd_dir=self.cwd_dir)
+            data = build_all_serve_data(
+                self.scan_dir,
+                cwd_dir=self.cwd_dir,
+                explicit_dir=self.explicit_dir,
+            )
             self._send(200, "application/json; charset=utf-8", json.dumps(data, ensure_ascii=False).encode("utf-8"))
         elif path.startswith("/p/"):
             self._send_project(path[len("/p/"):])
@@ -3351,8 +3391,12 @@ def cmd_all_serve(args, cfg=None):
         parent = Path(args.scan).expanduser().resolve()
         if not parent.is_dir():
             die(f"❌ --scan 目录不存在：{parent}")
-    cwd_dir = cfg["repo_root"] if cfg else None
-    handler = type("AllHandler", (AllBoardRequestHandler,), {"scan_dir": args.scan, "cwd_dir": cwd_dir})
+    explicit_dir = cfg["repo_root"] if cfg else None
+    handler = type(
+        "AllHandler",
+        (AllBoardRequestHandler,),
+        {"scan_dir": args.scan, "cwd_dir": explicit_dir, "explicit_dir": explicit_dir},
+    )
     try:
         server = http.server.ThreadingHTTPServer(("127.0.0.1", args.port), handler)
     except OSError as e:
