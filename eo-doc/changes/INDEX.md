@@ -19,3 +19,4 @@
 | 15 | [board-fork-collapse](15-board-fork-collapse/change.md) | light | enhance | archived | 2026-08-12 | 同 change 多 worktree 副本只出最新一卡，分叉副本收进徽标可下钻 |
 | 16 | [board-global-dashboard](16-board-global-dashboard/change.md) | full | enhance | archived | 2026-08-12 | 移除单项目默认入口，三形态默认全局 dashboard；泳道页项目 chip 改下拉切换 |
 | 17 | [board-swimlane-search](17-board-swimlane-search/change.md) | full | feature | archived | 2026-08-12 | 泳道页新增 Cmd+K 定位搜索（#seq 直跳、全文命中片段）、列内独立滚动、列折叠隐藏并持久记忆 |
+| 18 | [board-switcher-style](18-board-switcher-style/change.md) | light | enhance | archived | 2026-08-12 | 原生 select 换自绘下拉，样式对齐看板设计语言，行为与跳转口径不变 |
