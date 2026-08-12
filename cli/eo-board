@@ -1184,6 +1184,7 @@ PROJECT_CSS = r"""
     position: sticky; top: 0; z-index: 2; background: var(--bg);
     display: flex; align-items: baseline; gap: 8px; padding: 4px 6px 8px;
     border-bottom: 2px solid var(--col-color, var(--line)); margin-bottom: 10px;
+    cursor: pointer; user-select: none;
   }
   .col-head .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--col-color); align-self: center; }
   .col-head .name { font-weight: 700; font-size: 13.5px; letter-spacing: 0.02em; }
@@ -2471,6 +2472,14 @@ function buildBoard() {
     button.addEventListener('click', function (e) {
       e.stopPropagation();
       var col = button.closest('.col');
+      setColumnCollapsed(col.getAttribute('data-status'), !col.classList.contains('collapsed'));
+    });
+  });
+  root.querySelectorAll('.col-head').forEach(function (head) {
+    head.addEventListener('click', function (e) {
+      if (e.target && e.target.closest && e.target.closest('.col-toggle')) return;
+      e.stopPropagation();
+      var col = head.closest('.col');
       setColumnCollapsed(col.getAttribute('data-status'), !col.classList.contains('collapsed'));
     });
   });
