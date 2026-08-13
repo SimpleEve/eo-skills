@@ -587,6 +587,14 @@ class StageProgressTests(BoardCardProgressFixture):
         self.assertEqual(len(titles), 1)
         self.assertIn("P0-1", titles[0])
 
+    def test_review_blocker_counts_current_p0_and_p1_from_ledger(self):
+        """卡点按台账未决分级计数，不得使用历史标题总数或漏掉 P1。"""
+        self.write_review_gate(
+            p0=2, p1=2, rounds_hint=2, verdict="不通过", open_p0=1, open_p1=1,
+        )
+        rec = self.rec()
+        self.assertEqual(rec.get("blocker"), "review P0×1 P1×1 待修（第≈2轮）")
+
     def test_reserved_pass_with_open_p1_is_current_stage(self):
         """有保留通过 + 台账 open P1 → 当前仍是 review，不得吞掉未决。"""
         self.write_review_gate(
@@ -728,10 +736,7 @@ class ProjectJsRenderTests(BoardCardProgressFixture):
         self.assertIn("当前状态", detail)
         card = result["card"]
         self.assertIn("card-warn", card)
-        self.assertTrue(
-            "stage" in card or "change-review" in card or "第" in card,
-            card,
-        )
+        self.assertNotIn("card-stage-line", card)
 
     def test_gates_tab_shows_current_blocker_and_open_items(self):
         """质量门 tab 顶部展示阶段/卡点/未决明细；无卡点时空态。"""

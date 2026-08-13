@@ -438,7 +438,12 @@ def compute_gates(rec, doc_root, warnings):
         open_p0 = int(g.get("open_p0") or 0)
         open_p1 = int(g.get("open_p1") or 0)
         if g.get("verdict") and "不通过" in g["verdict"]:
-            text = f"review P0×{g.get('p0', 0)} 待修"
+            bits = []
+            if open_p0:
+                bits.append(f"P0×{open_p0}")
+            if open_p1:
+                bits.append(f"P1×{open_p1}")
+            text = "review " + (" ".join(bits) if bits else "不通过") + " 待修"
             if g.get("rounds_approx", 1) >= 2:
                 text += f"（第≈{g['rounds_approx']}轮）"
             candidates.append((file_last_touch(wt_path, f"{rel_dir}/review.md") or "", text))
@@ -1259,7 +1264,6 @@ PROJECT_CSS = r"""
   .bar > i { display: block; height: 100%; border-radius: 2px; background: var(--bar-color, var(--st-implementing)); }
   .prog-num { font-family: var(--mono); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; width: 68px; flex: none; text-align: right; }
 
-  .card-stage-line { margin-top: 9px; }
   .card-foot { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; align-items: center; }
   .tag {
     display: inline-flex; align-items: center; gap: 4px;
@@ -2254,10 +2258,6 @@ function changeCard(d) {
       + '<span class="prog-num">' + tdDone + '/' + tdTotal + ' · B' + batchDone + '/' + d.todo.length + '</span></div>';
   }
   var sp = d.stage_progress;
-  var stageHtml = '';
-  if (sp && sp.label) {
-    stageHtml = '<div class="card-stage-line"><span class="tag ' + (sp.warn ? 'warn' : 'stage') + '">' + esc(sp.label) + '</span></div>';
-  }
   var foot = '';
   if ((d.branch || d.worktree_name) && (d.diverged || !d.is_default_worktree))
     foot += '<span class="tag branch wt-split"><span class="wt-line">⎇ ' + esc(d.branch || '?') + '</span><span class="wt-line">' + esc(d.worktree_name || '?') + '</span></span>';
@@ -2288,7 +2288,6 @@ function changeCard(d) {
     + todoHtml
     + '<span class="src">正文 checkbox 现场计数</span>'
     + '</div>'
-    + stageHtml
     + '<div class="card-foot">' + foot + '<span class="date">' + esc(d.last_touch || '') + '</span></div>'
     + '</article>';
 }
