@@ -1,8 +1,11 @@
 # 三档制设计：直改 / 轻档 change / 全档 change（已采纳）
 
+> ⚠️ **已被 v3 取代（2026-08-15）**：三档判档、轻档 lock、完成门、测试资产唯一写入者等机制整体退役，见 [v3-design.md](v3-design.md)。本文件保留作历史决策记录。
+
 > status: **adopted · 已实施（2026-07-18）**。三个开放项按推荐落地：eo-implement 轻模式 / 完成门一次性 subagent 复核 / backlog 先判档（经 eo-change 第一步判档自然生效）。实施直接落 SKILL.md（本仓库即 skills 本体，不走 eo-* 流程）。落点：granularity.md §5（判档表）、conventions.md §3（轻档流转）、change-template.md（轻档模板）、eo-change（轻档流程）、eo-implement（轻模式）、ac-spec / eo-change-review / eo-review / eo-test（兼容行）。
 > 修复轮（2026-07-18）：对抗性审查（P0×6/P1×10/P2×3，报告 tmp/eo/review-tier/findings.md）后修正——收口改为五步 finalizer（含显式 doc sync，cursor sync 无自动触发的误设已纠正）、manual 确认留痕、`test_lock_commit` 比对基线、扩档子流程（回 eo-change）、判档轴收紧（描述成本降为安全前提下的 tie-breaker、多方轴排除独立复核者）、轻档显式 review/test 只读化、eo-flow 移除。
 > 归档同源化（2026-07-22）：轻档归档从 implement 收口内联五步改为 **eo-archive 轻档门**——准入验完成门留痕（独立复核基线新鲜 + 锁定测试绿 + manual 确认记录），第二~五层与全档共用；implement 收口瘦身为内嵌调用。动机：归档步骤单一信源防两份漂移，且完成门证据本就全在工件里（`test_lock_commit`、复核行基线 sha、AC 确认记录），主控 / implement / 用户任一上下文均可校验后归档，消除「主控被拒 → 回抛 implement」的往返。
+> 测试职责收敛（2026-08-04）：测试文件、fixture、mock、harness 与测试配置的唯一写入者统一为 eo-test。轻档锁定从 implement 上下文拆成前置 `/eo-test lock` 独立 tester；随后另一上下文的 implement 只消费锁、写业务实现并运行测试，不修改任何测试资产。轻档仍不产事后 test.md。
 > 依据：本轮竞品与实践调研（[research/INDEX.md](../research/INDEX.md)）。skill 落地时**不携带**任何出处说明（精简 token）；有据可循的职责由本稿与 research/ 承担。
 
 ## 1. 问题与结论
@@ -15,7 +18,7 @@
 
 1. **减前置描述**——前置描述只能解释约 15% 的 agent 失配，是三档里最可压缩的部分
 2. **保验收锚点**——AC 是唯一不随模型变强而失效的工件职能（独立验证的基准，治"假报完成"）
-3. **验证下沉为测试**——正向可判定的 AC 落成失败测试并 commit 锁定；负向约束与观感留书面
+3. **验证交给独立 tester**——正向可判定的 AC 由 `/eo-test lock` 落成失败测试并 commit 锁定；implement 只消费锁，不参与测试设计
 4. **意图显式去处**——常驻层（state）承接不了单次意图；不落 change 的意图要么进 decisions/，要么明示接受蒸发
 
 ## 2. 三档总览
@@ -25,13 +28,13 @@
 | 触发 | trivial 四判据 + 描述成本下界 | 影响面可圈住的小型明确需求 | 跨边界 / 跨 session / 多方对齐 |
 | 工件 | 零 | 极简 change.md：意图 1-2 句 + AC ≤5 条（`tier: light`） | 完整 change.md（`tier: full`，缺省即 full） |
 | TODO | 无 | **不预写**——agent 自拆，不落盘 | 三要素 + Batch |
-| 验收 | 常规 commit | 测试锁定 + 独立复核 + manual 过目 | 全流程（implement/test/review） |
+| 验收 | 常规 commit | 独立 `/eo-test lock` + implement + 独立复核 + manual 过目 | 全流程（implement/test/review） |
 | 方案审查 | 无 | 无——**探针对齐**替代（落盘即请用户否一次） | change-review（可选，条件触发） |
 | 归档 | 随下次 doc sync 收割 | 收口内嵌调用 eo-archive 轻档门；无 test.md/review.md | eo-archive 全档门 |
 
 ## 3. 判档决策表
 
-**判档权在 agent，不在用户**：用户始终自然描述需求，不需要预判档位。agent 按本表判档并一句话宣告（含该档的取舍，如「按轻档走：不出 review 报告，验收靠测试 + 复核」），用户一个词即可改档。判错代价已设计为低——判低了有升档路径兜底，判高了只多一份工件——**边界不需要精确，只需要错得便宜**，这正是模糊地带无害的原因。
+**判档权在 agent，不在用户**：用户始终自然描述需求，不需要预判档位。agent 按本表判档并一句话宣告（含该档的取舍，如「按轻档走：不出事后 test/review 报告，先由独立 tester 锁定测试，再由 implement 实现」），用户一个词即可改档。判错代价已设计为低——判低了有升档路径兜底，判高了只多一份工件——**边界不需要精确，只需要错得便宜**，这正是模糊地带无害的原因。
 
 **输入源与档位正交**：用户口述 / backlog 卡 / 外部 GitHub issue / brainstorming 捕获都是输入源，统一过本判档门。外部 GitHub issue 可落任何档：报 bug → eo-fix；小而明确 → 轻档（号回写 frontmatter `issue:`，联动钩子靠回写号去重、不重复建）；大需求 → 全档（现有 board-github 联动不变）。输入自带 AC 时（规范的 GH issue 正是如此），落盘近乎零成本。
 
@@ -61,7 +64,7 @@ id: export-name-fix        # slug 即身份，规则同 conventions.md §2
 seq: 15                    # 与全档共用序号空间，目录 <NN>-<slug>/
 tier: light                # light | full；缺省视为 full（存量 change 零迁移）
 status: draft              # 状态机与全档共用：draft → confirmed → implementing → archived（轻档跳过 reviewed）
-test_lock_commit: ~        # 测试锁定 commit（独立复核的比对基线）
+test_lock_commit: ~        # /eo-test lock 在独立 tester 上生成（独立复核的比对基线）
 commits: []                # finalizer 收口时写入（审计区间）
 issue: ~                   # 联动创建或外部来源的 GitHub issue 号（复用全档字段，钩子靠它去重）
 created: 2026-07-18
@@ -83,20 +86,20 @@ created: 2026-07-18
 ### 4.2 生命周期（状态机与全档共用）
 
 ```
-澄清（1-2 问）→ 落盘(draft) → 探针对齐(confirmed) → 测试锁定 + 实施(implementing) → 完成门 → done(archived)
-                                                              ↘ 扩档信号 → tier 改 full，原地续走全流程
+澄清（1-2 问）→ 落盘(draft) → 探针对齐(confirmed) → /eo-test lock（仍 confirmed）→ /eo-implement（implementing）→ 完成门 → done(archived)
+                                                                  ↘ 扩档信号 → tier 改 full，原地续走全流程
 ```
 
-1. **落盘 + 探针对齐**：写完立即请用户否一次。探针的成功标准是**尽快暴露分歧**，不是通过评审；用户点头即 `confirmed` 进入实施，无修订循环
-2. **测试锁定**：实施前把 auto 类 AC 按性质分流落锁——新增行为先红；characterization（行为不变）基线即绿合法；负向约束锁静态检查；零 auto 跳过；无测试基建问用户（转全档或注明无锁定）。锁定 commit 记入 `test_lock_commit`，AC 行回填测试锚点
-3. **派发实施**：eo-implement 轻模式。agent 自拆 TODO，工作记录留在对话与 commit，不回写工件
-4. **实施纪律**：**禁改测试文件**。确需改（AC 本身写错）→ 停手上报，用户确认后改 AC、重锁测试再继续
+1. **落盘 + 探针对齐**：写完立即请用户否一次。探针的成功标准是**尽快暴露分歧**，不是通过评审；用户点头即 `confirmed` 进入锁定与实施链，无修订循环
+2. **独立测试锁定**：实施前派独立 tester 运行 `/eo-test lock`，按 auto AC 性质分流落锁——新增行为先红；characterization（行为不变）基线即绿合法；负向约束锁静态检查；零 auto 留痕跳过；无测试基建问用户（转全档或注明无锁定）。锁定 commit 记入 `test_lock_commit`，AC 行回填测试锚点，status 保持 `confirmed`
+3. **派发实施**：换另一上下文进入 eo-implement 轻模式，只传锁定 commit、AC→锚点与 RED/characterization 摘要。implement 自拆 TODO，工作记录留在对话与 commit，不回写工件
+4. **实施纪律**：**测试资产零写入**。测试文件、fixture、mock、harness、测试配置确需变化，或 AC 本身写错 → 停手上报；前者交回 eo-test，后者经用户确认改 AC 后交 `/eo-test lock` 重锁，不得在 implement 上下文就地改测试
 5. **完成门**：测试绿 + lint/typecheck + **新鲜上下文独立复核**（见 §4.3）+ manual 项用户过目
 6. **收口**：完成门通过后立即内嵌调用 **eo-archive 轻档门**（留痕校验 → 结算 → 元数据冻结 → 显式 doc sync → push/PR → 关 issue / stub 终态）——归档步骤单一信源在 eo-archive。不产 test.md / review.md；决策按 eo-project-record 门槛落 decisions/
 
 ### 4.3 轻档的测试与审查（不是省略，是吸收与压缩）
 
-**测试——eo-test 的职能前移吸收**：测试锁定这一步就是"以 AC 为锚编写测试"（eo-test 的核心职能），只是从实施后挪到了实施前，实施的目标就是让它变绿——所以轻档没有事后测试轮，也不产 test.md。边界：AC 的验证若需要**起环境 / 多环境组合 / 点击流**（auto-heavy），说明验证成本已经不轻——这本身就是扩档信号，把重验证交还给全档的 eo-test 一次跑完。
+**测试——eo-test 前移为独立节点**：测试锁定就是“以 AC 为锚编写测试”（eo-test 的核心职能），从实施后前移到实现前，并与 implement 使用不同角色上下文。tester 负责写锁，implement 只负责让锁变绿——所以轻档没有事后测试轮，也不产 test.md，但并非跳过 eo-test。边界：AC 的验证若需要**起环境 / 多环境组合 / 点击流**（auto-heavy），说明验证成本已经不轻——这本身就是扩档信号，转全档后由 eo-test 一次跑完重验证。
 
 **审查——两级都有对应物**：
 - **方案级**（change-review 的对应物）→ **探针对齐**。轻档没有 TODO 映射、粒度、条件节这些审查对象，六维度里只剩"AC 质量 + 意图一致"两个面，一次人工否定比一轮结构化审查性价比高
@@ -105,7 +108,7 @@ created: 2026-07-18
 
 ### 4.4 扩档路径（原地升档）
 
-实施中触发扩档信号 → 停手转 eo-change「扩档子流程」：`tier` 改 `full`，就地补齐模板节——**已完成工作映射为已勾 TODO 并注「扩档前完成」**，意图与 AC 原样保留，已锁定测试与 `test_lock_commit` 继续有效；交用户再确认（因影响面/风险触发的建议跑一次全量 change-review）；status 不变，回 eo-implement 从首个未完成 Batch 续走。**文件不挪、目录不改、commit 前缀不变**；INDEX 档列与 issue body 随扩档刷新。
+锁定或实施中触发扩档信号 → eo-test lock / eo-implement 停手转 eo-change「扩档子流程」：`tier` 改 `full`，就地补齐模板节——**已完成工作映射为已勾 TODO 并注「扩档前完成」**，意图与 AC 原样保留，已锁定测试与 `test_lock_commit` 继续有效；交用户再确认（因影响面/风险触发的建议跑一次全量 change-review）；status 不变，回 eo-implement 从首个未完成 Batch 续走。**文件不挪、目录不改、commit 前缀不变**；INDEX 档列与 issue body 随扩档刷新。
 
 ### 4.5 归档与文档同步
 
@@ -126,7 +129,7 @@ created: 2026-07-18
 
 | # | 问题 | 最终选择 | 落点 |
 |---|------|----------|------|
-| 1 | 实施入口 | eo-implement 增「轻模式」 | eo-implement/SKILL.md |
+| 1 | 实施入口 | 独立 `/eo-test lock` → eo-implement「轻模式」；两者上下文隔离 | eo-test/SKILL.md + eo-implement/SKILL.md |
 | 2 | 独立复核形态 | 完成门内 spawn 一次性 subagent，复核结论一行写回 change.md | eo-implement 轻模式完成门 |
 | 3 | backlog 衔接 | backlog 卡先判档（经 eo-change 第一步自然生效） | eo-change 第一步 |
 

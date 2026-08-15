@@ -103,17 +103,17 @@ init 会问一个关键问题——项目管理侧（roadmap / backlog / 决策 
 ```mermaid
 flowchart TD
     Init["/eo-project-init<br/>(必跑一次)"]:::entry --> Change
-    Brain["/eo-brainstorming<br/>(可选：方向发散 + 拆首批 change)"] -.捕获出口.-> Change["/eo-change<br/>change.md (轻/全两档)"]
-    Change -.可选.-> CR["/eo-change-review<br/>方案审查"]
+    Brain["/eo-brainstorming<br/>(可选：方向发散 + 拆首批 change)"] -.捕获出口.-> Change["/eo-change<br/>change.md 四问骨架"]
+    Change --> Imp["/eo-implement<br/>按 Batch 写代码 + 自验勾 AC"]
+    Imp --> Arch["/eo-archive<br/>四问核对门 + 更新活文档 + 冻结 change"]
+
+    Change -.信号命中/点名.-> CR["/eo-change-review<br/>方案审查（可选闸门）"]:::gate
     CR -.P0.-> Change
-    Change --> Imp["/eo-implement<br/>按 Batch 写代码 + 勾 TODO<br/>(只跑轻验证)"]
-    Imp --> Test["/eo-test<br/>test.md<br/>(重验证一次跑完)"]
-    Imp --> Rev["/eo-review<br/>review.md<br/>(读码，不起环境)"]
-    Test -.失败.-> Imp
-    Rev -.P0/P1.-> Imp
-    Test -->|链路 A：行为面广，先跑矩阵再审码| Rev
-    Rev -->|链路 B：逻辑密集，先审码再跑矩阵| Test
-    Test --> Arch["/eo-archive<br/>更新活文档 + 冻结 change"]
+    Imp -.信号命中/点名.-> Test["/eo-test<br/>独立测试（可选闸门）"]:::gate
+    Imp -.信号命中/点名.-> Rev["/eo-review<br/>代码审查（可选闸门）"]:::gate
+    Test -.失败.-> Fix2["/eo-fix 循环内分支"] -.修复.-> Test
+    Rev -.P0/P1.-> Fix2 -.修复.-> Rev
+    Test --> Arch
     Rev --> Arch
 
     Fix["/eo-fix<br/>bug 口喷入口：定位 + 直接修复"] -.需求变更.-> Change
@@ -127,13 +127,14 @@ flowchart TD
 
     classDef entry fill:#fef3c7,stroke:#f59e0b,stroke-width:2px
     classDef cross fill:#dbeafe,stroke:#3b82f6,stroke-dasharray: 3 3
+    classDef gate fill:#f3f4f6,stroke:#9ca3af,stroke-dasharray: 5 5
 ```
 
 > `/eo-handoff` 横切整个流程：clear 前在**任意节点**都可触发，把当前状态写到 `tmp/eo/handoff/<topic>.md` 供下个会话载入。图中仅以 implement 阶段示意。
 >
-> 样式微调、多语言这类 trivial 改动走**直改模式**（不开 change，判据见 [eo-shared/granularity.md](eo-shared/granularity.md)），随下次 doc sync 顺带收割。轻档 change（`tier: light`）跳过 test/review，完成门通过后由收口内嵌调用 `/eo-archive` 轻档门归档（含显式 doc sync）——详见 [docs/tier-design.md](docs/tier-design.md)。
+> v3 默认主路只有三站：**change → implement → archive**；change-review / test / review 是**可选闸门**——风险信号命中（不可逆操作 / 权限资金 / 外部契约 / 大影响面）或你点名时才挂，豁免一个词的事。样式微调、多语言这类 trivial 改动走**直改模式**（不开 change，判据见 [eo-shared/granularity.md](eo-shared/granularity.md)），随下次 doc sync 顺带收割。
 >
-> **互不干扰的工作可并行**：全档 Batch 可标同层并行组（`Batch 2a`/`2b`），超标拆出的 change 序列可标「可与 #N 并行」——由 `/eo-loop` 派发到隔离 worktree 并行推进（判据、机械校验与合流 checkpoint 见 [eo-shared/granularity.md](eo-shared/granularity.md) §6）。
+> **互不干扰的工作可并行**：Batch 可标同层并行组（`Batch 2a`/`2b`），超标拆出的 change 序列可标「可与 #N 并行」——由 `/eo-loop` 派发到隔离 worktree 并行推进（判据、机械校验与合流 checkpoint 见 [eo-shared/granularity.md](eo-shared/granularity.md) §6）。
 
 ---
 
@@ -143,21 +144,21 @@ flowchart TD
 |------|---|------|
 | 第一次在项目里用 eo-skills | `/eo-project-init` | **必跑** |
 | 想法还不成形 / 新项目从零起步 | `/eo-brainstorming` | 发散 + 钉决策，出口直接拆首批 change |
-| 发起变更（新功能 / 增强 / 重构） | `/eo-change` | 产出 `change.md`（轻档 = 意图 + AC；全档 = 速览 + AC + TODO 分批）；trivial 短路直改 |
-| 按 change 写代码 | `/eo-implement` | 按 Batch 执行，含 bug 修复循环 |
+| 发起变更（新功能 / 增强 / 重构） | `/eo-change` | 产出四问骨架 `change.md`（解决什么问题 / 完成后看到什么 / 谁验收 / 不通过怎么办）；trivial 短路直改 |
+| 按 change 写代码 | `/eo-implement` | 按 Batch 执行，批末自验勾 AC；测试随写（普通工程实践） |
 | 发现 bug（口喷即可） | `/eo-fix` | 定位 + 直接修复；难缠 bug 自动升级深挖模式；需求变更转 change |
-| 跑测试 / 写测试报告 | `/eo-test` | 以 AC 为锚 + 读码取输入；重验证唯一执行者；单测审计 + 补缺不重写 |
-| 实施后代码审查 | `/eo-review` | 全档必跑；轻档由 implement 完成门独立复核替代 |
-| 审查/完成门通过后归档 | `/eo-archive` | 更新 state/handbook + 冻结 change；轻档走轻档门（收口自动触发，亦可单独调用） |
+| 独立测试 / 补测试 | `/eo-test` | **可选闸门**：信号命中或点名时用；独立视角审计 + 补缺，产简版 test.md |
+| 实施后代码审查 | `/eo-review` | **可选闸门**：信号命中或点名时用；通过则 status 置 reviewed |
+| 验收归档 | `/eo-archive` | 四问核对硬门 + 更新 state/handbook + 冻结 change |
 | 忘了当初怎么设计的 / 想看某段逻辑的实现 | `/eo-recall` | 只读问答，分层作答带出处；复杂逻辑可出图/解释页 |
 | 定设计系统 / 出视觉方案 / 高保真页面 | `/eo-design <mode>` | init / variants / apply / audit，真相源 `DESIGN.md` |
 | 即将 `/clear` 但要保留进度 | `/eo-handoff` | 写到 `tmp/eo/handoff/<topic>.md`，下个会话载入即续 |
 | 维护 `eo-doc/` 文档体系 | `/eo-doc-manager` | sync / re-sync |
 | 记录决策 / 经验教训 | `/eo-project-record` | lessons/ + decisions/，带 INDEX 供自动消费 |
 | 加一条 backlog 待办 / 灵感 | `/eo-backlog` | 仅追加到 `backlog.md` |
-| 把若干节点串起来循环推进到收敛 | `/eo-loop` | 总控调度：圈状态机线段 → 派发到可插拔基底（子 agent / codex / orca）→ 每 ≤30min 主动观测并出进度报告；互不干扰的并行组（同层批 / 可并行 change）多 worker 并行推进 |
+| 把若干节点串起来循环推进到收敛 | `/eo-loop` | 总控调度：圈线段 → 派发到可插拔基底（子 agent / codex / orca）→ 每 ≤30min 主动观测并出进度报告；互不干扰的并行组多 worker 并行推进 |
 
-不在表里的 skill（`eo-change-review`）是可选增强，详见 [GUIDE](docs/GUIDE.md)。
+不在表里的 skill（`eo-change-review`）是可选闸门之一（方案审查，implement 之前），详见 [GUIDE](docs/GUIDE.md)。
 
 ---
 
@@ -196,10 +197,12 @@ eo-sync watch --all     # 常驻：所有注册项目状态一变自动追平（
 
 ## 两种 review 别混用
 
-| Skill | 审什么 | 核心问题 | 强制？ |
+| Skill | 审什么 | 核心问题 | 何时用 |
 |-------|-------|---------|-------|
-| `/eo-change-review` | 某个 change 的方案 | **方案**对吗？AC 质量、粒度合规？ | 可选（高风险建议走） |
-| `/eo-review` | change 实施后的代码 | **代码**对吗？符合 AC？ | 全档强制；轻档默认由独立复核替代 |
+| `/eo-change-review` | 某个 change 的方案 | **方案**对吗？AC 质量、粒度合规？ | 可选闸门（implement 前；信号命中或点名） |
+| `/eo-review` | change 实施后的代码 | **代码**对吗？符合 AC？ | 可选闸门（implement 后；信号命中或点名） |
+
+信号清单见 [eo-shared/granularity.md](eo-shared/granularity.md) §5。
 
 ---
 

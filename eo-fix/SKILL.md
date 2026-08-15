@@ -1,8 +1,8 @@
 ---
 name: eo-fix
 description: |
-  bug 口喷入口：定位并直接修复。触发：修 bug / 有个 bug / 报错了 / 行为不对 / fix / /eo-fix。
-  NOT FOR: 明确的业务变更（走 /eo-change）；implement-test-review 循环内的反馈修复（归 /eo-implement 模式二）。
+  缺陷修复方法论唯一入口：口喷 bug 定位直修；implement-test-review 循环内的反馈修复也走本 skill（循环内分支，原 impl worker 执行）。触发：修 bug / 有个 bug / 报错了 / 行为不对 / fix / /eo-fix。
+  NOT FOR: 明确的业务变更（走 /eo-change）。
 ---
 
 # eo-fix — Bug 修复
@@ -63,7 +63,7 @@ description: |
 | 取证结果 | 动作 |
 |---------|------|
 | 行为查无出处（无 AC 声明、state 无记载）且按口述明显是缺陷 | 按快路修（第三步） |
-| **行为是有意设计**（AC 声明过 / state 记为规则 / change 意图明确） | 停手告知：「这是 <change-id> 特意做的（AC-x）」；用户仍要改 → 纯外观 / 文案类按 trivial 直改，并顺手就地精化对应 AC 文本（意图不变、不动 `plan_revision`）；涉及功能语义 / 交互逻辑 → 转 `/eo-change`（带上取证结论） |
+| **行为是有意设计**（AC 声明过 / state 记为规则 / change 意图明确） | 停手告知：「这是 <change-id> 特意做的（AC-x）」；用户仍要改 → 纯外观 / 文案类按 trivial 直改，并顺手就地精化对应 AC 文本（意图不变）；涉及功能语义 / 交互逻辑 → 转 `/eo-change`（带上取证结论） |
 | AC 写漏且 change 未 archived | 确认后先补 §2/§3 再修（Update preserves context） |
 | state 与代码矛盾 | 文档陈旧 → 提示跑 `/eo-doc-manager sync`，以代码为准重判 |
 
@@ -80,7 +80,7 @@ description: |
 
 ### 第六步：落点记账（任何路都不豁免，~30 秒）
 
-- 有相关**活跃 change** → 勾选涉及的 TODO/AC（**auto-heavy 不代勾**，勾选权归 /eo-test；被本次改动弄脏的已勾项按 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)「勾变脏即取消」处理），commit 带 `[<change-id>]` 前缀；改动影响其 acceptance.md 人工项的入口/行为 → 按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)「失效与重置」取消该项勾选并注明原因
+- 有相关**活跃 change** → 勾选涉及的 TODO/AC（人工项不代勾，勾选权归用户；被本次改动弄脏的已勾项按 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)「勾变脏即取消」处理），commit 带 `[<change-id>]` 前缀；改动影响其 acceptance.md 人工项的入口/行为 → 按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)「失效与重置」取消该项勾选并注明原因
 - 无 → 直改落地：commit 带 `fix:` 前缀（见 [../eo-shared/conventions.md](../eo-shared/conventions.md)），由下次 doc sync 兜底归档；cursor 落后超过 10 个 commit 时建议顺手跑 `/eo-doc-manager sync`
 
 ### 第七步：收尾速报
@@ -93,6 +93,47 @@ description: |
 - （取证时）行为出处：<AC-x / state 记载 / 查无出处>
 - （深挖时）调查记录：tmp/eo/fix/<file>；建议沉淀 lesson：<是/否>
 ```
+
+## 循环内分支（implement-test-review 反馈修复）
+
+**适用**：`test.md` 有未决失败项，`review.md` 有 open P0/P1，或 `acceptance.md` 有「不通过」项。由 /eo-loop 派发到**原 impl worker** 执行（worker 复用纪律不变——本分支只是换方法论，不换人），或循环会话内直接调用。status 为 `reviewed` 时（产出阻塞结果的 skill 正常已按回退边置回；没置则此刻补）→ 先置回 `implementing`。
+
+与口喷路径的差异只有两条：**免定位**（反馈报告即定位输入，跳过第二步）；**带核销职责**（第 1/5 步与交接速报）。分诊三路由原样生效——明显缺陷走快路；finding 与已确认 AC / 已钉决策冲突（「这个行为本来就不对」类）走取证路，防静默推翻；定位不了或链路连环失败走深挖，链路类缺陷用「全链审查」变体（见 [references/investigation.md](references/investigation.md)）。
+
+0. **熔断检查**（修复动手前）
+   - 凭报告与对话机械可判：同一 change 修复轮次 ≥3，或各轮失败触发位置互不相同（打地鼠信号）→ **停，不开始修复**，用户三选一：
+     a) **豁免一轮**：放行本轮，change.md 末尾记「熔断豁免：<日期>」
+     b) **卡点检查**：走下方子流程，按根因结论定出口
+     c) **回炉**：转 /eo-change 回炉子流程（方案实质修订 + 重新确认）
+1. **读取反馈**：同会话反馈已在上下文 → **不重读报告文件**；跨会话 → 只读报告的未决清单 + 结论，按 open 项定点读详情，不通读全文。根因为 `test-asset` 的 finding 不由本分支消费，交 `/eo-test`；本分支只处理业务实现项
+2. **分诊定路 + 修复**：按 P0 > P1 > P2 逐一过第一步分诊表定路，各走快路 / 取证 / 深挖；修复代码**注释零溯源**（[../eo-shared/conventions.md](../eo-shared/conventions.md) §2.6）
+3. **双向取证，取最低成本层**：每个缺陷**先复现失败、修后在同层验通过**——「改完看起来对了」不算证据；层选法同主流程第三步
+4. 涉及的**自动 AC 就地重验**；被本次修复弄脏的**已勾** AC 按 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)「勾变脏即取消」处理；修复改变了人工项的入口/行为 → 按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)「失效与重置」更新对应验收项
+5. **回写未决清单**：每个业务实现缺陷修复并同层验通过后，把对应报告清单行置 `fixed` 并填修复 commit——`verified` 由复审方核销，本分支不写
+6. 修复提交带 `[<change-id>]` 前缀
+7. **交接**：回原复审方核销（增量，不重开全文）。交付速报列：`反馈来源`、`修复 commit`、`受影响 AC`、`局部验证`、`下一节点`
+8. 修复不开新 change；发现根源是方案/需求问题 → 停下告知用户，转 /eo-change **回炉子流程**（实质修订 + 重新确认；意图不变的口径精化不必回炉，就地补 AC 即可）
+
+### 卡点检查子流程（熔断三选一选 b 时执行）
+
+spawn 一个**新鲜上下文 subagent**（执行者自述不作数——修了 3 轮的 agent 是判断自己为何修不好的最差人选），输入按 manifest 给，**禁止默认通读报告全史**：
+
+- change.md 全文
+- test.md / review.md 的未决清单 + 结论 + open/fixed 项定点详情
+- change-review.md 当前结论、acceptance.md 不通过项、implement.md 偏差记录（各自存在时）
+- `[<change-id>]` 提交列表与涉及文件的 scoped diff、本 change 相关的未提交脏 diff
+
+产出五分类根因 + 建议出口：
+
+| 根因 | 出口 |
+|------|------|
+| change 方案/架构不合理 | 转 /eo-change 回炉子流程 |
+| 链路失败语义残缺（向前写链，恢复面的洞逐次暴露） | 走深挖「全链审查」变体：枚举链上全部可死点 + 逐点恢复证明矩阵，按矩阵批量修 |
+| AC 口径漂移（各轮按不同理解打回） | 回 /eo-change 钉死口径（意图不变的精化，不必回炉） |
+| 纯实施质量问题 | 方向没错，建议豁免一轮继续修 |
+| 测试基建/环境假失败 | 修基建；报告未决清单注明假失败供用户裁决 |
+
+结论一行写入 change.md 末尾：`卡点检查：<根因>，<日期>`。**失败关闭**：subagent 起不了（槽位/工具不可用）→ 不得用执行者自述替代，记「卡点检查未执行」，用户在「稍后重试 / 直接回炉 / 单轮豁免」中裁决。
 
 ## 关键约束
 
@@ -107,7 +148,7 @@ description: |
 | 深挖必宣告、必还原 | 插桩/日志/bisect 结束后全部还原 |
 | 需求变更不伪装成 fix | **功能语义 / 交互逻辑**的期望变更就是 /eo-change 的事，哪怕改动很小；纯外观 / 样式 / 文案的期望变更不算——按 granularity §2 trivial 直改（前缀选择见 conventions §2.5） |
 | 注释纪律 | 一切流程溯源标注（change 编号/slug、TODO/AC、finding P0-x/P1-x、FAIL-x）严禁进代码注释（溯源走 commit 前缀）；不写「为何正确」的辩护；提交前对新增注释自检一眼，见 conventions.md §2.6 |
-| 与 implement 的分工 | test/review 反馈的修复归 /eo-implement 模式二；本 skill 是流程外的口喷入口 |
+| 循环内修复归本 skill | test/review/acceptance 反馈的修复走循环内分支（原 impl worker 执行）；eo-implement 无独立修复模式 |
 
 ## 典型场景
 
@@ -118,3 +159,5 @@ description: |
 **场景 3 · 需求变更伪装**：「积分过期改成 90 天了」→ state 记载 30 天规则、代码一致——有意设计 → 转 /eo-change。
 
 **场景 4 · 难缠 bug**：「偶发卡死，复现不稳定」→ 定位无果 → 宣告深挖 → 四阶段 → 根因回分诊 → 修复 + 还原 + 建议沉淀 lesson。
+
+**场景 5 · 循环内打地鼠（全链审查）**：记账链 Test 连续 FAIL 且各轮触发点互不相同（终局等待面 / 锁权限 / 重试误判已入账）→ loop 打地鼠信号命中，用户选全链审查 → 原 impl worker 走深挖链路变体：枚举链上全部可死点，配不出恢复证明的点 = 洞 → 按死点矩阵批量修 → 台账置 `fixed`，回原 tester 复验。

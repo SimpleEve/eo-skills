@@ -1,10 +1,8 @@
-# change.md 固定模板（v2）
+# change.md 固定模板（v3）
 
 eo-change 按下方模板写入 `eo-doc/changes/<NN>-<slug>/change.md`（目录 = seq 补零前缀 + slug；身份是 slug，见 [eo-shared/conventions.md](../../eo-shared/conventions.md) §2）。
 
-**change 分轻/全两档**（判档见 [eo-shared/granularity.md](../../eo-shared/granularity.md) §5）：全档用下方完整模板；轻档（`tier: light`）用文末的极简模板。
-
-全档必填 = **速览 + §1-§3**。§4-§8 是**条件节**：满足触发条件才写，不满足整节省略（连标题都不留）。如果写出来的 change.md 明显超过本模板量级，先查 [eo-shared/granularity.md](../../eo-shared/granularity.md) 的硬指标。
+v3 单一形态（轻/全档已合并）：**必填 = §1-§4**（四问骨架，用户是第一受众）；§5 技术备注是 implementer 视角的折叠节；§6 是条件节，满足触发条件才写。如果写出来的 change.md 明显超过本模板量级，先查 [eo-shared/granularity.md](../../eo-shared/granularity.md) 的硬指标。
 
 ```markdown
 ---
@@ -12,128 +10,75 @@ id: batch-export     # slug 即身份（commit 前缀/stub 文件名用它），
 seq: 14              # 显示序号（#14），补零作目录前缀 14-<slug>/；撞号自愈见 conventions.md §2
 title: 批量导出
 summary: <一句话意图，≤50 字，纯文本>   # INDEX 摘要列与看板卡面的单一来源
-status: draft        # draft | confirmed | implementing | reviewed | archived（skill 自动流转，用户不手改）
-tier: full           # light | full；缺省视为 full（存量 change 零迁移）
+status: draft        # draft | confirmed | implementing | reviewed | archived（skill 自动流转，用户不手改；reviewed 可选）
 type: feature        # bootstrap | feature | enhance | refactor
 base_commit: ~       # eo-implement 首次执行时写入
-plan_revision: 1     # 方案版本；仅 eo-change 回炉子流程（用户重新确认时）+1；缺省视为 1
-fix_rounds: 0        # 当前 revision 修复轮次；eo-implement 模式二第 0 步维护，≥3 熔断；缺省视为 0
-fix_consumed: []     # 已消费失败反馈标识（review#N / test#N / acceptance#<AC>@<基线sha>）；回炉确认时清空
 commits: []          # eo-archive 归档时写入（仅审计用，不决定同步范围）
 issue: ~             # eo-sync 同步时由 github 适配器回写号（confirmed 起）
 pr: ~                # eo-sync 归档同步回写 URL
-created: 2026-07-07
+created: 2026-08-15
 ---
 
 # <标题>
 
-## 速览
+## §1 解决什么问题
 
-<!-- 人读投影（全档必填，轻档无此节）：给确认与人工 review 的 30 秒入口。视角纪律：写用户可见的行为差异，
-     不复述 AC 条文、不写技术方案——与 §1/§2 是视角不同，不是内容重复。确认交付时对话里亮的就是本节 + §2 -->
-- **改什么**：<一句话（可与 frontmatter summary 同文）>
-- **为什么**：<一句话>
-- **行为差异**：之前 <用户看到/做到什么> → 之后 <变成什么>
-- **怎么验**：AC <n> 条（人工 <m> 条）；<验收入口一句，如「导出对话框选中多条直接试」>
+<!-- 为谁解决什么问题、为什么现在做。1-3 句人话，含用户原话要点。
+     已钉决策（来自起草澄清 / brainstorming 捕获）跟在意图后： -->
 
-## 1. 意图
-
-<为什么做，1-3 段，含用户原话要点。>
-
-已钉决策（来自起草澄清 / brainstorming 捕获）：
+已钉决策：
 - <决策面> → <结论>（理由：…）
-- <决策面> → <结论>（假设，用户未逐条确认）
 
-## 2. 验收清单
+## §2 完成后我应该看到什么
 
-<!-- 规范见 eo-shared/ac-spec.md：用户视角、可独立验证、技术无关、覆盖异常路径；能自动验的不写成人工。
-     验证栏走增量制：只写声明读不出来的操作入口/观察位置；声明已含触发条件与可观察结果的省略 -->
-- [ ] AC-1 <用户能……>（验证：<声明读不出来的操作入口 / 观察位置>）
-- [ ] AC-2 <当……失败时，用户看到……>
-- [ ] AC-3 <体验/观感类>（人工:<做什么 → 过目什么>）
+<!-- AC 规范见 eo-shared/ac-spec.md：演示脚本口吻 + 归属标注 + 阻塞标注；能自动验的不写成人工；
+     至少 1 条异常路径；条数不模板化。缺省即阻塞，非阻塞显式标 -->
+- [ ] AC-1 [自动] 打开导出对话框选中多条，点导出后得到 `<项目名>-<日期>.zip`，行数等于选中数
+- [ ] AC-2 [自动] 当选中数为 0 时点导出，看到「请先选择条目」提示且不产生文件
+- [ ] AC-3 [人工·非阻塞] 导出完成提示不遮挡列表内容（人工:导出一次过目提示位置）
 
-## 3. TODO
+## §3 谁验收、按什么标准
 
-<!-- 3-7 条理想 / 10 条硬上限；每条三要素（描述/文件/对应 AC）；文件栏带操作类型前缀 新增:/修改:/删除:
-     （缺省视为修改——change-review 维度 7 按类型核验）；完成判据仅在多条 TODO 对同一 AC 时逐条写
-     （一对一不写，默认判据 = 批末对应 AC 验证通过）；禁止占位符；按 Batch 分组，Batch 1 = MVP。
-     互不干扰的批标同层并行组（字母后缀 Batch 2a / 2b，判据与合流见 granularity §6）；纯数字 = 串行 -->
+<!-- 自动项：跑什么命令 / 看什么输出（增量制——§2 声明已说清的此处不重复）；
+     人工项：指向验收单（implement 完成时生成）。小 change 两三句即可 -->
+- 自动项：eo-implement 批末逐条执行，命令 + 关键输出留在速报
+- 人工项（AC-3）：归档前照 acceptance.md 过目勾选
+
+## §4 不通过怎么办
+
+<!-- 缺省写法如下，只有需要定制时才改写 -->
+- 阻塞项不通过 → 禁止归档：回 /eo-implement 修复，方案本身要改则回炉
+- 非阻塞项不通过 → 记 backlog 继续，不挡归档
+
+## §5 技术备注（implementer 视角）
+
+<!-- TODO 3-7 条理想 / 10 条硬上限；每条三要素（描述/文件/对应 AC）；
+     按 Batch 分组，Batch 1 = MVP（跑完即可独立验证其对应 AC）；
+     互不干扰的批可标同层并行组（字母后缀 Batch 2a/2b，判据见 granularity §6）；纯数字 = 串行 -->
 
 ### Batch 1（MVP）
-- [ ] TODO-1 <描述>（文件：新增: path/to/new.ts；对应 AC-1）
-- [ ] TODO-2 <描述>（文件：修改: path/to/existing.ts；对应 AC-2）
+- [ ] TODO-1 <描述>（文件：path/to/a.ts；对应 AC-1）
 
 ### Batch 2
-- [ ] TODO-3 <描述>（文件：…；对应 AC-3；完成判据：…）
-- [ ] TODO-4 <描述>（文件：…；对应 AC-3；完成判据：…）
+- [ ] TODO-2 <描述>（文件：…；对应 AC-2）
 
 <!-- ============ 以下为条件节，满足触发条件才写 ============ -->
 
-## 4. 涉及文件
+## §6 风险与开放问题
 
-<!-- 触发：存在 TODO 行未覆盖的连带影响文件（生成物、配置、迁移脚本等）。
-     主改动文件已在各 TODO 行内标注，本节不重复罗列 -->
-- `path/to/file` — <连带影响一句话>
-
-## 5. 技术方案
-
-<!-- 触发（任一成立才写，都不满足 → 整节省略）：新架构模式 / 新外部依赖 / 安全・性能・数据迁移复杂度。
-     判据须可证伪——「编码前有歧义」这类恒真描述不构成触发；有歧义应在第三步澄清掉，而非落进本节。 -->
-
-## 6. 流程图
-
-<!-- 触发：状态机、多角色交互等「画比说清楚」的场景。规范见 eo-doc-manager/references/mermaid.md -->
-
-## 7. 风险与回滚
-
-<!-- 触发：不可逆操作 / 数据迁移 / 对外接口变更 -->
-
-## 8. 开放问题
-
-<!-- 触发：决策台账存在 defer 项（上限 3 条）；或归档时的 AC 豁免记录 -->
-- OQ-1 <问题>（defer 原因：…）
+<!-- 触发（任一）：命中风险信号（granularity §5，含用户豁免记录）/ 不可逆操作与回滚 /
+     defer 的开放问题（上限 3 条）/ 归档时的 AC 豁免记录 -->
+- <信号或豁免一句：什么信号、挂/豁免了哪个闸门、日期>
+- OQ-1 <开放问题>（defer 原因：…）
 ```
 
 ## type 字段说明
 
 | type | 语义 |
 |------|------|
-| `bootstrap` | 从零起步（新项目 / 新能力首开），无存量代码约束。**仅是标记**，无任何特殊章节或认领机制 |
+| `bootstrap` | 从零起步（新项目 / 新能力首开），无存量代码约束。仅是标记，无特殊章节 |
 | `feature` | 新增用户可见能力 |
 | `enhance` | 调整已有能力 |
 | `refactor` | 内部重构，用户可见行为不变（AC 写「行为不变」的回归口径） |
 
 **无 `fix` 类型**：bug 修复走 `/eo-fix`——有活跃 change 时计入该 change；trivial 直改；实为需求变更才新开 change。
-
-## 轻档模板（tier: light）
-
-存放、目录名、seq、INDEX、eo-sync 投影（看板/GitHub）与全档同一套。只有意图 + 验收清单两节，**无速览（探针对齐即人读投影）、无 TODO / 涉及文件 / 条件节**；AC 上限 5 条——装不下即扩档信号：
-
-```markdown
----
-id: export-name-fix
-seq: 15
-title: 修正导出文件名
-summary: <一句话意图，≤50 字>
-status: draft        # 轻档流转：draft → confirmed → implementing → archived（跳过 reviewed，收口即归档）
-tier: light
-type: enhance
-base_commit: ~
-test_lock_commit: ~  # eo-implement 轻模式测试锁定 commit（独立复核的比对基线）
-commits: []          # 收口时写入（[id] 前缀提交区间，审计用）
-issue: ~             # eo-sync github 适配器建号或外部来源的 issue 号（外部输入落盘即回写，eo-sync 靠它去重；跨仓来源记 owner/repo#N 或 URL）
-created: 2026-07-18
----
-
-# <标题>
-
-意图：<为什么做 + 做什么，1-2 句>
-
-## 2. 验收清单
-
-- [ ] AC-1 <正向可判定>（锁定：<测试锚点，eo-implement 轻模式回填>）
-- [ ] AC-2 <当……失败时，用户看到……>
-- [ ] AC-3 <观感类>（人工:<做什么 → 过目什么>）
-```
-
-AC 撰写规则同 [eo-shared/ac-spec.md](../../eo-shared/ac-spec.md)（增量制验证栏、条数不模板化、manual 标记；manual 项代勾附「确认：原话要点 + 日期 + 基线 sha」）。验收清单保留 `## 2.` 编号——eo-review / eo-test 显式调用时按 §2 定位 AC，轻档工件天然可消费。

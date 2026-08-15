@@ -44,7 +44,7 @@ skill 写入 vault（board stub、brainstorm 记录、lessons/decisions、backlo
 
 **`seq`（frontmatter 整数，显示作 `#14`）是显示序号**，真相只存在于 change.md frontmatter 一处；目录前缀、INDEX 的 # 列、stub 卡的 seq 字段都是它的投影。分配 = 项目内现有最大号 +1（含 v1/v2 存量数字前缀）。**seq 允许撞号**——多 worktree 并行分配是常态，撞号只造成同号目录与外观歧义，不破坏任何机制：
 
-- **自愈**（撞号只在多分支合并、两卡同树时才显形）：任何更新 INDEX 的动作（eo-change 第八步、eo-archive——轻模式收口经其轻档门，同属后者）顺手对 seq 查重；发现重号 → `created` 晚者让号（同日无法判晚者 → slug 字典序大者让号，稳定可判），一套机械动作：① 改 frontmatter `seq` → ② `git mv <旧NN>-<slug> <新NN>-<slug>`（目录含未跟踪产物则 `mv` 后 `git add`）→ ③ 改 INDEX 行（# 列 + 链接路径）→ ④ 一句话报告（投影由下次 eo-sync 重算自带新 seq，流转期不写）。**commit 前缀 `[slug]`、issue 标题/号绝不动**——这正是比 v1 便宜的根因：v1 把号钉进 commit，让号即断链；v2 只动可改名投影
+- **自愈**（撞号只在多分支合并、两卡同树时才显形）：任何更新 INDEX 的动作（eo-change 第九步、eo-archive）顺手对 seq 查重；发现重号 → `created` 晚者让号（同日无法判晚者 → slug 字典序大者让号，稳定可判），一套机械动作：① 改 frontmatter `seq` → ② `git mv <旧NN>-<slug> <新NN>-<slug>`（目录含未跟踪产物则 `mv` 后 `git add`）→ ③ 改 INDEX 行（# 列 + 链接路径）→ ④ 一句话报告（投影由下次 eo-sync 重算自带新 seq，流转期不写）。**commit 前缀 `[slug]`、issue 标题/号绝不动**——这正是比 v1 便宜的根因：v1 把号钉进 commit，让号即断链；v2 只动可改名投影
 - **口头引用**：用户说「14 那个」→ 查 INDEX 解析成 slug；重号未修时列出候选问一句
 - **seq 绝不进** commit message、issue 标题、stub 文件名——这些改不了或没人会回去改
 
@@ -58,9 +58,9 @@ skill 写入 vault（board stub、brainstorm 记录、lessons/decisions、backlo
 | 直改模式：bug 小修 | `fix:` | `fix: 修正导出文件名日期格式` |
 | 直改模式：UI/样式/文案 | `ui:` | `ui: 调整卡片间距` |
 
-change-id 前缀是 eo-archive 归集 commit 区间的依据；`fix:`/`ui:` 前缀供 retro 统计直改流量。推荐「一次 change 一次 commit」；TODO 分批时允许一批一 commit，archive 至多补两个收尾 commit：结算 meta commit + 可选 sync 身份回写 commit（后者仅当收口 `eo-sync run` 产生身份字段回写时）。**轻档例外**：预期恰为 2-3 个 commit——eo-test lock commit + eo-implement 实施 commit（+ 收尾 meta commit），**不得 squash**（锁定边界是独立复核的比对基准）。
+change-id 前缀是 eo-archive 归集 commit 区间的依据；`fix:`/`ui:` 前缀供 retro 统计直改流量。推荐「一次 change 一次 commit」；TODO 分批时允许一批一 commit，archive 至多补两个收尾 commit：结算 meta commit + 可选 sync 身份回写 commit（后者仅当收口 `eo-sync run` 产生身份字段回写时）。
 
-**前缀选择不因活跃 change 改向**：trivial 直改（[granularity.md](granularity.md) §2）即使落在某活跃 change 的范围内，仍走 `fix:`/`ui:`——证据冻结后（`reviewed` / 轻档完成门已过）带 `[<change-id>]` 提交会推进 `H`、使 Review / 完成门基线过期，一行 CSS 触发一轮复审。证据未冻结期（implementing 中）的范围内缺陷修复，才按 eo-fix 第六步带 `[<change-id>]` 落点。
+**前缀选择不因活跃 change 改向**：trivial 直改（[granularity.md](granularity.md) §2）即使落在某活跃 change 的范围内，仍走 `fix:`/`ui:`——一行 CSS 不该触发该 change 的复审。
 
 ## 2.6 代码注释纪律
 
@@ -68,53 +68,36 @@ change-id 前缀是 eo-archive 归集 commit 区间的依据；`fix:`/`ui:` 前�
 
 注释只写**代码本身表达不了的约束**（不变量、反直觉的坑、外部契约），一两行为限；不复述代码在做什么，**不向审查者解释这次改动为何正确**——正确性辩护属于 commit message 与对话汇报。密度对齐所在文件的既有风格。
 
+**执行点**：本条纪律的门禁在**写入方自检**——eo-implement 批提交前、eo-test 测试资产提交前、eo-fix 与直改提交前各自检一眼；eo-review 只作观察（至多记 P2），不因注释问题阻塞 `reviewed` 流转或打回。
+
 ## 3. 状态词汇总表（看板列序即此）
 
 看板列序按主路径排列；状态机 = **主路径 + 显式回退边**（不是单向全序，下游不得按列序数值判合法流转）：
 
 ```
-backlog → draft → confirmed → implementing → reviewed → archived
+backlog → draft → confirmed → implementing → [reviewed] → archived
 ```
+
+v3 起 **`reviewed` 是可选状态**：只有实际跑了 /eo-review 且通过时才由它写入；不跑 review 的 change 从 `implementing` 直接归档。状态枚举本身不变（eo-board / eo-sync 消费这些字符串）。
 
 change 的 `status` 由 skill 在对话确认后自动写入，**用户永远不手改 frontmatter**：
 
 ```
 draft ──(eo-change：用户对话确认)──▶ confirmed
-      ──(eo-implement：首次执行)──▶ implementing
-      ──(eo-review 通过)──▶ reviewed（代码审查已过；人工验收与归档尚未发生）
-      ──(eo-archive：完成归档)──▶ archived（不可逆）
+confirmed ──(eo-implement：首次执行)──▶ implementing
+implementing ──(可选：eo-review 通过)──▶ reviewed
+implementing / reviewed ──(eo-archive：四问门通过)──▶ archived（不可逆）
 
 回退边（与主路径同等合法）：
-reviewed ──(阻塞反馈：eo-test 结论不通过 / eo-review 复审出 P0/P1 / acceptance 打回 / 进入回炉前的置回)──▶ implementing
-          由**产出该结果的 skill 当场执行**，不等 implement 猜；acceptance 打回常由用户
-          直接标注、无产出 skill——由首个读到打回的 skill（implement / archive）补置
-implementing ──(eo-change 回炉子流程：方案需实质修订)──▶ draft
-          重新确认后回 confirmed；`plan_revision` +1
+reviewed ──(阻塞反馈：eo-review 复审出 P0/P1 / acceptance 打回)──▶ implementing
+          由产出该结果的 skill 当场执行；acceptance 打回常由用户直接标注、无产出 skill
+          ——由首个读到打回的 skill（/eo-fix / implement / archive）补置
+implementing ──(eo-change 回炉：方案需实质修订)──▶ draft，重新确认后回 confirmed
 ```
 
-**修复后的节点路由不等于重放固定流水线**：Test / Review 是证据节点，不是 `status`。首轮可按风险选择先 Test 或先 Review；一旦进入反馈循环，按反馈来源与证据新鲜度分流：
+**反馈循环路由**（仅在挂了对应闸门时存在）：报告有未决阻塞项 → 原 impl worker 走 /eo-fix 循环内分支修复 → 回**原**复审方核销（增量，不重开全文）。同一 change 修复轮次 ≥3，或各轮失败触发位置互不相同（打地鼠信号）→ 停下问用户（豁免一轮 / 卡点检查 / 回炉），不代答、不无限循环。熔断判据凭报告与对话机械可判，**不再使用 `plan_revision` / `fix_rounds` / `fix_consumed` 等 frontmatter 计数器**（v3 起停止写入；修订历史由 git 兜）。
 
-- **Review 反馈**：`eo-review → eo-implement → 原 reviewer 增量复审`。仍有 P0/P1 就继续修，不在代码审查尚未收敛时反复启动 Test；复审通过后，若存在较旧的通过 Test 基线 `T`，原 reviewer 再审计 `T` 到当前交付基线 `H` 的完整差异，并在最新 review 轮写 `测试证据处置：沿用 / 复验`。`H` = 本 change 最后一个 `[<change-id>]` 业务代码或测试资产提交
-  - `沿用`：`T` 是 `H` 的祖先，`T..H` 可完整审计，既有 Test 无阻塞项，且修复未改变受测外部行为、AC / 验证口径、测试断言 / fixture / mock / 配置 / 环境组合 / 关键依赖，也未弄脏 auto-heavy AC；跳过 eo-test
-  - `复验`：任一沿用条件不成立，或处置缺失、含糊、基线关系无法证明；派回原 tester。影响不含 auto-heavy 且能映射到有限 AC、用例及依赖闭包时定向复验；任一 auto-heavy AC 被弄脏，或影响跨共享路径 / 契约 / 状态机 / schema / 并发 / 权限安全 / 外部集成 / 环境矩阵 / 测试基础设施，或范围无法圈定时完整复验
-  - `不适用`：没有历史 Test，或 Test 已在当前 `(plan_revision, H)` 通过。前者按既有 heavy AC 门决定是否首跑 Test（无待验 heavy AC 则不强迫补 Test），后者直接复用当前证据键上的 Test
-- **Test 反馈**：存在未核销 Test FAIL 时固定走 `eo-test → eo-implement → 原 tester 复验`，不得被 Review 的证据沿用分支绕过；Test 失败曾把 status 置回 `implementing` 时，复验通过后无论 `H` 是否变化都回原 reviewer（`reviewed` 的恢复权归 Review）；若产生过新的业务代码或测试资产提交，Reviewer 同时增量审查这些提交，恢复状态与 Review 基线新鲜度
-- **Test 资产与基线**：测试文件、fixture、mock、harness、测试配置都属于测试资产。eo-test 本轮改动测试资产时，须先以 `[<change-id>]` 提交，再在更新后的 `H` 上执行最终验证；`test.md` / `review.md` / change 元数据等纯流程工件提交不推进 `H`。Test 报告以 `B` 记录本轮最终执行基线（执行时 `B = H`）。Test / Review 的完整新鲜度键是 `(plan_revision, commit)`：任何业务代码或测试资产提交都会推进 `H`，而回炉提升 `plan_revision` 即使 `H` 不变也会使旧证据过期
-- **权限边界**：Implement 只提供修复 commit、finding / FAIL 映射、同层验证和受影响 AC 候选；它的“预计无测试影响”只是 reviewer 的输入，不能自行批准跳过独立 Test。Loop 只校验并消费 review/test 的结构化处置，不亲自看 diff 作语义判定
-
-无需为该路由新增 frontmatter 状态：Review 通过仍可置 `reviewed`；其后 Test 若失败再按既有回退边置回 `implementing`，Test 通过则保持 `reviewed`。
-
-**修复循环与回炉字段**（全档 change.md frontmatter；轻档不使用——轻档熔断 = 两次以上跑偏即扩档，扩档确认后从零起算）：
-
-| 字段 | 类型/缺省 | 写入者 | 语义 |
-|------|----------|--------|------|
-| `plan_revision` | 整数，缺省视为 1 | eo-change 回炉子流程（用户重新确认时 +1） | 方案版本。fix 计数、change-review 轮数、wont-fix 豁免、报告台账全部以当前 revision 为界 |
-| `fix_rounds` | 整数，缺省视为 0 | eo-implement 模式二第 0 步 | 当前 revision 内的修复轮次；≥3 触发熔断三选一；回炉确认时归零 |
-| `fix_consumed` | 列表，缺省 `[]` | eo-implement 模式二第 0 步 | 已消费的失败反馈标识（`review#N` / `test#N` / `acceptance#<AC编号>@<验收基线sha>`）——幂等计数依据，触发集为空 = 续修不计数；回炉确认时清空 |
-
-**文本同步不是 revision**：change 活跃期内，意图不变的文本维护（措辞对齐实际实现、就地补 AC、typo）是编辑行为——不动 `plan_revision`、不清计数、不走回炉；loop / test / review 各节点不得把 change.md 的此类文本差异当 revision 信号。边界细则（何谓「意图不变」）以 eo-change「回炉与就地精化的边界」为单一来源。
-
-**change 分轻/全两档**（frontmatter `tier: light | full`，**缺省视为 full**，存量 change 零迁移）。轻档共用上表状态机但**跳过 reviewed**：draft →（探针对齐）confirmed →（独立 eo-test lock，status 不变）confirmed →（eo-implement 实施）implementing →（完成门通过，收口立即内嵌调用 eo-archive）archived——**归档两档同源于 eo-archive**，按档分流准入：全档验 review 基线新鲜度，轻档走轻档门（验完成门留痕：独立复核基线新鲜 + 锁定测试绿 + manual 确认记录）。轻模式收口负责在完成门通过后立即触发；其他上下文（主控 / 用户）持完成门留痕直接调 /eo-archive 亦可，门槛不因入口减免。判档规则见 [granularity.md](granularity.md) §5。
+**文本同步不是回炉**：change 活跃期内，意图不变的文本维护（措辞对齐实际实现、就地补 AC、typo）是编辑行为，不走回炉。边界细则以 eo-change「回炉与就地精化的边界」为单一来源。
 
 用户的确认动作发生在对话里（回复确认，或按 [questioning.md](questioning.md) §4 封闭选择协议选择），skill 负责落盘。
 

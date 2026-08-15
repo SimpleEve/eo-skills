@@ -1,17 +1,17 @@
 ---
 name: eo-loop
 description: |
-  eo 流程总控：按用户意图在 eo 状态机上圈一段（入口节点 → 出口节点 → 收敛标准），把 eo-change / eo-change-review / eo-implement / eo-test / eo-review / eo-archive 派发到可插拔执行基底上循环推进至收敛，窗口化汇报进度。触发：eo-loop / 串起来跑 / 循环推进到收敛 / 总控调度 / /eo-loop。
+  eo 流程总控：按用户意图圈一段（入口节点 → 出口节点 → 收敛标准），把 eo-change / eo-implement / eo-archive 及可选闸门（eo-change-review / eo-test / eo-review）派发到可插拔执行基底上推进至收敛，窗口化汇报进度。触发：eo-loop / 串起来跑 / 循环推进到收敛 / 总控调度 / /eo-loop。
   NOT FOR: 单点动作（直接调对应 eo-* skill）；派出去不再监督的完全交接（orca-cli full handoff）；bug 口喷（/eo-fix）。
 ---
 
 # eo-loop — eo 流程总控
 
-总控只做五件事：**识别、派发、路由、循环、汇报**。三不做：不亲自写代码、不改 change 实质内容、不复述下游流程（节点内部怎么做由各 eo-* skill 自治，总控只关心状态是否推进）。
+总控只做五件事：**识别、派发、路由、循环、汇报**。三不做：不亲自写代码、不改 change 实质内容、不复述下游流程（节点内部怎么做由各 eo-* skill 自治）。
 
-**总控无状态**：流程真相只在 change.md frontmatter 与 review/test 台账里。会话断了，任何 agent 重读 frontmatter 即可从当前节点继续——本 skill 不落自有状态文件（journal 是速报留痕，不是信源）。
+**总控无状态**：流程真相只在 change.md frontmatter 与报告文件里。会话断了，任何 agent 重读 frontmatter 即可从当前节点继续。
 
-**总控在哪**：用户在哪个会话喊 /eo-loop，哪个会话就是总控。不派专职 coordinator；跨 agent 时由当前会话消费 orca 原语监督。
+**总控在哪**：用户在哪个会话喊 /eo-loop，哪个会话就是总控。
 
 ## 前置条件
 
@@ -20,155 +20,133 @@ description: |
 
 ## 调度哲学（四步闭环）
 
-没有固定 pipeline。每一轮都走同一个闭环：
+**① 圈线段**：从用户话语确定三要素——**入口节点、出口节点、收敛标准**。v3 默认线段很短：
 
-**① 圈线段**：从用户话语确定三要素——**入口节点、出口节点、收敛标准**（出口状态怎样算达成）。地图是 [../eo-shared/conventions.md](../eo-shared/conventions.md) §3 的状态机（主路径 + 回退边）。典型线段只是示例、不是枚举：
+```
+默认主路：change → implement → archive
+信号命中：主路对应位置插入闸门（change 确认后插 change-review；implement 后插 test / review）
+```
 
-- 方案对齐：change ↔ change-review，收敛 = 审查通过、用户确认
-- 实施对齐（首轮典型路径）：implement → test → review，收敛 = 台账无阻塞项（P0/P1 清零）、最新 Review 覆盖当前 `(plan_revision, H)`，且测试证据已闭合（Test 在当前 revision 的 `H` 通过 / 当前 Review 明确签署旧证据沿用 / 无历史 Test 且既无待验 heavy AC、也无「待 test（需测试资产）」auto-light）；进入反馈循环后按 ④ 的非对称回路分流，不机械重放整条路径
-- 轻档直通：change confirmed → **eo-test lock（独立 test worker）** → implement → 完成门 → archive；测试锁定与业务实现不得复用同一 worker
-- 直通：change → … → review 或 archive
+地图是 [../eo-shared/conventions.md](../eo-shared/conventions.md) §3 的状态机。三要素判不出的，先查偏好文件补缺省（见「经验沉淀」）；仍缺 → 按封闭选择协议（[../eo-shared/questioning.md](../eo-shared/questioning.md) §4）问一次，不追问第二轮。
 
-三要素判不出的，先查偏好文件补缺省（见「经验沉淀」）；仍缺 → 按封闭选择协议（[../eo-shared/questioning.md](../eo-shared/questioning.md) §4）问一次，不追问第二轮。
+**随手小改先过 trivial 闸**：总控会话里用户随手提的修改，先按 [../eo-shared/granularity.md](../eo-shared/granularity.md) §2 判定——trivial → 总控直改（需起环境验证才派原 impl worker），commit 前缀按 conventions §2.5，不进状态机、不产工件；改动使活跃 change 的 AC / 文本与实际不符时，顺手就地精化文本。四判据任一不满足 → 回到正常圈段。
 
-**随手小改先过 trivial 闸**：总控会话里用户随手提的修改（一轮收敛后或节点间隙最常见），先按 [../eo-shared/granularity.md](../eo-shared/granularity.md) §2 判档——trivial → 总控直改（需起环境验证才派原 impl worker），commit 前缀按 [../eo-shared/conventions.md](../eo-shared/conventions.md) §2.5，**不进状态机、不产工件、不动 `(plan_revision, H)`**；改动使活跃 change 的 AC / 文本与实际不符时，顺手就地精化文本（不动 `plan_revision`，见 conventions §3「文本同步不是 revision」）。四判据任一不满足 → 回到正常圈段。
+**举例措辞判据**：用户意图含「比如 / 之类 / 例如」= 形态未定稿——先安排探针对齐（change 确认）把形态钉下来再派实施节点，不得让例子直接当定稿进派发 prompt。
 
-**举例措辞判据**：用户意图含「比如 / 之类 / 例如」等举例措辞 = 形态未定稿——例子是方向、不是规格。圈段时先安排探针对齐（轻档探针 / change 确认）把形态钉下来再派实施节点，不得让例子直接当定稿进派发 prompt。
+**条件式 Execution Guard**：圈段后若命中任一条件——**长程**（跨多轮或跨节点）、**并行**、**无人值守**、**高风险**（安全 / 权限 / 数据 / 不可逆动作）、存在**开放未知**——本线段启用 [../eo-shared/goal-contract.md](../eo-shared/goal-contract.md)，总控在**每个节点派发前**从现有真相源即时编译控制包。来源限于当前 change.md、报告、Git 基线与用户本轮授权；本轮授权只能收紧运行边界，若与已冻结的 Why / 范围 / AC 冲突，必须先走用户裁决与 change 回炉。控制包只存在于本轮派发上下文，不落盘、不造第二信源。未命中条件则沿用普通调度。
 
-**条件式 Execution Guard**：圈段后若命中任一条件——**长程**（跨多轮或跨节点）、**并行**、**无人值守**、**高风险**（安全 / 权限 / 数据 / 不可逆动作）、存在**开放未知**——本线段启用 [../eo-shared/goal-contract.md](../eo-shared/goal-contract.md)，总控在**每个节点派发前**从现有真相源即时编译控制包。来源限于当前 change.md、review/test 台账、Git 基线与用户本轮授权；本轮授权只能收紧运行边界、预算或资源，若与已冻结的 Why / 范围 / AC 冲突，必须先走用户裁决与 change revision，不得直接覆盖。控制包只存在于本轮派发上下文，不写 `PROGRESS.md`，不写 journal，不新增任何第二真相源。未命中条件则沿用普通调度，不为形式完整强造控制包。
+控制包只投影六项，不创造新要求：**意图与出口 / 证据门（每项结论由哪个角色基于什么工件证明）/ 运行边界 / 取舍顺序（引 goal-contract）/ 未知权限（引 goal-contract Unknown 分流）/ 路由事实**。
 
-线段从 eo-change 或 draft 的 change-review 起跑时，目标尚未冻结：控制包只投影用户意图、当前草案与硬边界，并标明「未冻结」，不得据此派发 eo-implement / eo-test / eo-review / eo-archive。change 经用户确认后，后续交付节点再从 confirmed change 重编译冻结版控制包。
+Unknown 的运行时动作（分类语义以 goal-contract 为唯一来源）：
 
-控制包只投影六项，不创造新要求：
+- **A 类**：核对确在权限包络内 → 允许 worker 先做后报
+- **B 类**：worker 变更前发求裁决信号并暂停受影响分支；总控把同窗 B 类合并成一次封闭选择交用户
+- **C 类**：worker 变更前立即停下，总控立即上交用户
+- **证据未知**：只允许一次有界探测（写清问题、预算、停止条件）；仍拿不到 → fail-closed，结论只能「未验证 / 阻塞」，不得用 worker 自述补证
 
-- **意图与出口**：当前目标的冻结状态、Why / 范围 / AC，以及本线段的出口节点、收敛标准
-- **证据门**：每项结论由哪个有权角色、基于哪个当前基线、以什么既有工件证明；仅在节点契约要求时强制独立角色
-- **运行边界**：允许触碰的 change / TODO / 文件集、角色权限、人工门、预算与熔断
-- **取舍顺序**：引用 goal-contract 的「Trade 的默认裁决顺序」；越过前三层必须上交用户或回炉 change
-- **未知权限**：引用 goal-contract 的「Unknown 分流」；不得把 B / C 降级成实现细节
-- **路由事实**：回收时只消费推进状态机所需的角色、工件指针、基线与结构化判据归属；事实缺失或冲突才转为 ③ 的风险信号，不把读取扩大成 implement / test / review
+**② 选基底**：对线段上每个节点确定执行者与模型，三级优先：**本次用户显式指定 > 偏好文件 > 探测缺省**。偏好层**不静默生效**：命中偏好条目时开跑前列出来问一次「按此偏好跑？」。运行时 `ls` 本 skill `references/substrates/*.md` 得到基底清单，读候选文件按其「探测」节确认可用。
 
-Unknown 的分类语义以 goal-contract 为唯一来源，Loop 只规定运行时动作：
+**③ 派发、路由与风险升级**：按基底文件「派发」节把节点交出去。worker 完成后，默认只读取决定下一步所需的**路由事实**：frontmatter 当前状态、预期工件指针、报告结论、未决清单。这是路由职责，不是对 worker 内容再做一轮核查；正常路径不打开完整 diff、不重跑节点命令。
 
-- **A 类**：总控核对确在权限包络内后，允许 worker 先做后报，随交付记录选择、理由与回退方式
-- **B 类**：worker 在变更前发求裁决信号并暂停受影响分支；总控可把同窗 B 类合并成一次封闭选择，其他独立工作继续
-- **C 类**：worker 在变更前立即发求裁决信号并停止相关工作，总控立即上交用户，不等交付后补报
+**无风险即推进**：路由事实齐备且不冲突 → 直接进下一节点。交付来自其他 agent、worker 首次参与、换基底、普通节点交接，均**不是风险信号**；不得因此抽查或信任分层。
 
-**证据未知不等于 A 类**：只允许一次有界探测，派发前写清「待回答的问题、时间 / 调用预算、停止条件」。探测后仍拿不到必要证据 → fail-closed，结论只能是「未验证 / 阻塞」，不得写 PASS、不得用 worker 自述补证。探测若触发 B / C 类，立即按对应决策门处理。
+只有出现下列**可指认的风险信号**才升级核查；主观不信任不构成信号：
 
-**② 选基底**：对线段上每个节点确定执行者与模型，三级优先：**本次用户显式指定 > 偏好文件 > 探测缺省**。偏好层**不静默生效**：用户本次未指定模型 / effort / 基底的节点若命中偏好条目，开跑前把命中条目列出来问一次「按此偏好跑？」（封闭选择：确认 / 逐项调整）；确认即本轮生效，调整按「经验沉淀」纠偏规则回写。无偏好可查才落到探测缺省。运行时 `ls` 本 skill `references/substrates/*.md` 得到当前基底清单，读候选文件按其「探测」节确认可用；不可用即跳过换下一候选。
-
-**③ 派发、路由与风险升级**：按基底文件「派发」节把节点交出去。worker 完成后，默认只读取决定下一条合法边所需的**路由事实**：frontmatter 当前状态、预期工件指针、当前交付基线、最新结构化处置与待处理决策门。读取这些事实是总控的路由职责，不是对 worker 内容再做一轮核查；正常路径不打开完整 diff、不重跑节点命令、不重新判断实现、测试或 review 是否正确。
-
-**无风险即推进**：路由事实齐备且彼此不冲突时，直接进入下一合法节点。交付来自其他 agent、worker 首次参与当前 change、换用新的可用基底或完成一次普通节点交接，均**不是风险信号**；不得因此设置首次抽查、随机抽查、按比例抽查或 worker 信任分层。
-
-只有出现下列**可指认的风险信号**才升级核查；主观不信任或“以防万一”不构成信号：
-
-- frontmatter、预期工件、结构化处置、当前基线或 worker 完成声明互相冲突
-- 推进所必需的工件或字段缺失，revision / 基线过期、不可解析，或存在本 change 未提交的业务代码 / 测试资产导致交付基线无法确定
+- frontmatter、预期工件、报告结论、worker 完成声明互相冲突
+- 推进所必需的工件或字段缺失、不可解析，或存在未提交交付改动
 - 已有可观察证据显示节点越过角色权限或约定文件边界
-- AC、测试锁、测试 / judge、安全、权限、数据或不可逆动作发生本轮计划外变化
+- AC、安全、权限、数据或不可逆动作发生本轮计划外变化
 - worker 主动上报 Unknown B / C、证据未知、阻塞或决策门
 - 同一交付被打回后仍重复出现同类异常
 
-升级后只处理触发信号对应的范围，不扩张为全面核查：状态 / 工件缺陷附具体冲突打回原 worker；需要判断实现、测试或 review 实质正确性时派对应有权节点；产品 / 架构分歧、范围或方案实质变更、AC 豁免、熔断三选一、判档等超总控权限事项停下上交用户。风险消除后回到正常路由；同一节点因交付异常打回 2 次仍不合格，升级为卡点问用户。总控不得为补齐判定而亲自实施、改测试、执行 eo-test 或兼任 eo-review。
+升级后只处理触发信号对应的范围：状态/工件缺陷打回原 worker；需要实质判断时派对应有权节点；产品/架构分歧、范围变更、AC 豁免、熔断等超总控权限事项停下上交用户。同一节点打回 2 次仍不合格 → 升级为卡点问用户。总控不得亲自实施、改测试、兼任审查。
 
-**并行派发**（判据与合流规范见 [../eo-shared/granularity.md](../eo-shared/granularity.md) §6）：可并行的单位有二——同一 change 的**同层并行批**（§3 字母后缀 Batch 2a/2b），与 INDEX 摘要标注「可与 #N 并行」的 **change**（并行收敛组）。纪律：
+**并行派发**（判据与合流见 [../eo-shared/granularity.md](../eo-shared/granularity.md) §6）：同一 change 的同层并行批（Batch 2a/2b），与 INDEX 标注「可与 #N 并行」的 change。纪律：
 
-- 派发前总控先做**文件集机械校验**（同层批 TODO 文件栏两两不相交；不过 → 降级串行并一句话报告）
-- 一并行 worker 一**独立 worktree**（现场隔离，手段见基底文件）；同层全部收口后指派其一 worker 执行合并与合流 checkpoint，总控读取合流后的路由事实；出现冲突或边界异常时按上方风险升级规则处理，冲突修复派回引入冲突批的原 worker
-- 并行派发 >2 个 worker 前先报数量与预算，等用户点头（见事实说明）
+- 派发前先做**文件集机械校验**（两两不相交；不过 → 降级串行并一句话报告）
+- 一并行 worker 一**独立 worktree**；同层全部收口后指派其一执行合并与合流 checkpoint
+- 并行派发 >2 个 worker 前先报数量与预算，等用户点头
 
-Review 修复后的免测路由只读取最新 review 轮的 `测试证据处置`、既有 Test 基线 `T`、当前交付基线 `H`、受影响范围与依据。存在较旧 Test 时，只有原 reviewer 在当前 `plan_revision` 的 `H` 上明确签署 `沿用`，且 `既有通过 Test：第 N 轮 @ T` 精确对应同一 `test.md` 中当前 revision 最新的通过轮、该轮先通过下文同等级的 Test 结构/定向来源链/范围覆盖校验、台账无阻塞项、`T` 为 `H` 的祖先时才可跳过 eo-test；Implement 的影响候选、worker 口头结论、旧 revision 或字段缺失/含糊都不能放行，后一律按 `复验` 路由。处置为 `不适用` 时只接受两种可机械证明的情况：Test 已在当前 revision 的 `H` 通过且同样通过下文结构校验，或从未运行 Test 且没有待验 heavy AC；否则派 Test。
+**④ 收敛判定**：对照收敛标准——出口节点达成 + 所有已产报告无未决阻塞项。未收敛走反馈回路：
 
-Test 交付也按当前基线校验：`H` 是最后一个触及业务代码或测试资产的本 change commit，纯报告/元数据提交不计；Test 新增或修改测试资产时必须先以 `[<change-id>]` 提交，再在新 `H` 上执行最终验证。总控只接受当前 `plan_revision` 的结构化 Test 轮次：结论通过、台账无阻塞项、`当前交付基线 B` 可解析，且 `验证方式`、`触发来源`、`测试资产提交`、`重跑范围`、`沿用范围`、`范围校验` 均明确，测试资产提交已包含在 `B` 中；定向复验还须指向同一报告内结构完整且明确通过的 `第 N 轮 @ S`（定向来源链递归有效），证明 `S` 是 `B` 的祖先、从触发来源指向的历史 Review/Test 轮解析出的影响集包含在重跑范围内，且来源证据被重跑范围与沿用范围无遗漏、无重叠地覆盖。字段残缺、revision 过期、来源链不通过、范围覆盖无法证明或存在本 change 的未提交业务代码/测试资产 → 拒收并打回对应原 worker。若 Review 在 `H` 上签署 `复验`，只有后续通过的 Test 轮明确写 `触发来源：Review 第 R 轮 @ H` 才算消费该路由；消费后即使 Review 速报仍保留 `复验` 字样，也不得再次派 Test。Test 通过后若 `status` 不是 `reviewed` 或最新 Review 未覆盖当前 `(plan_revision, H)`，先回原 reviewer；Reviewer 在 Test 已于当前 revision 的 `H` 通过时写 `不适用`，不会因此再次触发 Test。
-
-**Unknown 上报与决策门**：A 类随交付记录只作透明留痕，不再要求用户逐项重判；B 类在变更前进入求裁决信号，总控把同窗互不依赖的 B 类攒成**一次封闭选择**（协议见 [../eo-shared/questioning.md](../eo-shared/questioning.md) §4）转达用户，裁决作为输入回灌原 worker；C 类立即单独上交。任何裁决改变已冻结 Why / 范围 / AC 时，先走 change revision，再重新派发。
-
-**④ 收敛判定**：先消费待执行的证据路由，再对照收敛标准；Review 虽已通过但处置为 `复验` 且尚无匹配该 Review 轮的后续 Test 通过、处置不可采、任一证据 revision 过期、最新 Review 未覆盖 `(plan_revision, H)` 或仍有待验 heavy AC 时，均**尚未收敛**。只有台账无阻塞项、最新 Review 覆盖当前 `(plan_revision, H)`，且测试证据按上方三种方式之一闭合，才收口（回写经验并发最终速报）。其余走下列**非对称回路**，不把首轮路径当循环体：
-
-- `review` 有 P0/P1 → 原 impl worker 走 eo-implement 模式二 → **原 reviewer 增量复审**。仍有 P0/P1 就继续这条短回路，不启动 Test；复审通过后读取测试证据处置：`沿用` → 跳过 eo-test，尚未被匹配 Test 轮消费的 `复验` / 缺失 / 含糊 / 基线关系不成立 → 派原 test worker，`不适用` → Test 已在当前基线通过则继续收口；无历史 Test 时仅有待验 heavy AC 才首跑 Test
-- 进入 `test` 后，由原 tester 根据 review 指出的影响集决定范围：不含 auto-heavy 且能映射到有限 AC、用例及依赖闭包 → **定向复验**，从明确通过的来源轮组合“重跑范围 + 沿用范围”；任一 auto-heavy AC 被弄脏、影响跨共享行为 / 契约 / 测试基础设施或影响圈不住 → **完整复验**。tester 可扩大范围，不得无证据缩小 reviewer 指出的影响集
-- `test` 通过 → 若 `status` 因先前 Test FAIL 仍为 `implementing`、本轮测试资产提交推进了 `H`，或最新 Review 因 revision/其他交付提交未覆盖 `(plan_revision, H)`，先派原 reviewer 增量审查；只有 `status: reviewed`、Review 覆盖当前 `(plan_revision, H)` 且 Test 结论也在该键上时才继续收口
-- `test` 有未核销 FAIL（含 Test 与 Review 同时有反馈）→ 原 impl worker 修复 → **原 test worker 复验**；通过后只要 `status` 仍为 `implementing`，或产生过业务代码/测试资产提交，就再派原 reviewer 增量审查，恢复 status 与 Review 基线新鲜度。此分支不得套用 `沿用` 跳过 tester
-- acceptance 打回 → implement 修复 → 原 reviewer 增量审查，再按其测试证据处置继续
+- 报告有未决 P0/P1 或测试失败 → 原 impl worker 走 /eo-fix 循环内分支修复 → 回**原**复审方核销（增量，不重开全文）
+- acceptance 打回 → implement 修复 → 有 review 闸门的回原 reviewer 核销
 - 方案需实质修订 → eo-change 回炉
 
-**熔断只消费、不发明**：`fix_rounds ≥3` 三选一、change-review 轮数上限，任一触发即停下，按对应 skill 的协议问用户，绝不代答、绝不无限循环。
+**打地鼠信号与裁决门**：同一 change 修复轮次 ≥2 且各轮**失败触发位置互不相同**（凭报告未决清单的位置列机械可判），或修复轮次 ≥3 → 停下向用户发封闭选择四选一：
+
+a) **全链审查**（链路类缺陷缺省推荐）——原 impl worker 走 /eo-fix 深挖链路变体：枚举链上全部可死点、逐点配恢复证明，按死点矩阵批量修复
+b) **继续逐点修复**——缺陷相互独立、非链路形态时
+c) **卡点检查**——方向存疑，新鲜上下文做根因分类（/eo-fix 子流程）
+d) **回炉**——方案本身要改
+
+总控不代答、不以任何形式默认继续逐点修复。
 
 ## 节点清单
 
-只描述能力边界；顺序与合法流转以 conventions §3 状态机为准。
-
 | 节点 | 消费 | 产出 | 边界 |
 |------|------|------|------|
-| eo-change | 意图 / 回炉反馈 | change.md（draft → confirmed 经用户确认） | 含判档（light/full）与回炉子流程 |
-| eo-change-review | draft/confirmed 的 change.md | 方案审查与修订（文档修订，不产码） | 轻档用探针对齐替代，不派本节点 |
-| eo-implement | confirmed | 代码 + AC 勾选（implementing） | 模式二承接 test/review 反馈修复 |
-| eo-test | implementing/reviewed 后需验证的代码 | test.md 台账 + 定向/完整范围 | 严禁改业务代码；首轮完整审计，复验按影响范围分流 |
-| eo-review | implementing 后的代码 | review.md P0/P1/P2（通过 → reviewed） | 代码级审查 |
-| eo-archive | 全档 reviewed；轻档 implementing + 完成门留痕 | archived（不可逆） | 两档同源：轻档走轻档门；implement 收口也内嵌调用它 |
+| eo-change | 意图 / 回炉反馈 | change.md（draft → confirmed 经用户确认） | 含风险信号播报与回炉子流程 |
+| eo-change-review（可选闸门） | draft/confirmed 的 change.md | change-review.md | 信号命中或点名才派 |
+| eo-implement | confirmed 的 change.md | 业务代码 + 测试 + AC 勾选（implementing） | 反馈修复归 /eo-fix 循环内分支 |
+| eo-test（可选闸门） | implementing 后的代码 | 测试补缺 + test.md | 严禁改业务代码 |
+| eo-review（可选闸门） | implementing 后的代码 | review.md（通过 → reviewed） | 代码级审查 |
+| eo-archive | implementing / reviewed | archived（不可逆） | 四问核对门 |
 
 ## 执行基底（可插拔）
 
-基底 = 「把一个节点交给谁执行」的载体。**清单不写死在本文件**：一基底一文件，放 `references/substrates/`，增减基底 = 加删文件，本文件零改动。每个基底文件必须含五节（新建照 `references/substrates/_template.md`）：
+基底 = 「把一个节点交给谁执行」的载体。一基底一文件，放 `references/substrates/`，增减基底 = 加删文件。每个基底文件必须含五节（照 `references/substrates/_template.md`）：**探测 / 派发 / 等待与观测 / 回收 / 已知陷阱**。
 
-**探测 / 派发 / 等待与观测 / 回收 / 已知陷阱**
-
-初始三基底与优先倾向（倾向只是缺省，被 ② 的三级优先覆盖）：
+初始三基底与优先倾向（被 ② 的三级优先覆盖）：
 
 | 调用形态 | 倾向基底 |
 |----------|----------|
 | 总控是 Claude Code，执行者也是 Claude | claude-subagent |
 | 总控运行在 Codex 侧 | codex-subagent |
-| 节点要跨 agent 运行（执行者与总控不同栈） | orca-orchestration |
+| 节点要跨 agent 运行 | orca-orchestration |
 
-**派发 prompt 纪律（全基底通用）**：写目标、不写步骤——只给节点 skill 名、change 目录路径、本轮收敛标准、必要输入（如反馈报告路径）；命中 Execution Guard 时再附即时控制包，未命中不得机械附加；不复述下游流程；动词避免锚定手段（写「审查 / 实施 / 验证」，不写「搜一下 / 看看 / 检查检查」）；**不要求 worker 中途回报进度**（观测是总控的事，见「可观测性」）。**Unknown 上报**：prompt 要求 worker 按 goal-contract 分类新分叉——仅 A 类可采默认后随交付记录；B 类须在变更前发求裁决信号并暂停受影响分支；C 类须在变更前立即停下求裁决。不得用“先采假设、交付后再问”绕过 B / C 决策门。
+**交互式硬约束（全基底通用）**：节点派发一律走**交互式通道**——总控会话内 subagent，或 orca 交互终端 + dispatch task。**严禁 `codex exec`、`claude -p` 等一次性非交互式调用**承载节点：纯黑盒、无会话复用、无求裁决通道。
 
-**worker 复用纪律（全基底通用）**：一个 change 的 loop 内，worker 按**角色**一次创建、跨轮次复用——修复轮回**原 impl worker**、增量复审回**原 reviewer**（增量核销依赖其上下文）、打回重做回原 worker。上下文是资产，不要轮轮新开。两条边界：
+**派发 prompt 纪律**：写目标、不写步骤——只给节点 skill 名、change 目录路径、本轮收敛标准、必要输入；命中 Execution Guard 时再附即时控制包；不复述下游流程；不要求 worker 中途回报进度。**Unknown 上报**：仅 A 类可先斩后奏随交付记录；B / C 类须变更前求裁决。
 
-- **跨角色必须隔离**：review / test 绝不复用 impl 的 worker——独立性是审查的价值，复用即失效
-- **重建仅当**：换执行者或模型（用户指定 / 偏好调整）；上下文已污染（打回后仍复读旧结论，或到打回上限经用户同意重开）；worker 已不可达。各基底的复用手段见其「派发」节
+**worker 复用纪律**：一个 change 的 loop 内，worker 按**角色**一次创建、跨轮次复用——修复回原 impl worker，核销回原复审方（增量核销依赖其上下文）。边界：**跨角色必须隔离**（review / test 绝不复用 impl worker——独立性是审查的价值）；重建仅当换执行者/模型、上下文已污染、或 worker 不可达。
 
 ## 可观测性：窗口化等待 + 主动观测
 
-**进度是总控查出来的，不是 worker 报上来的**：worker 专注任务本身，除完成/求裁决信号外零回报义务。总控在窗口内主动读证据观测进度——终端输出、change.md 勾选、review/test 台账增量、git log——具体手段见各基底文件「等待与观测」节。
+**进度是总控查出来的，不是 worker 报上来的**：worker 除完成/求裁决信号外零回报义务。总控在窗口内主动读证据——终端输出、change.md 勾选、报告增量、git log——手段见各基底文件「等待与观测」节。
 
-一切等待必须窗口化，单窗 ≤30 分钟。**窗口到期或节点边界，无论有无进展**，向用户发进度报告并追加到 `tmp/eo/loop/<slug>/journal.md`。骨架定长、内容随窗口内事件伸缩（静默窗口摘要一句即可）：
+一切等待必须窗口化，单窗 ≤30 分钟。**窗口到期或节点边界，无论有无进展**，向用户发进度报告并追加到 `tmp/eo/loop/<slug>/journal.md`：
 
 ```
-• <HH:MM> <本窗口事件标题，如「review 处理结果」「Batch 2 实施中」>
+• <HH:MM> <本窗口事件标题>
 
-<一句定性：发生了什么 + 是否需要用户裁决——无则明说「没有需要你裁决的事项」，
- 有则列明分歧并暂停等答复>
+<一句定性：发生了什么 + 是否需要用户裁决——无则明说「没有需要你裁决的事项」>
 
-<实质摘要：按主题归组的要点（如问题归几组、各组一行），不是操作流水账>
+<实质摘要：按主题归组的要点，不是操作流水账>
 
-- 派发：<task / dispatch 凭据（orca 时）或 worker 标识>
+- 派发：<task / dispatch 凭据或 worker 标识>
 - owner：<基底 + 模型>
-- 当前规则：<本轮循环策略，如「Review 短回路先收敛；同一 reviewer 核销后再按测试证据处置决定是否派 Test」>
+- 当前规则：<本轮循环策略一句>
 
 下一次固定进度报告约 <HH:MM +30min>。
 ```
 
-journal 属 tmp/eo 命名空间（[../eo-shared/conventions.md](../eo-shared/conventions.md) §1）：可丢弃、不作信源，仅供跨会话回看报告流水。
+journal 属 tmp/eo 命名空间（conventions §1）：可丢弃、不作信源。
 
 ## 经验沉淀（调度偏好）
 
-把「你习惯怎么调度」变成缺省值。位置 `~/.eo-skills/loop/preferences/`：`_global.md`（跨项目）+ `<项目短名>.md`（覆盖全局同名条目）；格式与读写纪律见 [references/preferences-format.md](references/preferences-format.md)。
+位置 `~/.eo-skills/loop/preferences/`：`_global.md`（跨项目）+ `<项目短名>.md`（覆盖全局同名条目）；格式见 [references/preferences-format.md](references/preferences-format.md)。
 
-- **读**：② 选基底时作为第二优先级——**列出命中条目请用户确认后生效，不静默套用**；① 圈线段判不出时查「习惯线段」节（同样列出确认）
-- **写**：收口时回写本次实际生效的「节点 → 基底/模型」映射（与既存条目一致则只刷日期），**缺省写进 `<项目短名>.md`**——调度习惯首先是项目属性；用户明示跨项目（「所有项目都这样」）或同一映射已在 ≥2 个项目文件出现时才写 `_global.md`。用户当场纠偏（「下次 review 还是用 codex」）→ 立即写入
-- **性质**：可能有效的提示、而非保证——按偏好调度失败 → 回退探测缺省，并把失败记进该文件陷阱节
-- 目录不存在 → 静默创建
+- **读**：② 选基底时第二优先级——列出命中条目请用户确认后生效；① 圈线段判不出时查「习惯线段」节
+- **写**：收口时回写本次实际生效的「节点 → 基底/模型」映射，**缺省写进 `<项目短名>.md`**；用户明示跨项目或同一映射已在 ≥2 个项目文件出现时才写 `_global.md`。用户当场纠偏 → 立即写入
+- **性质**：提示而非保证——按偏好调度失败 → 回退探测缺省，并把失败记进该文件陷阱节
 
 ## 事实说明
 
-- codex 的 skill 前缀是 **`$` 不是 `/`**；模型与 effort 是**启动参数**，中途不可切换
-- worker 的完成声明 ≠ 状态推进；状态真相只在 frontmatter 与台账
-- 回退边（status 置回）由**产出该结果的 skill 当场执行**（conventions §3），总控不代写 status
-- review 结果不授权总控动手修——修复一律派回 eo-implement 模式二
-- Review 修复不自动回 Test：先回原 reviewer 增量复审；只有结构化处置为 `复验`（或处置不可采）才派原 tester
+- codex 的 skill 前缀是 **`$` 不是 `/`**；模型与 effort 是启动参数，中途不可切换
+- worker 的完成声明 ≠ 状态推进；状态真相只在 frontmatter 与报告
+- 回退边（status 置回）由产出该结果的 skill 当场执行（conventions §3），总控不代写 status
+- review 结果不授权总控动手修——修复一律派回原 impl worker 走 /eo-fix 循环内分支
 - 并行派发 >2 个 worker 前，先报数量与预算，等用户点头
 
 ## 关键约束
@@ -176,15 +154,14 @@ journal 属 tmp/eo 命名空间（[../eo-shared/conventions.md](../eo-shared/con
 | 约束 | 说明 |
 |------|------|
 | 三不做 | 总控不写码、不改 change 实质、不复述下游流程 |
-| 条件式控制包 | 仅长程 / 并行 / 无人值守 / 高风险 / 开放未知时，每个节点派发前从既有 SoT 即时编译并传递；不落盘、不造第二信源 |
+| 严禁非交互派发 | 节点执行必须走交互式通道；一次性调用全面禁止 |
+| 条件式控制包 | 仅长程 / 并行 / 无人值守 / 高风险 / 开放未知时即时编译；不落盘 |
 | Unknown 权限 | 仅 A 类可先做后报；B / C 类变更前进决策门；证据未知有界探测后 fail-closed |
-| 取舍顺序 | 以 goal-contract 的「Trade 的默认裁决顺序」为单一来源；越过前三层须上交用户或回炉 change |
-| 风险触发式核查 | 正常交付只消费路由事实并推进，不抽查、不做信任分层；仅有客观风险信号时针对异常范围升级，需要实质判断就派有权节点 |
-| 反馈回路非对称 | Review 修复先走 implement↔review 短回路，再按 reviewer 的测试证据处置决定是否 Test；Test FAIL 修复则必须先回 tester |
-| worker 按角色复用 | 同角色跨轮次复用原 worker（上下文资产）；跨角色隔离；换模型 / 污染 / 不可达才重建 |
+| 风险触发式核查 | 正常交付只消费路由事实并推进；仅有客观风险信号时针对异常范围升级 |
+| worker 按角色复用 | 同角色跨轮次复用；跨角色隔离；换模型 / 污染 / 不可达才重建 |
 | 无状态 | 不落自有状态文件；中断恢复 = 重读 frontmatter |
-| 熔断只消费 | 到限即停、按下游 skill 协议问用户，绝不无限循环 |
+| 熔断只消费 | 打地鼠/轮次到限即停、按协议问用户，绝不无限循环 |
 | 汇报硬窗口 | 任何等待 ≤30 分钟必有一次进度报告；报告首要回答「需不需要你裁决」 |
 | worker 零回报 | 进度由总控主动观测；派发 prompt 不得附加中途回报要求 |
 | 基底即文件 | 新基底照 _template.md 建文件即生效；禁止把基底细节写回本文件 |
-| 一次一收敛组 | 缺省逐 change 收敛、不交叉派发；仅当 change 间标注互不干扰（INDEX「可与 #N 并行」或用户显式指定）才圈进同一并行收敛组——组内并行、组间串行（granularity §6） |
+| 一次一收敛组 | 缺省逐 change 收敛；仅当 change 间标注互不干扰才圈进同一并行收敛组 |

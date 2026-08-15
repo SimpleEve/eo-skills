@@ -1,107 +1,77 @@
 ---
 name: eo-review
 description: |
-  对已实施的代码做审查：AC 逐条核对 + 代码质量，产出 P0/P1/P2 分级报告（前提：代码已实现）。触发：review / 代码审查 / /eo-review。
-  NOT FOR: change 方案审查（/eo-change-review，代码还没写时用）。
+  按需代码审查：风险信号命中或用户点名时，对已实施代码做 AC 逐条核对 + 代码质量审查，产简版 review.md（P0/P1/P2）。触发：review / 代码审查 / 再找双眼睛看看 / /eo-review。
+  NOT FOR: change 方案审查（/eo-change-review，代码还没写时用）；默认主路（无信号时不强制）。
 ---
 
-# eo-review — 代码审查
+# eo-review — 代码审查（按需闸门）
 
-根据 change 文档（验收清单 + TODO）对**已实施的代码**进行审查，产出结构化审查报告。
+v3 起本 skill 是**可选闸门**。根据 change.md（验收清单 + TODO）对**已实施的代码**做独立审查，产出简版报告。
 
-> **定位**：`eo-review` 只审代码。审查范围前移（审 change 方案）请用 `/eo-change-review`。两种 review 关注点、上下文、产出物都不同，不要混用。
->
-> | Skill | 审查对象 | 产出 |
-> |-------|---------|------|
-> | `/eo-change-review` | change.md（implement 前） | `change-review.md` |
-> | **`/eo-review`**（本技能） | change 实施后的代码 | `review.md` |
+> 与 /eo-change-review 的区别：本 skill 审**代码**（implement 之后）；change-review 审**方案**（implement 之前）。两者都是按需闸门，不是必经节点。
 
 ## 核心原则
 
-1. **AC 是检查表**：change.md §2 验收清单逐条核对实现覆盖（规范见 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)）
+1. **AC 是检查表**：change.md §2 逐条核对实现覆盖
 2. **最佳实践审查**：代码质量、命名、架构合理性
-3. **结构化产出**：P0/P1/P2 分级，输出到 `eo-doc/changes/<change-id>/review.md`
-4. **通过即流转**：审查通过（无 P0/P1）时把 change.md `status` 置 `reviewed`（skill 自动写入；reviewed = 代码审查已过，人工验收与归档尚未发生）
+3. **简版报告**：结论 + P0/P1/P2 清单，输出到 `eo-doc/changes/<change-id>/review.md`；复审**覆盖重写**（历史由 git 兜）
+4. **通过即流转**：审查通过（无未决 P0/P1）时把 change.md `status` 置 `reviewed`（可选状态，只有本 skill 写）
 
 ## 前置条件
 
 - **必须能找到 `.eo-project.json`**。同目录存在 `.eo-project.local.json` 时顶层字段覆盖合并（local 优先）。找不到 → 报错退出，提示运行 `/eo-project-init`
 - `eo-doc/changes/<change-id>/change.md` 存在，**相关代码已实现**（TODO 至少部分勾选），status 为 `implementing` 或 `reviewed`
-- `tier: light` 的 change 默认不经本 skill（代码级核查由 eo-implement 轻模式完成门的独立复核承担）。用户显式要求时按 §2 AC 逐条核对执行，但为**只读语义**：报告落对话或 `tmp/eo/`，**不写 change 目录、不改 status**——archived 是不可逆终态绝不回写 reviewed，implementing 同样保持不变；发现缺陷 → 未收口的回轻模式修复，已 archived 的走 /eo-fix 或新开 change
+- 调用依据：§6 信号命中未豁免 / 用户显式点名。都没有 → 告知默认主路不需要本闸门，确认仍要跑再继续
 
 ### 前置拦截（硬性）
 
-发现以下任一信号，**立即停止并纠偏**，不要开始审查：
-
-| 信号 | 含义 | 正确路径 |
-|------|------|---------|
-| change.md `status: draft` / `confirmed` 且 TODO 全未勾选 | 代码还没开工 | 先 `/eo-implement`；审方案走 `/eo-change-review` |
-| 用户描述是「审查 change 方案」/「implement 之前再看看」 | 要的是方案审查 | `/eo-change-review`（**不是本 skill**） |
-| 用户描述是「change 重写后再看看」 | 代码未变，只是 change.md 改了 | `/eo-change-review` |
-| 用户描述是「实施后发现方案/架构不对」 | 方案要实质修订，不是代码缺陷 | eo-change **回炉子流程**（修订 + 重新确认，不是本 skill） |
-
-纠偏反馈模板：
-> ⚠️ `/eo-review` 是**实施后的代码审查**，需要代码已经写出来。你当前的情况是 `<信号>`——应走 `/eo-change-review`（审 change.md 本身：AC / TODO 是否合规，implement 之前）。
+| 信号 | 正确路径 |
+|------|---------|
+| change.md `status: draft` / `confirmed` 且 TODO 全未勾选 | 先 `/eo-implement`；审方案走 `/eo-change-review` |
+| 用户描述是「审查 change 方案」/「implement 之前再看看」 | `/eo-change-review`（不是本 skill） |
+| 用户描述是「实施后发现方案/架构不对」 | eo-change **回炉子流程**（不是本 skill） |
 
 ## 工作流程
 
 ### 第一步：阅读上下文
 
-1. `eo-doc/changes/<change-id>/change.md`：§1 意图与已钉决策、§2 AC、§3 TODO、条件节（§5 方案 / §7 风险若存在）
-2. 经 `eo-doc/agent-handbook/INDEX.md` 定位相关代码地图，理解既有架构与模式
-3. 本次交付的 diff（按 frontmatter `base_commit` 起算，或 `[<change-id>]` 前缀的业务代码与测试资产提交）
+1. `eo-doc/changes/<change-id>/change.md`：§1 意图与已钉决策、§2 AC、§5 TODO、§6 风险
+2. 经 `eo-doc/agent-handbook/INDEX.md` 定位相关代码地图
+3. 本次交付的 diff（按 frontmatter `base_commit` 起算，或 `[<change-id>]` 前缀提交）
 
-### 第二步：确定条件维度
+### 第二步：代码审查
 
-- 维度 1-5 恒定执行
-- 涉及 UI 且仓库根存在 `DESIGN.md` → 加启用维度 6（设计一致性）
-- 存在最近一次通过的 Test，且其 revision 不等于当前 `plan_revision`，或其基线 `T` 之后有新的业务代码/测试资产提交 → 加启用维度 7（测试证据失效审计）
-
-### 第三步：代码审查
-
-- **维度 1 · 验收覆盖**：§2 每条 AC 逐条核对实现与验证方式；每条 TODO 的完成判据是否真实达成；有无遗漏边界场景；**反向核对**：diff 中映射不到任何 AC/TODO 的行为新增（镀金）→ P1 建议裁剪或转 backlog。**未勾的 auto-heavy / manual AC 不算缺陷**——勾选权分别归 /eo-test 与用户（三级归属见 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)）；本 skill 在 test 之前跑时它们本就未勾，只核对「实现是否覆盖该 AC」，不因未勾判失败
+- **维度 1 · 验收覆盖**：§2 每条 AC 逐条核对实现与证据；**反向核对**：diff 中映射不到任何 AC/TODO 的行为新增（镀金）→ P1 建议裁剪或转 backlog
 - **维度 2 · 逻辑正确性**：核心逻辑、异常处理、边界条件；竞态/死锁/资源泄漏/生命周期
 - **维度 3 · 架构合规**：分层、模块边界、依赖方向；职责单一、无不合理耦合
-- **维度 4 · 代码规范**：命名一致、类型严格（无随意 `any`）、重复代码、公共 API 注释；**注释纪律**（[../eo-shared/conventions.md](../eo-shared/conventions.md) §2.6）——diff 中发现流程溯源标注（change/TODO/AC/finding 编号、slug 作溯源）或「为何正确」的叙事辩护注释 → P1
+- **维度 4 · 代码规范**：命名一致、类型严格、重复代码；**注释纪律**（[../eo-shared/conventions.md](../eo-shared/conventions.md) §2.6）只作观察——发现流程溯源标注或叙事辩护注释 → P2，不阻塞
 - **维度 5 · 安全与性能**：注入/越权/敏感信息暴露；明显性能瓶颈
-- **维度 6 · 设计一致性（条件）**：UI 实现的字体/色值/间距/圆角是否符合 `DESIGN.md`；发现色板外颜色、刻度外魔法数标 P1
-- **维度 7 · 测试证据失效审计（条件）**：存在最近一次通过的 `test.md`，但其 revision 已旧，或其基线 `T` 之后又有业务代码/测试资产提交时启用。证据 revision 不等于当前 `plan_revision` → AC / 验证口径可能已变化，直接签 `复验`，不得仅凭 `T == H` 沿用；其余情况以当前最后一个 `[<change-id>]` 交付提交为 `H`，审计完整 `T..H`，不采信 implement 的“预计无影响”自述。只有同时满足下列条件才签署 `测试证据处置：沿用`：Test 台账无 `open`/`fixed` 阻塞项；Test 与 Review 均属当前 revision；`T` 是 `H` 的祖先且范围可完整审计；未改变受测外部行为、AC / 验证口径、测试断言 / fixture / mock / 配置 / 环境组合 / 关键依赖；未弄脏 auto-heavy AC；受影响 auto-light AC 已有同层重验证证据。任一不成立或无法证明 → `测试证据处置：复验`，列出受影响 AC / 测试与原因。这里仅判证据是否失效，不运行 heavy Test、不修改 test.md、不宣告测试通过
+- **维度 6 · 设计一致性（条件）**：涉及 UI 且仓库根有 `DESIGN.md` → 字体/色值/间距/圆角符合性；色板外颜色、刻度外魔法数标 P1
 
-### 第四步：报告与速报（轮次留痕，追加不覆盖）
+finding 标根因：业务源码归 `implementation`；测试本身的问题归 `test-asset`；验收口径或方案本身有误归 `requirement`。
 
-1. 按 [references/review-template.md](references/review-template.md) 维护 `eo-doc/changes/<change-id>/review.md`：
-   - **首轮**（文件不存在）：全量写入并建立 `第 1 轮记录`，P0/P1/P2 各条同步建入 Finding 台账（状态 open、首见轮 1、根因、本轮审查基线 commit）
-   - **复审轮**：**不重写报告**——先核销台账：`fixed` 项按其修复 commit 复验，到位 → `verified`，没到位 → 回 `open` 一句话说明；`verified` 项再次打回 = **reopen**（状态回 `open`、刷新最近轮）；新 finding 建条（编号沿用同一序列）。然后在「速报」前追加 `## 第 N 轮记录（revision R · 日期）` 节，原地更新末尾速报。遇**无台账的旧格式报告** → 按当前内容一次性补建台账再继续
-   - 台账写入权见模板 writer matrix：本 skill 建条与核销；`fixed` + 修复 commit 归 eo-implement 回写；用户当场裁决不修的 P1 → 状态置 `waived`（附原话要点，不阻塞 reviewed/归档）；历史轮次节不改；轮次编号全文件单调递增，跨 revision 不清零
-   - **测试证据处置**：末尾速报每轮都写固定字段：`测试证据处置：不适用 / 沿用 / 复验`、`既有通过 Test`、`当前交付基线 H`、`受影响 AC / 测试`、`依据`；维度 7 启用时还须把同组字段写进本轮记录留历史。没有历史 Test，或 Test 已在当前 revision 的 `H` 通过时写 `不适用` 并说明是哪一种；字段缺失/含糊、revision 过期均不等价于沿用
-2. **status 流转（双向都归本 skill）**：无未决 P0/P1（`open`/`fixed`；`waived` 不算）→ change.md `status` 置 `reviewed`；有 P0/P1 且当前 status 已是 `reviewed`（复审翻车）→ **当场置回 `implementing`**（回退边，见 [../eo-shared/conventions.md](../eo-shared/conventions.md) §3）
-3. **对话速报（硬性——缺速报 = 流程未完成）**：
+### 第三步：报告与速报
+
+1. 按 [references/review-template.md](references/review-template.md) 写入 `review.md`（覆盖式：复审先核销上一版未决清单——fixed 按修复 commit 复验 → verified / 回 open，再加上新发现；用户当场裁决不修的标 `waived` 附原话，不阻塞）
+2. **status 流转（双向都归本 skill）**：无未决 P0/P1 → change.md `status` 置 `reviewed`；有 P0/P1 且当前已是 `reviewed`（复审翻车）→ 当场置回 `implementing`
+3. **对话速报（硬性）**：
 
 ```
-结论：通过 / 不通过（P0 x 条）/ 有保留通过（P1 x 条）［第 N 轮 · revision R · 基线 <short-sha>］
-⚠️ 复发：<ID> 第二次打回（无则省略此行）
-测试证据处置：不适用 / 沿用 / 复验
-既有通过 Test：无 / 第 N 轮 @ <T>；当前交付基线：<H>
-受影响 AC / 测试：无 / <清单>；依据：<一句话>
+结论：通过 / 不通过（P0 x 条）/ 有保留通过（P1 x 条）［基线 <short-sha>］
 P0（阻塞）：
 1. <一句话> — <file:line>
 P1（应修）：
 2. <一句话> — <file:line>
-P2（可后置）：
-3. <一句话>
-下一步：<有 P0/P1 → 回 /eo-implement 修复后复审 / 处置为复验或仍有未勾 heavy AC → /eo-test / 处置为沿用、Test 已在当前基线通过、或无历史 Test 且无 heavy AC → /eo-archive>
-📋 <通过且存在 acceptance.md 时：代码审查通过（测试：当前基线已过 / 旧证据已由本轮 Review 签署沿用 / 未跑 eo-test，如实标注），可以人工验收了：<路径>（说「带我验收」可逐项走查）；否则省略此行>
-（详细分析见 <review.md 路径>）
+下一步：<implementation finding → /eo-fix 循环内分支；requirement → /eo-change 回炉或精化；通过 → /eo-archive>
+📋 <通过且存在 acceptance.md 时：可以人工验收了：<路径>（说「带我验收」可逐项走查）；否则省略此行>
+（详细报告见 <review.md 路径>）
 ```
-
-无某级问题整行省略；每条一句话 + 定位，不展开分析。全绿时省略 finding 明细，但测试证据处置、`T/H`、受影响范围、依据与下一步仍保留，不能压缩掉机器可读路由字段。
 
 ## 关键约束
 
 - **客观公正**：基于 AC 和最佳实践，不做主观偏好评判
 - **定位精确**：必须给出文件路径和行号
-- **不直接改代码**：只产报告，修复归 `/eo-implement`
-- **免测签署不越权**：只判断既有 Test 证据能否从 `T` 沿用到 `H`；不代跑 Test、不修改 test.md、不把 implement 自述当证据。影响不清即签复验
+- **不直接改交付物**：只产报告；修复归 `/eo-fix` 循环内分支，需求口径归 `/eo-change`
 - **分级清晰**：P0 仅限阻塞性问题
-- **status 自动流转（双向）**：通过时本 skill 写 `reviewed`；复审翻车（reviewed 下发现 P0/P1）当场回退 `implementing`——都不要求用户手改
-- **报告追加不覆盖**：复审只核销台账 + 追加轮次记录 + 更新速报，历史轮次节不改；速报恒为末节
+- **status 自动流转（双向）**：通过置 `reviewed`；复审翻车当场回退 `implementing`
