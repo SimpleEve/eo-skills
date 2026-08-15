@@ -3,13 +3,13 @@ title: eo-board 看板现状
 type: state
 tags: [eo-board, cache, config, collaboration, aggregate, card, gates, journal, search]
 created: 2026-07-24
-updated: 2026-08-12
+updated: 2026-08-15
 scope: 想了解看板能做什么、配置怎么生效时
 status: active
 source: cli/eo-board
 summary: >
   eo-board 默认即全局 dashboard（终端/HTML/本地服务三形态只读）：首页是「change 流 ⇄ 概要卡」双视图，点卡/点行即下钻该项目泳道页，`--all` 已退役；
-  泳道页顶栏项目切换器是自绘下拉（暗色面板、方向键可达，不再是原生 select），change 卡面有阶段徽标与 ≥3 轮警告，详情抽屉为五 tab（概览含 frontmatter / 清单 / 质量门当前状态 / 动态 journal 逆序 / 全文 mdBlock）；
+  泳道页顶栏项目切换器是自绘下拉（暗色面板、方向键可达，不再是原生 select），change 卡面有 ⛔ 卡点标签（review/test 未决计数统一在此处）与 ≥3 轮警告，阶段徽标集中在详情质量门；详情抽屉为五 tab（概览含 frontmatter / 清单 / 质量门当前状态 / 动态 journal 逆序 / 全文 mdBlock）；
   泳道页版面定格为列内滚动、列头吸顶，整列头点击即可把列折叠成窄条/展开并按项目记忆，顶栏有可见搜索框（点击/Enter/空格），Cmd/Ctrl+K 或 `/` 唤起定位搜索（`#编号` 直跳、全文命中片段，命中折叠列自动展开）；
   --serve 有每项目缓存，仓库无变化时轮询不重扫，有变化 3 秒内上板。
 conclusions:
@@ -49,9 +49,8 @@ conclusions:
 ### 卡面
 
 - **AC / TODO 进度条**（正文 checkbox 现场计数）
-- **阶段徽标**（如 `review P1×1`、`test ≈2 轮`）：只标「当前」质量门阶段，不把已完全通过的历史报告当当前
+- **blocker 标签**（⛔）：质量门未过或台账未决时的一句话卡点，review/test 未决计数统一在这里（如 `review P0×1 P1×2 待修`）；独立阶段徽标行已从卡面去重，阶段明细看详情「质量门」tab
 - **轮次警告**：任一质量门轮次 ≥ 3 时卡面挂 `card-warn` 样式——与是否有活动阶段**解耦**（archived / 已通过但历史轮次高时仍可警告）
-- **blocker 标签**（⛔）：质量门未过或台账未决时的一句话卡点
 - 其他标签：分支 worktree（卡片类分行显示：`⎇ branch` / `worktree_name` 各占一行；分叉时出卡也显标记）、分叉徽标（`分叉×N`，N = 未出卡的其余内容变体数）、commits、issue/PR、测试锁定短 sha 等
 
 ### 版面：列内滚动与列折叠

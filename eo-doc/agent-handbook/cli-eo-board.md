@@ -3,7 +3,7 @@ title: cli/eo-board 只读看板 CLI
 type: agent
 tags: [cli, eo-board, serve, cache, rendering, routing, gates, journal, mdBlock, search]
 created: 2026-07-24
-updated: 2026-08-12
+updated: 2026-08-15
 scope: 改动看板呈现、门禁判定、serve 缓存、聚合页视图与下钻路由、泳道卡详情 tab 时
 status: active
 source: cli/eo-board
@@ -72,7 +72,7 @@ eo-skills 的默认呈现层。数据全部派生自 change.md frontmatter、质
 | `renderJournal` | journal 条目 `mdBlock`；顺序依赖数据层逆序 |
 | `mdBlock` / `applyInline` / `safeHref` | 迷你 markdown：标题 #~####、表、fenced code、列表/checkbox、hr、粗体/code/链接；**safeHref** 仅 http/https/mailto |
 | `bindDetailTabs` / `openDetail(..., isRefresh)` | tab 点击；热刷新时恢复活动 `data-tab` |
-| `changeCard` | 卡面阶段标签独立一行 `.card-stage-line` + `card-warn`（`stage_progress.warn`）；summary 走 `mdInline` |
+| `changeCard` | 卡面不存单列阶段徽标行（已去重，计数并入 ⛔ blocker 标签）；`card-warn` 样式由 `stage_progress.warn` 驱动；summary 走 `mdInline` |
 
 ## 泳道搜索、列显隐与版面（PROJECT_JS）
 
