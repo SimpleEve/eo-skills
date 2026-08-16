@@ -446,7 +446,7 @@ class BoardForkCollapseTests(BoardCacheServeTests):
         run_git(self.repo, "worktree", "add", "-q", str(side), "-b", branch)
         return side
 
-    def diverge_side_change(self, side, old="status: draft", new="status: confirmed"):
+    def diverge_side_change(self, side, old="title: Fixture", new="title: Fixture-side"):
         sc = side / "eo-doc" / "changes" / "01-fixture" / "change.md"
         sc.write_text(sc.read_text(encoding="utf-8").replace(old, new), encoding="utf-8")
         return sc
@@ -467,12 +467,12 @@ class BoardForkCollapseTests(BoardCacheServeTests):
         self.assertEqual(len(cards), 1)
         card = cards[0]
         self.assertEqual(Path(card["worktree"]).resolve(), side.resolve())
-        self.assertEqual(card["status"], "confirmed")
+        self.assertEqual(card["title"], "Fixture-side")
         self.assertTrue(card.get("diverged"))
         self.assertEqual(len(card["forks"]), 1)
         fork = card["forks"][0]
         self.assertEqual(Path(fork["worktree"]).resolve(), self.repo.resolve())
-        self.assertEqual(fork["status"], "draft")
+        self.assertEqual(fork["title"], "Fixture")
 
     def test_latest_wins_regardless_of_worktree(self):
         """main 副本动静更新时由 main 出卡：归属不看主从，只看动静先后。"""
@@ -485,8 +485,8 @@ class BoardForkCollapseTests(BoardCacheServeTests):
         cards = [c for c in data["changes"] if c["id"] == "fixture"]
         self.assertEqual(len(cards), 1)
         self.assertEqual(Path(cards[0]["worktree"]).resolve(), self.repo.resolve())
-        self.assertEqual(cards[0]["status"], "draft")
-        self.assertEqual([f["status"] for f in cards[0]["forks"]], ["confirmed"])
+        self.assertEqual(cards[0]["title"], "Fixture")
+        self.assertEqual([f["title"] for f in cards[0]["forks"]], ["Fixture-side"])
 
     def test_identical_copies_merge_to_one_card(self):
         """内容一致的副本只出一张卡，无分叉标记、无 forks。"""
@@ -496,6 +496,56 @@ class BoardForkCollapseTests(BoardCacheServeTests):
         self.assertEqual(len(cards), 1)
         self.assertFalse(cards[0].get("diverged", False))
         self.assertFalse(cards[0].get("forks"))
+
+    def test_identical_copies_attribute_to_latest_mtime(self):
+        """内容一致时仍按 change 目录动静归属，不固定落到主 worktree。"""
+        side = self.add_side_worktree()
+        now = time.time()
+        self._pin_mtime(self.change_path, now + 100)
+        self._pin_mtime(side / "eo-doc" / "changes" / "01-fixture" / "change.md", now + 200)
+        data = self.board.build_data(self.cfg)
+        cards = [c for c in data["changes"] if c["id"] == "fixture"]
+        self.assertEqual(len(cards), 1)
+        self.assertFalse(cards[0].get("diverged", False))
+        self.assertEqual(Path(cards[0]["worktree"]).resolve(), side.resolve())
+
+    def test_stale_main_does_not_inherit_other_branch_commit_time(self):
+        """过期主 worktree 不能靠 git log --all 吃到其它分支提交时间。
+
+        同状态分叉 + 两边文件 mtime 都早于新提交时，--all 会让活动尺子打平，
+        再按路径降序选中主目录（PWD），出卡内容却是最老一份。HEAD 尺子必须选出
+        真正提交了新正文的 side 副本。
+        """
+        self.change_path.write_text(
+            self.change_path.read_text(encoding="utf-8")
+            .replace("status: draft", "status: implementing")
+            .replace("title: Fixture", "title: Fixture-old"),
+            encoding="utf-8",
+        )
+        run_git(self.repo, "add", "eo-doc/changes/01-fixture/change.md")
+        run_git(self.repo, "commit", "-m", "main old implementing")
+
+        side = self.root / "dev-wt"
+        run_git(self.repo, "worktree", "add", "-q", str(side), "-b", "side")
+        sc = side / "eo-doc" / "changes" / "01-fixture" / "change.md"
+        sc.write_text(
+            sc.read_text(encoding="utf-8").replace("title: Fixture-old", "title: Fixture-live"),
+            encoding="utf-8",
+        )
+        run_git(side, "add", "eo-doc/changes/01-fixture/change.md")
+        run_git(side, "commit", "-m", "side live implementing")
+
+        old = 1_700_000_000  # 2023-11，早于上述两次提交
+        self._pin_mtime(self.change_path, old)
+        self._pin_mtime(sc, old)
+
+        data = self.board.build_data(self.cfg)
+        cards = [c for c in data["changes"] if c["id"] == "fixture"]
+        self.assertEqual(len(cards), 1)
+        card = cards[0]
+        self.assertEqual(Path(card["worktree"]).resolve(), side.resolve())
+        self.assertEqual(card["status"], "implementing")
+        self.assertEqual(card["title"], "Fixture-live")
 
     def test_shown_card_and_forks_carry_attribution_data(self):
         """出卡与 forks 都带归属数据（branch/worktree/status/activity），徽标计数有据。"""
@@ -512,7 +562,7 @@ class BoardForkCollapseTests(BoardCacheServeTests):
         fork = card["forks"][0]
         self.assertEqual(fork["branch"], "main")
         self.assertEqual(fork["worktree_name"], "repo")
-        self.assertEqual(fork["status"], "draft")
+        self.assertEqual(fork["title"], "Fixture")
         self.assertTrue(fork.get("activity_at"))
 
     @unittest.skipUnless(NODE, "缺少 node，无法渲染泳道页验证分叉卡详情")
@@ -550,11 +600,12 @@ class BoardForkCollapseTests(BoardCacheServeTests):
         main_body = details["ch:fixture"]
         # 出卡详情带分叉徽标（计数 = 其余内容变体数）
         self.assertIn("分叉×1", main_body)
-        self.assertIn("status: confirmed", main_body)
+        self.assertIn("title: Fixture-side", main_body)
         # fork 键切换到 main 副本的详情，内容对应其 change.md
         fork_body = details["ch:fixture@repo"]
         self.assertNotEqual(main_body, fork_body)
-        self.assertIn("status: draft", fork_body)
+        self.assertIn("title: Fixture", fork_body)
+        self.assertNotIn("title: Fixture-side", fork_body)
 
     def test_serve_refreshes_latest_attribution_after_divergence(self):
         """serve 挂起时制造分叉：一个轮询周期内仍只出一张卡，归属刷新为最新副本。"""
@@ -572,9 +623,9 @@ class BoardForkCollapseTests(BoardCacheServeTests):
         self.assertEqual(len(cards[0]["forks"]), 1)
 
     def test_ac6_stale_lower_status_filtered(self):
-        """基准状态更高时，状态更低的过期版本被过滤：不出卡也不进 forks。"""
+        """更新的高状态副本领先时，更旧且状态更低的遗留不出卡也不进 forks。"""
         side = self.add_side_worktree()
-        # main=archived（基准，高），side=implementing（过期，低）
+        # main=archived（更新），side=implementing（更旧遗留）
         self.change_path.write_text(
             self.change_path.read_text(encoding="utf-8").replace("status: draft", "status: archived"),
             encoding="utf-8",
@@ -584,6 +635,9 @@ class BoardForkCollapseTests(BoardCacheServeTests):
             side_change.read_text(encoding="utf-8").replace("status: draft", "status: implementing"),
             encoding="utf-8",
         )
+        now = time.time()
+        self._pin_mtime(side_change, now + 100)
+        self._pin_mtime(self.change_path, now + 200)
         data = self.board.build_data(self.cfg)
         cards = [c for c in data["changes"] if c["id"] == "fixture"]
         self.assertEqual(len(cards), 1)
@@ -591,10 +645,37 @@ class BoardForkCollapseTests(BoardCacheServeTests):
         self.assertFalse(cards[0].get("diverged", False))
         self.assertFalse(cards[0].get("forks"))
 
-    def test_base_lower_keeps_higher_via_collapse(self):
-        """基准状态更低时不误杀：高状态副本经折叠出卡，低状态基准副本进 forks。"""
+    def test_newer_lower_status_copy_beats_stale_main(self):
+        """主 worktree 状态更高但更旧时不能挡住正在改的新副本。"""
         side = self.add_side_worktree()
-        # main=implementing（基准，低），side=reviewed（高，不误杀）
+        self.change_path.write_text(
+            self.change_path.read_text(encoding="utf-8")
+            .replace("status: draft", "status: confirmed")
+            .replace("title: Fixture", "title: Fixture-old"),
+            encoding="utf-8",
+        )
+        side_change = side / "eo-doc" / "changes" / "01-fixture" / "change.md"
+        side_change.write_text(
+            side_change.read_text(encoding="utf-8")
+            .replace("status: draft", "status: draft")
+            .replace("title: Fixture", "title: Fixture-live"),
+            encoding="utf-8",
+        )
+        now = time.time()
+        self._pin_mtime(self.change_path, now + 100)
+        self._pin_mtime(side_change, now + 200)
+        data = self.board.build_data(self.cfg)
+        cards = [c for c in data["changes"] if c["id"] == "fixture"]
+        self.assertEqual(len(cards), 1)
+        card = cards[0]
+        self.assertEqual(card["title"], "Fixture-live")
+        self.assertEqual(card["status"], "draft")
+        self.assertEqual(Path(card["worktree"]).resolve(), side.resolve())
+        self.assertEqual([f["status"] for f in card.get("forks") or []], ["confirmed"])
+
+    def test_base_lower_keeps_higher_via_collapse(self):
+        """更新的高状态副本出卡；更旧且状态更低的遗留不进 forks。"""
+        side = self.add_side_worktree()
         self.change_path.write_text(
             self.change_path.read_text(encoding="utf-8").replace("status: draft", "status: implementing"),
             encoding="utf-8",
@@ -612,7 +693,8 @@ class BoardForkCollapseTests(BoardCacheServeTests):
         self.assertEqual(len(cards), 1)
         self.assertEqual(cards[0]["status"], "reviewed")
         self.assertEqual(Path(cards[0]["worktree"]).resolve(), side.resolve())
-        self.assertEqual([f["status"] for f in cards[0]["forks"]], ["implementing"])
+        self.assertFalse(cards[0].get("diverged", False))
+        self.assertFalse(cards[0].get("forks"))
 
     def test_ac6_base_missing_change_no_filter(self):
         """AC-6: 基准没有该 change 时无阈值不过滤。"""

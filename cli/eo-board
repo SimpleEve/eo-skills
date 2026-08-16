@@ -133,7 +133,7 @@ def compute_change_git_stats(rec, doc_root, main_worktree_path):
 
     rel_dir = str(Path(doc_root) / "changes" / rec["dirname"])
     dir_path = Path(wt_path) / rel_dir
-    last_out = run_git(["log", "--all", "-1", "--format=%cI", "--", rel_dir], cwd=wt_path).strip()
+    last_out = run_git(["log", "-1", "--format=%cI", "--", rel_dir], cwd=wt_path).strip()
     if last_out:
         rec["last_touch"] = last_out[:10]
     else:

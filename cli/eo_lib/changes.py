@@ -260,10 +260,13 @@ def group_changes_by_divergence(recs):
 
 
 def _change_activity_epoch(rec, doc_root):
-    """change 目录的动静尺子：git 末次提交时间与目录树 max-mtime 取大（epoch 秒）。"""
+    """change 目录的动静尺子：本 worktree HEAD 末次提交 + 目录树 max-mtime 取大（epoch 秒）。
+
+    不用 ``git log --all``：其它分支的新提交不能记到未回拉副本上。
+    """
     rel_dir = str(Path(doc_root) / "changes" / rec["dirname"])
     stamps = []
-    out = run_git(["log", "--all", "-1", "--format=%ct", "--", rel_dir], cwd=rec["worktree"]).strip()
+    out = run_git(["log", "-1", "--format=%ct", "--", rel_dir], cwd=rec["worktree"]).strip()
     if out.isdigit():
         stamps.append(int(out))
     mtime = tree_max_mtime(Path(rec["worktree"]) / rel_dir)
@@ -272,35 +275,57 @@ def _change_activity_epoch(rec, doc_root):
     return max(stamps) if stamps else 0
 
 
+def _change_recency_key(rec, doc_root):
+    """出卡平手键：活动更新 → 状态更高 → 路径字典序（降序，与折叠排序同源）。"""
+    return (_change_activity_epoch(rec, doc_root), status_rank(rec), rec["path"])
+
+
+def _stale_behind_latest(recs, doc_root):
+    """相对「最近活动」最新的那份：状态更低且动静更旧的视为过期遗留（未回拉），过滤。
+
+    不能拿 main worktree 当状态门槛：主目录常是最老、未跟上的那份，门槛会把
+    正在改的新 worktree（状态暂时更低或正文更新）误杀掉，出卡变成「新 PWD + 旧正文」。
+    """
+    if len(recs) <= 1:
+        return list(recs)
+    latest = max(recs, key=lambda r: _change_recency_key(r, doc_root))
+    latest_epoch = _change_activity_epoch(latest, doc_root)
+    latest_rank = status_rank(latest)
+    keep = []
+    for rec in recs:
+        if rec is latest:
+            keep.append(rec)
+            continue
+        if status_rank(rec) < latest_rank and _change_activity_epoch(rec, doc_root) < latest_epoch:
+            continue
+        keep.append(rec)
+    return keep
+
+
 def scan_all_changes_split(cfg, worktrees, warnings, base_worktree=None):
     """scan_all_changes 的分叉感知变体：同 id 折叠为一张卡。
-    内容一致副本维持旧口径（状态最高代表、单卡、无标记）；实质分叉时由最近活动最新的变体出卡，
-    其余变体代表收进 ``forks`` 并置 ``diverged``——分叉信号收敛到徽标而不是多张卡。
-    base_worktree 指定基准 worktree 路径时，状态严格低于基准的候选视为过期（被基准超越）并过滤；
-    状态 >= 基准的保留；基准没有该 change 时无阈值不过滤。过滤先于折叠，过期副本不进 forks。
+    内容一致副本合并为单卡、无标记，代表按最近活动选取（与分叉出卡同一把尺）；
+    实质分叉时由最近活动最新的变体出卡，其余变体代表收进 ``forks`` 并置 ``diverged``。
+    过期判定相对最近活动最新的那份：状态更低且动静更旧的副本先过滤，不进 forks。
+    base_worktree 保留给调用方兼容，不再作为状态门槛。
     """
     by_id = scan_changes_grouped(cfg, worktrees, warnings)
-    base_path = str(Path(base_worktree).resolve()) if base_worktree else None
     cards = []
+    doc_root = cfg["doc_root"]
     for recs in by_id.values():
-        pool = recs
-        if base_path:
-            base_recs = [r for r in recs if str(Path(r["worktree"]).resolve()) == base_path]
-            if base_recs:
-                threshold = status_rank(max(base_recs, key=status_rank))
-                pool = [r for r in recs if status_rank(r) >= threshold]
+        pool = _stale_behind_latest(recs, doc_root)
         groups = group_changes_by_divergence(pool)
-        if len(groups) == 1:
-            cards.append(pick_change_winner(groups[0]))
-            continue
-
         keys = {}
 
         def key_of(r):
             k = id(r)
             if k not in keys:
-                keys[k] = (_change_activity_epoch(r, cfg["doc_root"]), status_rank(r), r["path"])
+                keys[k] = _change_recency_key(r, doc_root)
             return keys[k]
+
+        if len(groups) == 1:
+            cards.append(max(groups[0], key=key_of))
+            continue
 
         reps = [max(g, key=key_of) for g in groups]
         reps.sort(key=key_of, reverse=True)
