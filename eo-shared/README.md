@@ -8,6 +8,8 @@
 | [goal-contract.md](goal-contract.md) | 七维目标契约的跨阶段语义、Proof 分层、Trade 优先级与 Unknown 权限 | eo-brainstorming / eo-loop |
 | [ac-spec.md](ac-spec.md) | 验收清单（AC）规范：三级验证归属、重验证的环境纪律 | eo-change / eo-implement / eo-test / eo-review / eo-fix |
 | [acceptance.md](acceptance.md) | 人工验收单：模板、软前门/唯一硬门生命周期、引导走查 | eo-implement（产）/ eo-review（提示）/ eo-archive（硬门） |
+| [evidence.md](evidence.md) | 交付证据面：三段模板、类型预设与项目扩展、截图纪律、刷新与失效 | eo-implement（产）/ eo-fix（刷新）/ eo-archive（硬门+渲染）/ eo-loop（收尾渲染） |
+| [reply-contract.md](reply-contract.md) | 长任务收尾回复契约（四条）单一来源与双生效通道 | eo-archive / eo-loop（硬步骤）/ eo-project-init（注入段） |
 | [granularity.md](granularity.md) | 粒度硬指标、trivial 判据、拆分决策表、风险信号清单（§5） | eo-change / eo-fix / eo-change-review / eo-brainstorming / eo-implement |
 | [conventions.md](conventions.md) | 横切约定：tmp/eo/、commit 前缀、状态流转 | 主链各 skill |
 | [board-github.md](board-github.md) | eo-sync 内置 Obsidian/GitHub 适配器的投影内容实现说明（opt-in） | eo-sync 内置适配器 / eo-archive 收口 / eo-project-init |

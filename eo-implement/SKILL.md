@@ -47,23 +47,26 @@ description: |
 
 5. **批末 checkpoint（STOP and VALIDATE）**
    - 自验该批对应的**自动 AC**：按 §2/§3 的验证口径逐条执行（需要起环境的照起，环境纪律见 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)「起环境的纪律」——探测复用、按环境组合分组跑），通过则勾选，证据留在汇报里
+   - **UI 变化留截图**：本批涉及 UI 变化时，自验当下把关键界面截图存进 change 目录 `shots/`（`<批号>-<场景>.png`），纪律见 [../eo-shared/evidence.md](../eo-shared/evidence.md)「截图纪律」
    - **人工项（「人工:」标记）不代勾**，留给验收单
    - 提交本批代码：commit message 带 `[<change-id>]` 前缀（推荐一次 change 一次 commit，分批时一批一 commit）
    - **提交前注释自检（必做）**：对本批 diff 的新增注释行扫溯源 token（`AC-\d`、`TODO-\d`、当前 change slug）——命中按 conventions §2.6 语义判定，确属溯源标注/叙事辩护的清理后再提交
    - **合流 checkpoint**（仅并行层）：本批是同层并行批的最后一批时，加跑合流校验（granularity §6）——合并结果常规绿灯 + 该层各批对应 AC 复核
    - 汇报：本批完成的 TODO / 勾掉的 AC（附一句证据）/ 未过项，询问「继续下一批 / 停」
 
-6. **全部完成 → 生成人工验收单（软门，不阻塞）**
-   - TODO 全勾、自动 AC 全部自验通过后，若存在**人工 AC**，按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md) 生成 `acceptance.md`（操作步骤写实现后才确定的入口/路径/数据），速报：
+6. **全部完成 → 生成交付证据面（必产）+ 人工验收单（软门，不阻塞）**
+   - TODO 全勾、自动 AC 全部自验通过后，**无论有无人工项**都按 [../eo-shared/evidence.md](../eo-shared/evidence.md) 生成 `evidence.md`（三段：入口与环境 / 过程证据 / 怎么验；先查项目 `eo-doc/templates/evidence-*.md` 预设，命中优先；无可观察面的最薄形态三段各一行）。自验起过的环境按 ac-spec 纪律不主动停——把可访问地址与状态写进「入口与环境」段
+   - 若存在**人工 AC**，按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md) 生成 `acceptance.md`（操作步骤写实现后才确定的入口/路径/数据），速报：
 
      ```
      ✅ 自验通过 <n>/<n>（<测试/回归摘要一句>）
+     🧾 交付证据面：<evidence.md 路径>（入口：<URL/命令，无则「无」>）
      📋 人工验收单已生成（<m> 条人工项）：<acceptance.md 路径>
         现在验或归档前验都行；对我说「带我验收」可逐项走查。
      建议下一步：<默认 /eo-archive；命中信号且未豁免 → 对应闸门（/eo-test 或 /eo-review）>
      ```
 
-     **不阻塞等待表态**（人工验收的唯一硬门在 /eo-archive）；用户此刻就确认的项照常按验收单规则处理；用户指出问题 → 转 /eo-fix 循环内分支。**无人工项的 change 不生成验收单、不打扰**
+     无人工项时速报去掉 📋 行。**不阻塞等待表态**（人工验收的唯一硬门在 /eo-archive）；用户此刻就确认的项照常按验收单规则处理；用户指出问题 → 转 /eo-fix 循环内分支
    - `status` 保持 `implementing`——`reviewed` 只在实际跑了 /eo-review 并通过时由它设置
 
 ### 偏差记录

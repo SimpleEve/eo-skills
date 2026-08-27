@@ -80,7 +80,7 @@ description: |
 
 ### 第六步：落点记账（任何路都不豁免，~30 秒）
 
-- 有相关**活跃 change** → 勾选涉及的 TODO/AC（人工项不代勾，勾选权归用户；被本次改动弄脏的已勾项按 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)「勾变脏即取消」处理），commit 带 `[<change-id>]` 前缀；改动影响其 acceptance.md 人工项的入口/行为 → 按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)「失效与重置」取消该项勾选并注明原因
+- 有相关**活跃 change** → 勾选涉及的 TODO/AC（人工项不代勾，勾选权归用户；被本次改动弄脏的已勾项按 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)「勾变脏即取消」处理），commit 带 `[<change-id>]` 前缀；改动影响其 acceptance.md 人工项的入口/行为 → 按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)「失效与重置」取消该项勾选并注明原因；改动影响其 evidence.md 的入口/行为/截图事实 → 按 [../eo-shared/evidence.md](../eo-shared/evidence.md)「刷新与失效」同步刷新对应段
 - 无 → 直改落地：commit 带 `fix:` 前缀（见 [../eo-shared/conventions.md](../eo-shared/conventions.md)），由下次 doc sync 兜底归档；cursor 落后超过 10 个 commit 时建议顺手跑 `/eo-doc-manager sync`
 
 ### 第七步：收尾速报
@@ -108,7 +108,7 @@ description: |
 1. **读取反馈**：同会话反馈已在上下文 → **不重读报告文件**；跨会话 → 只读报告的未决清单 + 结论，按 open 项定点读详情，不通读全文。根因为 `test-asset` 的 finding 不由本分支消费，交 `/eo-test`；本分支只处理业务实现项
 2. **分诊定路 + 修复**：按 P0 > P1 > P2 逐一过第一步分诊表定路，各走快路 / 取证 / 深挖；修复代码**注释零溯源**（[../eo-shared/conventions.md](../eo-shared/conventions.md) §2.6）
 3. **双向取证，取最低成本层**：每个缺陷**先复现失败、修后在同层验通过**——「改完看起来对了」不算证据；层选法同主流程第三步
-4. 涉及的**自动 AC 就地重验**；被本次修复弄脏的**已勾** AC 按 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)「勾变脏即取消」处理；修复改变了人工项的入口/行为 → 按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)「失效与重置」更新对应验收项
+4. 涉及的**自动 AC 就地重验**；被本次修复弄脏的**已勾** AC 按 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)「勾变脏即取消」处理；修复改变了人工项的入口/行为 → 按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)「失效与重置」更新对应验收项；修复改变了入口/行为/截图事实 → 按 [../eo-shared/evidence.md](../eo-shared/evidence.md)「刷新与失效」同步刷新 evidence.md 对应段
 5. **回写未决清单**：每个业务实现缺陷修复并同层验通过后，把对应报告清单行置 `fixed` 并填修复 commit——`verified` 由复审方核销，本分支不写
 6. 修复提交带 `[<change-id>]` 前缀
 7. **交接**：回原复审方核销（增量，不重开全文）。交付速报列：`反馈来源`、`修复 commit`、`受影响 AC`、`局部验证`、`下一节点`
