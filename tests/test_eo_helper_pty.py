@@ -135,9 +135,10 @@ class HelperInstallTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             prefix = root / "prefix" / "bin"
-            env = dict(os.environ, HOME=str(root / "home"), EO_BIN_DIR=str(prefix))
+            home = root / "home"
+            env = dict(os.environ, HOME=str(home), EO_BIN_DIR=str(prefix))
             result = subprocess.run(
-                ["sh", "install.sh", "--codex-only"], cwd=REPO_ROOT, env=env,
+                ["sh", "install.sh"], cwd=REPO_ROOT, env=env,
                 capture_output=True, text=True, timeout=30,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -148,6 +149,25 @@ class HelperInstallTests(unittest.TestCase):
             menu = subprocess.run([str(helper)], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=10)
             self.assertEqual(menu.returncode, 0, menu.stderr)
             self.assertIn("eo-board --serve", menu.stdout)
+
+    def test_install_uses_agents_shared_dir_and_excludes_eo_doc(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            home = root / "home"
+            env = dict(os.environ, HOME=str(home), EO_BIN_DIR=str(root / "bin"))
+            result = subprocess.run(
+                ["sh", "install.sh"], cwd=REPO_ROOT, env=env,
+                capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            shared = home / ".agents" / "skills"
+            # 共享规范库随整套安装（skills CLI 兼容的前提）
+            self.assertTrue((shared / "eo-shared").exists())
+            self.assertTrue((shared / "eo-change").exists())
+            # eo-doc 是仓库自身 dogfood 文档，不随安装分发
+            self.assertFalse((shared / "eo-doc").exists())
+            # 未检测到已装 agent 时不建 agent 目录
+            self.assertFalse((home / ".claude").exists())
 
 
 if __name__ == "__main__":

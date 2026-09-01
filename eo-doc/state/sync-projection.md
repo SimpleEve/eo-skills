@@ -34,7 +34,7 @@ eo-sync run --dry-run   # 只看计划（change × 目标 → create/update/dele
 eo-sync run             # 执行投影（本项目：Obsidian board/ stub 卡；GitHub 联动关闭）
 ```
 
-安装：`./install.sh` 把三个 CLI 链接进 `~/.local/bin`（POSIX-only，Windows 用 WSL）。
+安装：`npx skills add SimpleEve/eo-skills` 或 `./install.sh` 把五个 CLI（eo-helper / eo-board / eo-sync / eo-sync-obsidian / eo-sync-github）链接进 `~/.local/bin`（POSIX-only，Windows 用 WSL；skills CLI 方式需另跑 install.sh 接线 CLI）。
 
 ## 安全语义
 

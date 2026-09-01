@@ -1,6 +1,6 @@
 # eo-shared — 共享规范（非 skill）
 
-本目录**不是可触发的 skill**（刻意没有 SKILL.md），是 eo-* 各 skill 引用的单一来源规范。install.sh 按 `eo-*` 通配把它和其他 skill 一起软链到各 agent 的 skills 目录，无 SKILL.md 的目录仅作为文件被引用（已验证 Claude Code 忽略此类目录；Codex / Antigravity 按同规则处理，若某 runtime 异常请反馈）。**必须整套安装**——单独拷贝某个 skill 目录会使其 `../eo-shared/` 引用断链。
+本目录**不是可触发的 skill**，是 eo-* 各 skill 引用的单一来源规范。带 SKILL.md 仅为让 skills CLI（`npx skills add`）把它随整套 skill 一起分发（skills CLI 只装带 SKILL.md 的目录，缺了它 `../eo-shared/` 引用会断链）；agent 侧请勿把它当独立 skill 触发。**必须整套安装**——单独拷贝某个 skill 目录会使其 `../eo-shared/` 引用断链。
 
 | 文件 | 内容 | 主要消费方 |
 |------|------|-----------|

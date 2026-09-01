@@ -1,6 +1,6 @@
 # eo-skills
 
-一套面向 **Claude Code / Codex** 的开发工作流 skill 集合。以 change 工件为核心，配套可选的 codegraph 代码召回与 agent-handbook 项目操作手册，把从构思、变更、实施、测试、审查到归档的全流程拆成可独立调用的 skill，并支持跨 agent（Claude ↔ Codex）协作。
+一套开发工作流 skill 集合，可装进任何支持 Agent Skills 约定的 agent（Claude Code / Codex / Antigravity 等）。以 change 工件为核心，配套可选的 codegraph 代码召回与 agent-handbook 项目操作手册，把从构思、变更、实施、测试、审查到归档的全流程拆成可独立调用的 skill，并支持跨 agent 协作。
 
 > 从 v1 升级？破坏性变更与迁移步骤见 [docs/migration-v1-to-v2.md](docs/migration-v1-to-v2.md)。
 
@@ -12,77 +12,51 @@
 
 ## 依赖
 
-| 运行时 | 必需性 | 安装 |
-|--------|--------|------|
-| [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) | 必需（skill 运行时） | 官方 CLI |
-| [Codex](https://github.com/openai/codex) | 可选（skill 运行时） | 官方 CLI |
-| [Antigravity](https://antigravity.dev) | 可选（skill 运行时） | 官方 CLI |
-
-终端 CLI（`eo-helper` / `eo-board` / `eo-sync`）只用 Python 3 标准库，零第三方依赖（macOS / Linux 自带 python3 即可）。
+- **skill 本体**：无硬性运行时依赖——只要 agent 支持 Agent Skills 约定（读 `~/.agents/skills/` 及自身 skills 目录）即可装载，Claude Code / Codex / Antigravity 均在此列，装了哪个就用哪个。
+- **终端 CLI**（`eo-helper` / `eo-board` / `eo-sync`）：Python 3 标准库，零第三方依赖（macOS / Linux 自带 python3 即可）；POSIX-only，Windows 走 WSL。
+- **安装器**：`npx skills add` 需要 Node ≥ 18；无 Node 环境用 install.sh（仅需 git + POSIX sh）。
 
 
 ---
 
 ## 安装
 
-macOS / Linux:
+方式一（推荐）——skills CLI（[skills.sh](https://skills.sh) 生态标准安装器）：自动检测本机已装的 agent，把 skill 装入跨 agent 标准位 `~/.agents/skills/`，再在各 agent 的 skills 目录建软链：
 
 ```bash
-# 方式一：远程安装（自动 clone/update 到 ~/.eo-skills/repo）
+npx skills add SimpleEve/eo-skills
+```
+
+方式二——install.sh（无需 Node；软链进本仓库的 clone，`git pull` 后所有 skill 立即生效）：
+
+```bash
+# 远程安装（自动 clone/update 到 ~/.eo-skills/repo）
 curl -fsSL https://raw.githubusercontent.com/SimpleEve/eo-skills/main/install.sh | sh
 
-# 方式二：clone 后安装
-# 1. clone 本仓库到任意位置
+# 或 clone 后安装
 git clone https://github.com/SimpleEve/eo-skills.git ~/code/eo-skills
-
-# 2. 执行安装脚本（默认同时安装到 Claude Code + Codex + Antigravity）
 cd ~/code/eo-skills
 sh install.sh
 ```
 
-脚本会把仓库中所有 `eo-*` 目录（各 skill + `eo-shared` 支持目录）**直接软链**到各 agent 的 skills 目录，无中间层。**必须整套安装**——单独拷贝某个 skill 目录会使其对 `../eo-shared/` 的引用断链：
+两种方式落到同一拓扑：skill 统一放在 `~/.agents/skills/`，检测到的 agent 目录各建软链——
 
-| Agent | 目标目录 |
+| Agent | skills 目录 |
 |-------|----------|
 | Claude Code | `~/.claude/skills/` |
-| Codex | `~/.agents/skills/` |
+| Codex | `~/.codex/skills/` |
 | Antigravity | `~/.gemini/antigravity/skills/` |
 
-如果你只想装某一侧：
+**必须整套安装**——各 skill 以 `../eo-shared/` 相对路径引用共享规范库，单独装某个 skill 目录会断链（skills CLI 与 install.sh 都会连 `eo-shared` 一起装）。目标已有同名条目时跳过、不覆盖。install.sh 还会把终端 CLI 链接进 `~/.local/bin`（`EO_BIN_DIR` 可覆盖）。
 
-```bash
-sh install.sh --claude-only
-sh install.sh --codex-only
-sh install.sh --antigravity-only
-```
-
-Windows:
-
-```bat
-REM 1. clone 本仓库到任意位置
-git clone https://github.com/SimpleEve/eo-skills.git %USERPROFILE%\code\eo-skills
-
-REM 2. 执行安装脚本（默认同时安装到 Claude Code + Codex + Antigravity）
-cd /d %USERPROFILE%\code\eo-skills
-install.bat
-```
-
-如果你只想装某一侧：
-
-```bat
-install.bat --claude-only
-install.bat --codex-only
-install.bat --antigravity-only
-```
-
-脚本会把当前仓库下所有 `eo-*` 目录逐个链接到对应的 skill 目录；如果目标里已经有同名 skill，会直接跳过，不会覆盖。链接而非复制：本仓库更新后所有 skill 立刻生效。
+Windows：`install.bat` 同拓扑（junction 链接）；终端 CLI 仍 POSIX-only，用 WSL 跑 install.sh 接线。
 
 
 ---
 
 ## 第一次使用
 
-> 心智模型一句话：**对话里干活（skill），终端里看板（CLI）**。skill 在 Claude Code / Codex 会话里喊；终端侧日常只需记一条命令——`eo-helper`（数字菜单直达看板与同步各入口），`install.sh` 已链接进 `~/.local/bin`（POSIX-only，Windows 用 WSL）。
+> 心智模型一句话：**对话里干活（skill），终端里看板（CLI）**。skill 在 agent 会话里喊；终端侧日常只需记一条命令——`eo-helper`（数字菜单直达看板与同步各入口），安装脚本已链接进 `~/.local/bin`（POSIX-only，Windows 用 WSL）。
 
 进入任意项目目录，在 Claude Code 里跑：
 

@@ -9,7 +9,7 @@
 ## 契约纪律
 
 - 口径修改只改 eo-shared；禁止在任何 skill 内复制正文
-- skill 以相对路径引用 `../eo-shared/<file>`；必须整套安装（install.sh 软链），单独拷贝即断链
+- skill 以相对路径引用 `../eo-shared/<file>`；必须整套安装（skills CLI 或 install.sh 均整套分发，落位 `~/.agents/skills/` 单源 + 各 agent 目录软链），单独拷贝即断链
 
 ## SKILL 写作纪律
 
