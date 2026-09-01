@@ -143,14 +143,16 @@ def compute_change_git_stats(rec, doc_root, main_worktree_path):
         )
 
     # last_touch 是日粒度且有 commit 历史时忽略未提交编辑；排序/活跃判定另用秒级 activity_at
-    tree_mtime = tree_max_mtime(dir_path)
+    # mtime 只在目录有未提交改动时计入——新建 worktree 的检出 mtime 不算动静
+    dirty = run_git(["status", "--porcelain", "--", rel_dir], cwd=wt_path).strip()
+    tree_mtime = tree_max_mtime(dir_path) if dirty else None
     rec["activity_at"] = max_activity(
         last_out or None,
         iso_seconds(tree_mtime) if tree_mtime else None,
     ) or max_activity(rec.get("created"))
 
     rec["stale"], rec["stale_days"] = False, None
-    if rec["tier"] == "light" and rec["status"] != "archived" and rec.get("last_touch"):
+    if rec["status"] != "archived" and rec.get("last_touch"):
         try:
             dt = datetime.strptime(rec["last_touch"], "%Y-%m-%d").date()
             days = (date.today() - dt).days
@@ -204,25 +206,31 @@ def parse_pxx_headings(text, prefix):
 
 
 def parse_speed_report(text):
-    """定位末节标题含"速报"的节，抓「结论：」「下一步：」两行；解析不出返回 (None, None)——
-    容错优先，宁可不给结论也不误判卡点。"""
+    """优先解析 v2「速报」节；没有结论时回退读取 v3 顶部结论行。"""
     lines = text.splitlines()
     start = None
     for i, line in enumerate(lines):
         if re.match(r"^##\s*.*速报", line.strip()):
             start = i
-    if start is None:
-        return None, None
+
     verdict, next_step = None, None
-    for line in lines[start + 1:]:
-        s = line.strip()
-        m = re.match(r"^结论[:：]\s*(.+)$", s)
+    if start is not None:
+        for line in lines[start + 1:]:
+            s = line.strip()
+            m = re.match(r"^结论[:：]\s*(.+)$", s)
+            if m:
+                verdict = m.group(1).strip()
+                continue
+            m = re.match(r"^下一步[:：]\s*(.+)$", s)
+            if m:
+                next_step = m.group(1).strip()
+        if verdict is not None:
+            return verdict, next_step
+
+    for line in lines[:40]:
+        m = re.match(r"^>?\s*结论[:：]\s*(.+?)\s*$", line)
         if m:
-            verdict = m.group(1).strip()
-            continue
-        m = re.match(r"^下一步[:：]\s*(.+)$", s)
-        if m:
-            next_step = m.group(1).strip()
+            return m.group(1).strip(), None
     return verdict, next_step
 
 
@@ -242,49 +250,52 @@ _LEDGER_UNRESOLVED_STATUSES = frozenset({"open", "fixed"})
 
 
 def parse_finding_ledger_open_items(body):
-    """在「...台账」节表格里收集未决行（状态 open/fixed）：{level, id, summary, status}。
-
-    列位置按表头文字定位；找不到表头时退回模板默认（ID0 / 级别1 / 摘要2 / 状态4）。
-    """
+    """从 v2 台账或 v3 清单表格收集 open/fixed 未决项。"""
     target_lines = None
     for title, lines in split_by_h2(body):
-        if title and "台账" in title:
+        if title and (
+            "台账" in title
+            or "未决清单" in title
+            or "Finding 清单" in title
+        ):
             target_lines = lines
             break
     if target_lines is None:
         return []
-    table_rows = [l for l in target_lines if l.strip().startswith("|")]
+    table_rows = [line for line in target_lines if line.strip().startswith("|")]
     if not table_rows:
         return []
-    header_cells = [c.strip() for c in table_rows[0].strip().strip("|").split("|")]
-    id_idx, level_idx, summary_idx, status_idx = 0, 1, 2, 4
+
+    header_cells = [cell.strip() for cell in table_rows[0].strip().strip("|").split("|")]
+    id_idx, level_idx, summary_idx, status_idx = 0, None, 2, 4
     for idx, cell in enumerate(header_cells):
-        if cell in ("ID", "id") or cell.upper() == "ID":
+        if cell.upper() == "ID" or cell == "项":
             id_idx = idx
         if "级别" in cell:
             level_idx = idx
-        if "摘要" in cell:
+        if "摘要" in cell or "失败现象" in cell:
             summary_idx = idx
         if "状态" in cell:
             status_idx = idx
-    need = max(id_idx, level_idx, summary_idx, status_idx)
+
+    need = max(idx for idx in (id_idx, level_idx, summary_idx, status_idx) if idx is not None)
     items = []
     for row in table_rows[1:]:
         stripped = row.strip().strip("|")
         if re.fullmatch(r"[\s:|-]+", stripped):
             continue
-        cells = [c.strip() for c in stripped.split("|")]
+        cells = [cell.strip() for cell in stripped.split("|")]
         if len(cells) <= need:
             continue
-        st = cells[status_idx].lower()
-        if st not in _LEDGER_UNRESOLVED_STATUSES:
+        status = cells[status_idx].lower()
+        if status not in _LEDGER_UNRESOLVED_STATUSES:
             continue
-        level = cells[level_idx].upper()
+        level = cells[level_idx].upper() if level_idx is not None else ""
         items.append({
             "level": level,
             "id": cells[id_idx],
             "summary": cells[summary_idx],
-            "status": st,
+            "status": status,
         })
     return items
 
@@ -317,6 +328,7 @@ def parse_review_gate(path, worktree_path, rel_path, warnings):
     ]
     open_p0 = sum(1 for it in open_items if it.get("level") == "P0")
     open_p1 = sum(1 for it in open_items if it.get("level") == "P1")
+    open_p2 = sum(1 for it in open_items if it.get("level") == "P2")
     return {
         "exists": True,
         "rounds_approx": estimate_rounds_approx(fm, worktree_path, rel_path),
@@ -328,6 +340,7 @@ def parse_review_gate(path, worktree_path, rel_path, warnings):
         "p0_titles": p0_titles[:3],
         "open_p0": open_p0,
         "open_p1": open_p1,
+        "open_p2": open_p2,
         "open_p0_titles": open_p0_titles[:8],
         "open_p1_titles": open_p1_titles[:8],
         "date": fm.get("updated") or fm.get("created"),
@@ -342,7 +355,18 @@ def parse_test_gate(path, worktree_path, rel_path, warnings):
         return {"exists": True}
     fm, body = split_frontmatter(text)
     fm = fm or {}
-    fail_titles = parse_pxx_headings(body, "FAIL")
+    has_unresolved_list = any(
+        title and "未决清单" in title
+        for title, _ in split_by_h2(body)
+    )
+    if has_unresolved_list:
+        open_items = parse_finding_ledger_open_items(body)
+        fail_titles = [
+            f"{item.get('id') or ''} {item.get('summary') or ''}".strip()
+            for item in open_items
+        ]
+    else:
+        fail_titles = parse_pxx_headings(body, "FAIL")
     verdict, next_step = parse_speed_report(body)
     # 完全通过时历史 FAIL 不算当前未决（「有保留通过」对 test 不适用，仍按含「通过」且无「不通过」）
     passed = bool(
@@ -559,6 +583,9 @@ def _review_open_p1(rv):
     return len(titles)
 
 
+_review_open_p2 = _review_open_p1  # P2 与 P1 逻辑相同，仅字段名不同
+
+
 def derive_stage_progress(gates, status=None):
     """从 gates + status 推导卡面阶段徽标 + 轮次警告。
 
@@ -590,6 +617,7 @@ def derive_stage_progress(gates, status=None):
     cr_open = int((cr or {}).get("open_p0") or 0) if cr else 0
     rv_open_p0 = _review_open_p0(rv)
     rv_open_p1 = _review_open_p1(rv)
+    rv_open_p2 = _review_open_p2(rv)
 
     cr_active = bool(cr) and (cr_open > 0 or _gate_verdict_fail(cr))
     ts_active = bool(ts) and (
@@ -941,7 +969,7 @@ def render_terminal(data):
             out.append("  （无）")
             out.append("")
             continue
-        header = ["SEQ", "SLUG", "TIER", "TYPE", "AC", "TODO", "分支", "警告"]
+        header = ["SEQ", "SLUG", "TYPE", "AC", "TODO", "分支", "警告"]
         rows = []
         for c in items:
             seq = f"#{c['seq']}" if c.get("seq") is not None else "#?"
@@ -964,12 +992,12 @@ def render_terminal(data):
                 warn_parts.append("⛔ " + (b if len(b) <= 24 else b[:24] + "…"))
             warn = " ".join(warn_parts)
             rows.append(
-                [seq, c["id"], c["tier"], c["type"], fmt_progress(ac_done, ac_total), todo_str, branch, warn]
+                [seq, c["id"], c["type"], fmt_progress(ac_done, ac_total), todo_str, branch, warn]
             )
-        widths = [max(len(r[i]) for r in rows + [header]) for i in range(8)]
-        out.append("  " + "  ".join(header[i].ljust(widths[i]) if i < 7 else header[i] for i in range(8)))
+        widths = [max(len(r[i]) for r in rows + [header]) for i in range(7)]
+        out.append("  " + "  ".join(header[i].ljust(widths[i]) if i < 6 else header[i] for i in range(7)))
         for r in rows:
-            out.append("  " + "  ".join(r[i].ljust(widths[i]) if i < 7 else r[i] for i in range(8)))
+            out.append("  " + "  ".join(r[i].ljust(widths[i]) if i < 6 else r[i] for i in range(7)))
         out.append("")
 
     out.append(f"[backlog · 待办池] ({len(data['backlog'])})")
@@ -1521,8 +1549,8 @@ PROJECT_MARKUP = r"""<div class="wrap">
       <div class="prov-card">
         <h3><span class="badge a">直接可读</span>frontmatter / .eo-project.json 一行解析</h3>
         <ul>
-          <li><code>seq · title · summary · status · tier · type · created</code><span class="who">eo-change 写入</span></li>
-          <li><code>issue · pr · commits[] · test_lock_commit</code><span class="who">联动 / eo-implement 回写</span></li>
+          <li><code>seq · title · summary · status · type · created</code><span class="who">eo-change 写入</span></li>
+          <li><code>issue · pr · commits[] · test_lock_commit（v2 遗留字段）</code><span class="who">联动 / eo-implement 回写</span></li>
           <li>backlog 卡全字段 + <code>adopted_by / dropped_reason</code><span class="who">eo-backlog</span></li>
           <li>roadmap 的 <code>status · phase · summary · updated</code><span class="who">eo-project-init</span></li>
           <li>项目名 / 模式 / 联动开关<span class="who">.eo-project.json</span></li>
@@ -1531,8 +1559,8 @@ PROJECT_MARKUP = r"""<div class="wrap">
       <div class="prov-card">
         <h3><span class="badge b">现场推导</span>解析正文或问 git</h3>
         <ul>
-          <li>AC 进度 = §2 checkbox 计数；TODO / Batch 进度 = §3<span class="who">正文解析</span></li>
-          <li>意图段落、已钉决策、开放问题<span class="who">§1 / §8 解析</span></li>
+          <li>AC 进度 = §2 checkbox 计数；TODO / Batch 进度 = §5<span class="who">正文解析</span></li>
+          <li>意图段落、已钉决策、开放问题<span class="who">§1 / §6 解析</span></li>
           <li>review 结论与 P0/P1/P2 计数<span class="who">review.md 启发式解析</span></li>
           <li>test.md / change-review.md 有无<span class="who">目录探测</span></li>
           <li>所在 worktree、分支、commit 数<span class="who">git worktree + [slug] 前缀</span></li>
@@ -2196,15 +2224,15 @@ function renderChange(d) {
   if (d.todo) {
     var all = d.todo.reduce(function (acc, b) { return acc.concat(b.items); }, []);
     var tdDone = all.filter(function (t) { return t.done; }).length;
-    h += '<div class="d-section"><div class="d-label">TODO §3 <span class="cnt">' + tdDone + '/' + all.length + '</span>'
-      + '<span class="src">§3 checkbox · Batch 分组</span></div>';
+    h += '<div class="d-section"><div class="d-label">TODO §5 <span class="cnt">' + tdDone + '/' + all.length + '</span>'
+      + '<span class="src">§5 checkbox · Batch 分组</span></div>';
     d.todo.forEach(function (b) {
       h += '<div class="batch-name">' + esc(b.batch) + '</div><ul class="cklist">' + b.items.map(ckItem).join('') + '</ul>';
     });
     h += '</div>';
   } else {
-    h += '<div class="d-section"><div class="d-label">TODO §3</div>'
-      + '<div class="intent-text" style="color: var(--faint); font-size: 12.5px">轻档无 TODO 节（AC 即工作清单）</div></div>';
+    h += '<div class="d-section"><div class="d-label">TODO §5</div>'
+      + '<div class="intent-text" style="color: var(--faint); font-size: 12.5px">无 TODO 节（AC 即工作清单）</div></div>';
   }
   h += '</div>';
 
@@ -2278,7 +2306,7 @@ function changeCard(d) {
   return '<article class="' + cardClass + '" data-detail="' + esc(d._key)
     + '" tabindex="0" role="button" aria-label="查看详情：#' + esc(d.seq != null ? d.seq : '?') + ' ' + esc(d.title) + '">'
     + '<div class="card-top"><span class="seq">#' + esc(d.seq != null ? d.seq : '?') + '</span>'
-    + '<span class="tier ' + esc(d.tier) + '">' + esc(d.tier) + '</span>'
+    + (d.tier ? '<span class="tier ' + esc(d.tier) + '">' + esc(d.tier) + '</span>' : '')
     + '<span class="type">' + esc(d.type) + '</span><span class="src">frontmatter</span></div>'
     + '<div class="card-title">' + mdInline(d.title) + '</div>'
     + (d.summary ? '<div class="card-summary">' + mdInline(d.summary) + '</div>' : '')
@@ -2414,7 +2442,7 @@ function buildHeader() {
     + '<div class="stat"><div class="num">' + s.active_changes + '</div><div class="lbl">活跃 change</div><span class="src">status≠archived</span></div>'
     + '<div class="stat"><div class="num">' + s.backlog_count + '</div><div class="lbl">backlog 卡</div><span class="src">backlog/*.md 计数</span></div>'
     + '<div class="stat"><div class="num">' + s.direct_commits.total + '</div><div class="lbl">本月直改</div><div class="sub">fix:×' + s.direct_commits.fix + ' · ui:×' + s.direct_commits.ui + '</div><span class="src">git log --grep</span></div>'
-    + '<div class="stat"><div class="num">' + s.stale_count + '</div><div class="lbl">停滞提醒</div><div class="sub">轻档 &gt;30 天未动</div></div>'
+    + '<div class="stat"><div class="num">' + s.stale_count + '</div><div class="lbl">停滞提醒</div><div class="sub">&gt;30 天未动</div></div>'
     + '<div class="stat"><div class="num" style="color: var(--warn)">' + s.blocked_count + '</div><div class="lbl">卡点</div><div class="sub">质量门未过</div></div>'
     + '</div>'
     + '<label class="src-toggle"><input type="checkbox" id="p-src-toggle"> 标注数据来源</label>';
@@ -2461,8 +2489,8 @@ function buildBoard() {
     if (status === 'backlog' && DATA.backlog_archive && DATA.backlog_archive.count) {
       html += '<div class="col-note">archive/ 另有 ' + DATA.backlog_archive.count + ' 张：adopted×' + DATA.backlog_archive.adopted + ' · dropped×' + DATA.backlog_archive.dropped + '<span class="src">backlog/archive/</span></div>';
     }
-    if (status === 'implementing') html += '<div class="col-note">轻档无 TODO 节，只有 AC 进度；⚠ 为停滞提醒（轻档 &gt;30 天未动）</div>';
-    if (status === 'reviewed') html += '<div class="col-note">轻档跳过本列：完成门通过即 archived</div>';
+    if (status === 'implementing') html += '<div class="col-note">无 TODO 节的 change 只有 AC 进度；⚠ 为停滞提醒（&gt;30 天未动）</div>';
+    if (status === 'reviewed') html += '<div class="col-note">未跑 /eo-review 的 change 跳过本列直接归档</div>';
     html += '</section>';
   });
   root.querySelector('#p-board').innerHTML = html;
@@ -2529,7 +2557,9 @@ function openDetail(key, isRefresh) {
   }
   openDetailId = key;
   var chips = d.kind === 'change'
-    ? '<span class="seq">#' + esc(d.seq != null ? d.seq : '?') + '</span><span class="tier ' + esc(d.tier) + '">' + esc(d.tier) + '</span><span class="type">' + esc(d.type) + '</span>' + stPill(d.status)
+    ? '<span class="seq">#' + esc(d.seq != null ? d.seq : '?') + '</span>'
+      + (d.tier ? '<span class="tier ' + esc(d.tier) + '">' + esc(d.tier) + '</span>' : '')
+      + '<span class="type">' + esc(d.type) + '</span>' + stPill(d.status)
     : stPill('backlog');
   root.querySelector('#p-chips').innerHTML = chips;
   root.querySelector('#p-title').textContent = d.title;
@@ -3424,7 +3454,7 @@ function changeRow(c) {
     + esc(c.id) + '</span>'
     + '<span class="st-pill" style="background: var(--st-' + esc(c.status) + '-soft); color: var(--st-' + esc(c.status) + ')">'
     + esc(STATUS_ZH[c.status] || c.status) + '</span>'
-    + '<span class="tt"><b>' + esc(c.tier) + '</b>·' + esc(c.type) + '</span>';
+    + '<span class="tt">' + (c.tier ? '<b>' + esc(c.tier) + '</b>·' : '') + esc(c.type) + '</span>';
   if (c.diverged || !c.is_default_worktree) {
     line1 += '<span class="tag branch wt-split"><span class="wt-line">⎇ ' + esc(c.branch || '?') + '</span><span class="wt-line">' + esc(c.worktree_name || '?') + '</span></span>';
   }

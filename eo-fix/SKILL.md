@@ -35,7 +35,7 @@ description: |
 
 ### 第二步：定位（代码反查为主，~500-900 token）
 
-1. **锚定代码**：有症状字符串（报错文案 / UI 文案）→ 直接 grep 源码，几乎一步中的；没有 → 经 `eo-doc/agent-handbook/INDEX.md` 定位模块入口文件
+1. **锚定代码**：有症状字符串（报错文案 / UI 文案）→ 直接 grep 源码，几乎一步中的；没有 → `.codegraph/` 索引存在则 `codegraph explore` 定位模块入口，不存在则按目录收敛直读源码
 2. **反查归属**：`git log --oneline -n 20 -- <嫌疑文件>` 看 commit 前缀——`[<change-id>]`（slug 或存量数字前缀）→ 相关 change 直达；`fix:` / `ui:` → 直改历史（无书面期望）；无前缀 → 存量代码
 3. 需要书面期望时只读该 change 的 frontmatter + §2 AC，**不通读**
 
@@ -43,7 +43,7 @@ description: |
 
 ### 第三步：快路修复
 
-最小变更修复 → 用户给的复现步骤转成回归验证跑通 → 跳到第六步落点记账。中途发现行为其实可能是有意的 → 转第四步。修复代码**注释零溯源**：change/AC/finding 标记与修复辩护不进注释（[../eo-shared/conventions.md](../eo-shared/conventions.md) §2.6）。
+最小变更修复 → 用户给的复现步骤转成回归验证跑通 → 跳到第六步落点记账。中途发现行为其实可能是有意的 → 转第四步。修复代码**注释零溯源**：change/AC/finding 标记与修复辩护不进注释（项目级完整纪律见 `eo-doc/agent-handbook/comments.md`，如已启用）。
 
 **复现与回归都取最低成本层**：修前先在该层复现失败（这是根因判断的依据，也是「改完看起来对了」之外唯一的证据），修后在同层验通过。层的选法——纯逻辑用单测 / `node -e` 等价复刻（秒级），接口契约用一次请求，**确属集成 / UI 态才起环境**（环境纪律见 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)）。不要每改一行就重新 build + 起环境。
 
@@ -55,17 +55,18 @@ description: |
 |------|------|------|
 | 1 | 用户当下的口述 | 最高权威，永远存在 |
 | 2 | 相关 change 的 §2 AC（若有） | 最优书面期望 |
-| 3 | state/ 的记载 | **意图佐证**：行为被记为规则 = 曾被认为正常（state 是代码派生物，只能佐证意图，不能裁决代码对错） |
-| 4 | git 归属（commit 前缀） | 追溯行为来源 |
+| 3 | `eo-doc/state/` 现状篇（若 `state.enabled` 启用） | **意图佐证**：行为被现状篇记为规则 = 曾被认为正常（state 是代码派生快照，只能佐证不能裁决）；篇≠码 → 文档陈旧，提示可跑 `/eo-doc-manager sync` |
+| 4 | `<project_root>/decisions/` 与 brainstorm/ 的记录 | **意图佐证**：行为被钉为决策 = 曾被认为正常（只能佐证意图，不能裁决代码对错） |
+| 5 | git 归属（commit 前缀） | 追溯行为来源 |
 
 判定与动作：
 
 | 取证结果 | 动作 |
 |---------|------|
-| 行为查无出处（无 AC 声明、state 无记载）且按口述明显是缺陷 | 按快路修（第三步） |
-| **行为是有意设计**（AC 声明过 / state 记为规则 / change 意图明确） | 停手告知：「这是 <change-id> 特意做的（AC-x）」；用户仍要改 → 纯外观 / 文案类按 trivial 直改，并顺手就地精化对应 AC 文本（意图不变）；涉及功能语义 / 交互逻辑 → 转 `/eo-change`（带上取证结论） |
+| 行为查无出处（无 AC 声明、decisions 无记载）且按口述明显是缺陷 | 按快路修（第三步） |
+| **行为是有意设计**（AC 声明过 / decisions 钉为规则 / change 意图明确） | 停手告知：「这是 <change-id> 特意做的（AC-x）」；用户仍要改 → 纯外观 / 文案类按 trivial 直改，并顺手就地精化对应 AC 文本（意图不变）；涉及功能语义 / 交互逻辑 → 转 `/eo-change`（带上取证结论） |
 | AC 写漏且 change 未 archived | 确认后先补 §2/§3 再修（Update preserves context） |
-| state 与代码矛盾 | 文档陈旧 → 提示跑 `/eo-doc-manager sync`，以代码为准重判 |
+| 记录与代码矛盾 | 以代码为准重判 |
 
 **修复范围守界**：预估改动超出 trivial 量级（需方案权衡、动对外接口，判据见 [../eo-shared/granularity.md](../eo-shared/granularity.md) §2）→ 停手建议开 change，不硬修。
 
@@ -80,8 +81,9 @@ description: |
 
 ### 第六步：落点记账（任何路都不豁免，~30 秒）
 
-- 有相关**活跃 change** → 勾选涉及的 TODO/AC（人工项不代勾，勾选权归用户；被本次改动弄脏的已勾项按 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)「勾变脏即取消」处理），commit 带 `[<change-id>]` 前缀；改动影响其 acceptance.md 人工项的入口/行为 → 按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)「失效与重置」取消该项勾选并注明原因；改动影响其 evidence.md 的入口/行为/截图事实 → 按 [../eo-shared/evidence.md](../eo-shared/evidence.md)「刷新与失效」同步刷新对应段
-- 无 → 直改落地：commit 带 `fix:` 前缀（见 [../eo-shared/conventions.md](../eo-shared/conventions.md)），由下次 doc sync 兜底归档；cursor 落后超过 10 个 commit 时建议顺手跑 `/eo-doc-manager sync`
+- 有相关**活跃 change** → 勾选涉及的 TODO/AC（人工项不代勾，勾选权归用户；被本次改动弄脏的已勾项按 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)「勾变脏即取消」处理），commit 带 `[<change-id>]` 前缀；改动影响其 acceptance.md 人工项的入口/行为 → 按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)「失效与重置」取消该项勾选并注明原因；改动影响其 evidence.md 的入口/行为/截图事实 → 按 [../eo-shared/evidence.md](../eo-shared/evidence.md)「刷新与失效」同步刷新对应段；顺带更新其 frontmatter 的 `brief`（写法见 [../eo-shared/summary.md](../eo-shared/summary.md)；写不出留空）
+- 无 → 直改落地：commit 带 `fix:` 前缀（见 [../eo-shared/conventions.md](../eo-shared/conventions.md)）
+- **`state.enabled` 且 `eo-doc/.sync-cursor` 已存在时**才顺带报 sync 游标落后量（`last_commit..HEAD` commit 数）：落后 >10 个 commit → 建议顺手跑一次 `/eo-doc-manager sync`（直改提交会被 sync 按路径增量收割）。未启用 state 或游标未建立（尚未首次同步）→ 不报，零打扰
 
 ### 第七步：收尾速报
 
@@ -90,7 +92,7 @@ description: |
 - 改动：<file:line 级别的简述>
 - 验证：<复现步骤回归结果 / AC 核对结果>
 - 落点：计入 <change-id> / 直改（fix: commit <hash>）
-- （取证时）行为出处：<AC-x / state 记载 / 查无出处>
+- （取证时）行为出处：<AC-x / decisions 记载 / 查无出处>
 - （深挖时）调查记录：tmp/eo/fix/<file>；建议沉淀 lesson：<是/否>
 ```
 
@@ -106,7 +108,7 @@ description: |
      b) **卡点检查**：走下方子流程，按根因结论定出口
      c) **回炉**：转 /eo-change 回炉子流程（方案实质修订 + 重新确认）
 1. **读取反馈**：同会话反馈已在上下文 → **不重读报告文件**；跨会话 → 只读报告的未决清单 + 结论，按 open 项定点读详情，不通读全文。根因为 `test-asset` 的 finding 不由本分支消费，交 `/eo-test`；本分支只处理业务实现项
-2. **分诊定路 + 修复**：按 P0 > P1 > P2 逐一过第一步分诊表定路，各走快路 / 取证 / 深挖；修复代码**注释零溯源**（[../eo-shared/conventions.md](../eo-shared/conventions.md) §2.6）
+2. **分诊定路 + 修复**：按 P0 > P1 > P2 逐一过第一步分诊表定路，各走快路 / 取证 / 深挖；修复代码**注释零溯源**（纪律同上）
 3. **双向取证，取最低成本层**：每个缺陷**先复现失败、修后在同层验通过**——「改完看起来对了」不算证据；层选法同主流程第三步
 4. 涉及的**自动 AC 就地重验**；被本次修复弄脏的**已勾** AC 按 [../eo-shared/ac-spec.md](../eo-shared/ac-spec.md)「勾变脏即取消」处理；修复改变了人工项的入口/行为 → 按 [../eo-shared/acceptance.md](../eo-shared/acceptance.md)「失效与重置」更新对应验收项；修复改变了入口/行为/截图事实 → 按 [../eo-shared/evidence.md](../eo-shared/evidence.md)「刷新与失效」同步刷新 evidence.md 对应段
 5. **回写未决清单**：每个业务实现缺陷修复并同层验通过后，把对应报告清单行置 `fixed` 并填修复 commit——`verified` 由复审方核销，本分支不写
@@ -147,7 +149,7 @@ spawn 一个**新鲜上下文 subagent**（执行者自述不作数——修了 
 | 修复范围守界 | 超 trivial 量级 / 需方案权衡 → 转 change，不硬修 |
 | 深挖必宣告、必还原 | 插桩/日志/bisect 结束后全部还原 |
 | 需求变更不伪装成 fix | **功能语义 / 交互逻辑**的期望变更就是 /eo-change 的事，哪怕改动很小；纯外观 / 样式 / 文案的期望变更不算——按 granularity §2 trivial 直改（前缀选择见 conventions §2.5） |
-| 注释纪律 | 一切流程溯源标注（change 编号/slug、TODO/AC、finding P0-x/P1-x、FAIL-x）严禁进代码注释（溯源走 commit 前缀）；不写「为何正确」的辩护；提交前对新增注释自检一眼，见 conventions.md §2.6 |
+| 注释纪律 | 一切流程溯源标注（change 编号/slug、TODO/AC、finding P0-x/P1-x、FAIL-x）严禁进代码注释（溯源走 commit 前缀）；不写「为何正确」的辩护；提交前对新增注释自检一眼；存量过时/误导注释顺手清理。项目启用 `eo-doc/agent-handbook/comments.md` 时以该篇为准 |
 | 循环内修复归本 skill | test/review/acceptance 反馈的修复走循环内分支（原 impl worker 执行）；eo-implement 无独立修复模式 |
 
 ## 典型场景
@@ -156,7 +158,7 @@ spawn 一个**新鲜上下文 subagent**（执行者自述不作数——修了 
 
 **场景 2 · 有意设计被误报（取证路的价值时刻）**：「列表怎么把已归档的也显示出来了，去掉」→ 反查归属 `[list-archive-view]` → 该 change 的 AC-3 白纸黑字「归档项默认可见」→ 停手：「这是 list-archive-view 特意做的，要推翻它就是需求变更」→ 用户确认后转 /eo-change。**没有这一步，这个已确认决策就被静默推翻了。**
 
-**场景 3 · 需求变更伪装**：「积分过期改成 90 天了」→ state 记载 30 天规则、代码一致——有意设计 → 转 /eo-change。
+**场景 3 · 需求变更伪装**：「积分过期改成 90 天了」→ decisions 记载 30 天规则、代码一致——有意设计 → 转 /eo-change。
 
 **场景 4 · 难缠 bug**：「偶发卡死，复现不稳定」→ 定位无果 → 宣告深挖 → 四阶段 → 根因回分诊 → 修复 + 还原 + 建议沉淀 lesson。
 

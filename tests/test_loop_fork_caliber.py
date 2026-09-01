@@ -40,28 +40,28 @@ class TestAC1DispatchPromptUnknownAuthority(unittest.TestCase):
         self.assertNotIn("本应问用户的分叉 + 各自所采假设", self.sec)
 
     def test_b_and_c_gate_before_mutation(self):
-        self.assertIn("B 类", self.sec)
-        self.assertIn("C 类", self.sec)
-        self.assertGreaterEqual(self.sec.count("变更前"), 2)
-        self.assertIn("求裁决信号", self.sec)
-        self.assertIn("不得用“先采假设、交付后再问”", self.sec)
+        self.assertIn("B / C 类", self.sec)
+        self.assertIn("须变更前求裁决", self.sec)
+        self.assertNotIn("先采假设、交付后再问", self.sec)
 
 
 class TestAC2CoordinatorRoutesUnknowns(unittest.TestCase):
     """③派发、路由与风险升级：A 留痕、B 合并选择、C 立即上交。"""
 
     def setUp(self):
-        self.sec = section(SKILL, "**③ 派发、路由与风险升级**", "**④ 收敛判定**")
+        self.sec = section(SKILL, "**条件式 Execution Guard**", "**② 选基底**")
 
     def test_batched_closed_choice_to_user(self):
-        self.assertIn("A 类随交付记录只作透明留痕", self.sec)
+        self.assertIn("A 类", self.sec)
+        self.assertIn("允许 worker 先做后报", self.sec)
         self.assertIn("B 类", self.sec)
-        self.assertIn("封闭选择", self.sec)
-        self.assertIn("C 类立即单独上交", self.sec)
+        self.assertIn("合并成一次封闭选择", self.sec)
+        self.assertIn("C 类", self.sec)
+        self.assertIn("立即上交用户", self.sec)
 
-    def test_ruling_flows_back_with_revision(self):
-        self.assertIn("回灌", self.sec)
-        self.assertIn("change revision", self.sec)
+    def test_affected_branch_pauses_before_ruling(self):
+        self.assertIn("变更前发求裁决信号并暂停受影响分支", self.sec)
+        self.assertIn("总控把同窗 B 类合并成一次封闭选择交用户", self.sec)
 
 
 class TestAC3ExampleWordingIsNotFinal(unittest.TestCase):

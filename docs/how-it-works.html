@@ -466,7 +466,7 @@ const CAT=[
  ["增强 · 需要时才出现",[
   ["eo-design","设计系统","init 建 DESIGN.md（SAFE/RISK 提案 + HTML 预览）；variants 反趋同多方案对比；apply 生产级落地；audit 一致性审计。","DESIGN.md + CLAUDE.md 约束注入"],
   ["eo-change-review","方案审查（可选）","AC 质量、TODO↔AC 映射、粒度合规、占位符检测——implement 之前把牢方向。","产出 change-review.md"],
-  ["eo-loop","总控调度","圈状态机线段（入口 → 出口 → 收敛标准），派发到可插拔基底（子 agent / codex / orca）循环推进至收敛；<b>互不干扰的并行组</b>（Batch 2a/2b、可并行 change）多 worker 并行——worktree 隔离 + 文件集机械校验 + 合流 checkpoint；每 ≤30 分钟主动观测出进度报告。","跨节点循环 · journal 进 tmp/eo/loop/"],
+  ["eo-loop","总控调度","圈状态机线段（入口 → 出口 → 收敛标准），派发到可插拔基底（子 agent / codex / orca）循环推进至收敛；<b>互不干扰的并行组</b>（Batch 2a/2b、可并行 change）多 worker 并行——worktree 隔离 + 文件集机械校验 + 合流 checkpoint；每 ≤10 分钟主动观测出进度报告。","跨节点循环 · journal 进 tmp/eo/loop/"],
   ["eo-handoff","会话交接","/clear 前把「状态 + 口径 + 下一步」写成开机指令，新会话 5 分钟接上。","tmp/eo/handoff/<topic>.md"]]],
  ["CLI · 终端里敲的",[
   ["eo-board","只读看板 CLI","终端 / <span class=\"mono\">--html</span> / <span class=\"mono\">--serve</span> 默认都是全局 dashboard；<span class=\"mono\">--project</span> 任意目录直达单项目，<span class=\"mono\">--scan</span> 临时扫描兜底，<span class=\"mono\">--all</span> 已退役。泳道页可用项目下拉切换。<b>永远只读</b>，绝不写项目文件。","cli/eo-board · 注册表 ~/.eo/projects.json"],

@@ -26,13 +26,15 @@ updated: 2026-07-28
 
 ## 等待与观测
 
-每窗开始先重做「派发」第 1 步的身份钉桩（Orca 若重启过，handle 已漂移），然后 `orca orchestration check --wait --terminal $COORD --types worker_done,escalation,decision_gate --timeout-ms 1800000`——只等**必要信号**（完成 / 升级 / 求裁决），**不要求 worker 发 heartbeat**（dispatch 注入的 preamble 之外不追加任何回报要求，worker 专注任务）。窗口超时不是 worker 失败：总控主动观测——`terminal read` 看输出、`tui-idle` 探活、读台账增量——活着就发进度报告进下一窗。禁止 sleep 轮询。收到 `decision_gate` / `ask` 用 `reply` 应答后继续等。
+每窗开始先重做「派发」第 1 步的身份钉桩（Orca 若重启过，handle 已漂移），然后 `orca orchestration check --wait --terminal $COORD --types worker_done,escalation,decision_gate --timeout-ms 600000`——只等**必要信号**（完成 / 升级 / 求裁决），**不要求 worker 发 heartbeat**（dispatch 注入的 preamble 之外不追加任何回报要求，worker 专注任务）。窗口超时不是 worker 失败：总控主动观测——`terminal read` 看输出、`tui-idle` 探活、读台账增量——活着就发进度报告进下一窗。禁止 sleep 轮询。收到 `decision_gate` / `ask` 用 `reply` 应答后继续等。
 
 ## 回收
 
-`worker_done` 只用于唤醒总控和定位产物。正常路径按 SKILL.md ③ 读取 frontmatter 当前状态、预期工件指针、当前基线与最新结构化处置后直接路由，不打开完整 diff、不抽查或复做节点内容。只有这些事实缺失 / 冲突、出现可观察越界、计划外判据变化、Unknown B / C 或证据探测失败等客观风险信号时，才针对对应异常升级；review-only 的 `worker_done` 不授权总控动手修，修复派回 eo-implement 模式二，需要实质判断则按 owner 规则派 eo-review / eo-test。
+`worker_done` 只用于唤醒总控和定位产物。正常路径按 SKILL.md ③ 读取 frontmatter 当前状态、预期工件指针、当前基线与最新结构化处置后直接路由，不打开完整 diff、不抽查或复做节点内容。只有这些事实缺失 / 冲突、出现可观察越界、计划外判据变化、Unknown B / C 或证据探测失败等客观风险信号时，才针对对应异常升级；review-only 的 `worker_done` 不授权总控动手修，修复派回原 impl worker 走 /eo-fix 循环内分支，需要实质判断则按 owner 规则派 eo-review / eo-test。
 
 ## 已知陷阱
+
+> 本节只放出厂陷阱；运行时陷阱记在 `~/.eo-skills/loop/preferences/` 的「已知陷阱」节（前缀 `[orca-orchestration]`），一并读。
 
 - (2026-07-19) 终端有输出 ≠ 完成，不要据此杀 worker 重派；长任务 15-60 分钟是常态
 - (2026-07-19) terminal handle 重启后会变，报 `terminal_handle_stale` 时用 `terminal list` 重解析；绝不用 handle 对比判归属
@@ -41,3 +43,5 @@ updated: 2026-07-28
 - (2026-07-24) codex 终端刚创建即 dispatch --inject，注入会被启动期的目录信任弹窗吞掉（dispatch 状态仍显示成功）：必须先 `terminal wait --for tui-idle` **满足**（satisfied:true）再 dispatch；已被吞时任务卡 dispatched 态无法重派，救法 = `terminal send --enter` 手动补投任务文本（附 worker_done 上报命令，--to 填总控终端 handle）
 - (2026-07-24) worker_done 未必自动完结任务：skill 本体口径是**有效** worker_done 会自动置 completed；总控收信身份脱节时（见下条）runtime 关联不上就不会。同终端派下一轮前先 `task-list` 核对上轮状态，仍卡 dispatched 才手动 `task-update --id <上轮task> --status completed` 兜底（合法状态枚举：pending/ready/dispatched/completed/failed/blocked，没有 done）
 - (2026-07-24) **隐式身份解析的真实机制与失效条件**（受控实验实证，修正本条早先「每次 Bash 调用都不可信」的错误结论）：省略 `--from`/`--terminal` 时 CLI 按 `$ORCA_TERMINAL_HANDLE` 环境变量解析身份——该值会话启动时烙死、同会话所有 Bash 子进程恒定（解析是**确定性**的，不随调用漂移），Orca 重启后 pane 换发新 handle 而 env 不更新，即过期。runtime 对死 handle 的收发**静默成功**（check 返回空、send 照收，零报错），过期后自动解析 = 稳定守着死信箱瞎等。最危险的是**混用**：dispatch 按 terminal list 显式解析活 handle、check 靠 env 自动解析死 handle，收发指向两个信箱——worker 回包完好排队、任务正常自动完结，总控却永远收不到。pull 模型信件永久排队：身份钉对后迟到的 check 也能全量补收，「监听没在场所以错过」不成立、唯一致死因就是身份不对。防治即「派发」第 1 步身份钉桩；`inbox`（跨收件人非消费）兜底审计；task-list+git 工件为完成判据的持久真相。另：check 消费型语义，同一时刻只留一个监听，起新先杀旧。
+- (2026-08-07) **`reply --id` 对 `decision_gate` 类型消息回注可能不达**：codex worker 的 decision_gate 等待中，总控 `reply --id <gate_msg>` 返回 ok 但 worker 两轮超时未收到（最终 escalation）。可靠回注通道 = `send --to dispatch:<dispatch_id>`（worker 下次 check 必收）+ 并行 `reply`  escalation 线程留痕。低层 `dispatch --inject` 创建的 ctx_* dispatch 不被 `worker-show`/`worker-release` 识别（dispatch_not_found），清理用 `terminal close`。
+- (2026-08-08) **worker-start 的 receipt 不可信为注入凭证**：worker-start 返回 `stage: input_accepted` 但注入文本撞上 codex 启动期 MCP 引导刷屏（尤其 MCP 启动失败重试时）仍会被吞，输入框实际为空。dispatch/worker-start 后必须 `terminal read` 亲验任务文本在框内或已进入 transcript；被吞救法 = `terminal send --text "<spec 原文 + worker_done 上报命令（task-id/dispatch-id）>" --enter` 补投，补投后再次 read 验证

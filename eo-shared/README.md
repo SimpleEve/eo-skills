@@ -10,6 +10,7 @@
 | [acceptance.md](acceptance.md) | 人工验收单：模板、软前门/唯一硬门生命周期、引导走查 | eo-implement（产）/ eo-review（提示）/ eo-archive（硬门） |
 | [evidence.md](evidence.md) | 交付证据面：三段模板、类型预设与项目扩展、截图纪律、刷新与失效 | eo-implement（产）/ eo-fix（刷新）/ eo-archive（硬门+渲染）/ eo-loop（收尾渲染） |
 | [reply-contract.md](reply-contract.md) | 长任务收尾回复契约（四条）单一来源与双生效通道 | eo-archive / eo-loop（硬步骤）/ eo-project-init（注入段） |
+| [summary.md](summary.md) | 摘要契约：brief 字段写法（≤3 句三问）、生产时机与消费方、与 summary 的分工 | eo-implement / eo-fix（产）/ eo-archive（校）/ eo-loop（消费） |
 | [granularity.md](granularity.md) | 粒度硬指标、trivial 判据、拆分决策表、风险信号清单（§5） | eo-change / eo-fix / eo-change-review / eo-brainstorming / eo-implement |
 | [conventions.md](conventions.md) | 横切约定：tmp/eo/、commit 前缀、状态流转 | 主链各 skill |
 | [board-github.md](board-github.md) | eo-sync 内置 Obsidian/GitHub 适配器的投影内容实现说明（opt-in） | eo-sync 内置适配器 / eo-archive 收口 / eo-project-init |

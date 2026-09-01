@@ -1,6 +1,6 @@
 # eo-skills
 
-一套面向 **Claude Code / Codex** 的开发工作流 skill 集合。围绕"change 工件 + 活文档（state / agent-handbook）"机制，把从构思、变更、实施、测试、审查到归档的全流程拆成可独立调用的 skill，并支持跨 agent（Claude ↔ Codex）协作。
+一套面向 **Claude Code / Codex** 的开发工作流 skill 集合。以 change 工件为核心，配套可选的 codegraph 代码召回与 agent-handbook 项目操作手册，把从构思、变更、实施、测试、审查到归档的全流程拆成可独立调用的 skill，并支持跨 agent（Claude ↔ Codex）协作。
 
 > 从 v1 升级？破坏性变更与迁移步骤见 [docs/migration-v1-to-v2.md](docs/migration-v1-to-v2.md)。
 
@@ -92,9 +92,9 @@ install.bat --antigravity-only
 
 它会生成 `.eo-project.json`（项目级配置）+ 双侧最小骨架（代码侧 `eo-doc/` + 项目管理侧）。**所有其它 eo-* skill 都依赖它**，没跑过会直接报错。
 
-init 会问一个关键问题——项目管理侧（roadmap / backlog / 决策 / 教训）放哪：**local 模式**（缺省推荐，放仓库内 `.eo-project/` 且随仓库提交，协作者 clone 即得完整项目记忆）或 **vault 模式**（放 Obsidian vault，跨项目统一浏览）。init 成功还会顺手把项目登记进 `~/.eo/projects.json`（多项目看板靠它；失败不阻塞，稍后用 `eo-helper` 菜单「注册本项目」补上）。
+项目管理侧（roadmap / backlog / 决策 / 教训）放仓库内 `.eo-project/`，随仓库提交——协作者 clone 即得完整项目记忆。init 成功还会顺手把项目登记进 `~/.eo/projects.json`（多项目看板靠它；失败不阻塞，稍后用 `eo-helper` 菜单「注册本项目」补上）。
 
-协作场景：`.eo-project.json` 提交进仓库承载团队共享字段；机器相关字段（`project_root` / `mode` 等）放进不提交的 `.eo-project.local.json` 做顶层字段覆盖（协作者 clone 后重跑 `/eo-project-init` 自动引导生成）。local 模式的管理侧（`.eo-project/`：roadmap / backlog / decisions / lessons）缺省随仓库提交——协作者 clone 即得完整项目记忆。
+协作场景：`.eo-project.json` 提交进仓库承载团队共享字段；机器相关字段（`project_root` / `mode` 等）放进不提交的 `.eo-project.local.json` 做顶层字段覆盖（协作者 clone 后重跑 `/eo-project-init` 自动引导生成）。
 
 ---
 
@@ -132,9 +132,9 @@ flowchart TD
 
 > `/eo-handoff` 横切整个流程：clear 前在**任意节点**都可触发，把当前状态写到 `tmp/eo/handoff/<topic>.md` 供下个会话载入。图中仅以 implement 阶段示意。
 >
-> v3 默认主路只有三站：**change → implement → archive**；change-review / test / review 是**可选闸门**——风险信号命中（不可逆操作 / 权限资金 / 外部契约 / 大影响面）或你点名时才挂，豁免一个词的事。样式微调、多语言这类 trivial 改动走**直改模式**（不开 change，判据见 [eo-shared/granularity.md](eo-shared/granularity.md)），随下次 doc sync 顺带收割。
+> v3 默认主路只有三站：**change → implement → archive**；change-review / test / review 是**可选闸门**——风险信号命中（不可逆操作 / 权限资金 / 外部契约 / 大影响面）或你点名时才挂，豁免一个词的事。样式微调、多语言这类 trivial 改动走**直改模式**（不开 change，判据见 [eo-shared/granularity.md](eo-shared/granularity.md)），改完常规 commit 即结算。
 >
-> **互不干扰的工作可并行**：Batch 可标同层并行组（`Batch 2a`/`2b`），超标拆出的 change 序列可标「可与 #N 并行」——由 `/eo-loop` 派发到隔离 worktree 并行推进（判据、机械校验与合流 checkpoint 见 [eo-shared/granularity.md](eo-shared/granularity.md) §6）。
+> **互不干扰的工作可并行**：Batch 可标同层并行组（`Batch 2a`/`2b`）——由 `/eo-loop` 派发到隔离 worktree 并行推进；超标拆出的 change 序列标「依赖 #N」，按依赖序串行推进（判据、机械校验与合流 checkpoint 见 [eo-shared/granularity.md](eo-shared/granularity.md) §6）。
 
 ---
 
@@ -149,14 +149,14 @@ flowchart TD
 | 发现 bug（口喷即可） | `/eo-fix` | 定位 + 直接修复；难缠 bug 自动升级深挖模式；需求变更转 change |
 | 独立测试 / 补测试 | `/eo-test` | **可选闸门**：信号命中或点名时用；独立视角审计 + 补缺，产简版 test.md |
 | 实施后代码审查 | `/eo-review` | **可选闸门**：信号命中或点名时用；通过则 status 置 reviewed |
-| 验收归档 | `/eo-archive` | 四问核对硬门 + 更新 state/handbook + 冻结 change |
+| 验收归档 | `/eo-archive` | 四问核对硬门 + 冻结 change |
 | 忘了当初怎么设计的 / 想看某段逻辑的实现 | `/eo-recall` | 只读问答，分层作答带出处；复杂逻辑可出图/解释页 |
 | 定设计系统 / 出视觉方案 / 高保真页面 | `/eo-design <mode>` | init / variants / apply / audit，真相源 `DESIGN.md` |
 | 即将 `/clear` 但要保留进度 | `/eo-handoff` | 写到 `tmp/eo/handoff/<topic>.md`，下个会话载入即续 |
-| 维护 `eo-doc/` 文档体系 | `/eo-doc-manager` | sync / re-sync |
+| 维护 `eo-doc/` 文档体系 | `/eo-doc-manager` | changes/INDEX + agent-handbook + templates/ 维护 |
 | 记录决策 / 经验教训 | `/eo-project-record` | lessons/ + decisions/，带 INDEX 供自动消费 |
 | 加一条 backlog 待办 / 灵感 | `/eo-backlog` | 仅追加到 `backlog.md` |
-| 把若干节点串起来循环推进到收敛 | `/eo-loop` | 总控调度：圈线段 → 派发到可插拔基底（子 agent / codex / orca）→ 每 ≤30min 主动观测并出进度报告；互不干扰的并行组多 worker 并行推进 |
+| 把若干节点串起来循环推进到收敛 | `/eo-loop` | 总控调度：圈线段 → 派发到可插拔基底（子 agent / codex / orca）→ 每 ≤10min 主动观测并出进度报告；互不干扰的并行组多 worker 并行推进 |
 
 不在表里的 skill（`eo-change-review`）是可选闸门之一（方案审查，implement 之前），详见 [GUIDE](docs/GUIDE.md)。
 
@@ -190,7 +190,7 @@ eo-sync watch --all     # 常驻：所有注册项目状态一变自动追平（
 - **看板卡片怎么不动了？** 状态流转期间不再实时写卡（设计如此：写路径不为呈现层付费）。挂「看板自动跟手」（`eo-helper` 菜单 4）即秒级跟手；或随时同步一次（菜单 3）；归档时总会自动同步。
 - **看板卡片删错了？** 卡片是派生数据，`eo-sync run` 随时全量重建；孤儿清理只在快照可证完整时执行，扫描异常一律保守跳过。
 - **协作时配置里全是别人的路径？** 重跑 `/eo-project-init`，机器相关字段会写进你自己的 `.eo-project.local.json`（不提交）。
-- **老项目的 `project_root` 写成了相对路径？** v1 配置常写软链相对路径（如 `eo-doc/vault`）——现在会自动按 repo root 解析并解软链，照常可用，只是每次多一行告警；重跑 `/eo-project-init` 即回写绝对路径消除告警。解析不到目录时仍会报错（不猜路径）。
+- **老项目的 `project_root` 写成了相对路径？** v1 配置常写软链相对路径——现在会自动按 repo root 解析并解软链，照常可用，只是每次多一行告警；重跑 `/eo-project-init` 即回写绝对路径消除告警。解析不到目录时仍会报错（不猜路径）。
 - **删了工具会丢数据吗？** 不会。一切真相都在 markdown 文件里，CLI 只写派生卡片/注册表（`~/.eo/` 下）。
 
 ---

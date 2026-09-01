@@ -48,9 +48,8 @@ class TestAC1InitWritesSyncSection(unittest.TestCase):
         self.sec = section(SKILL, "**sync 段**", "用户跳过")
 
     def test_answers_land_in_sync_adapters(self):
-        self.assertIn("sync.obsidian", self.sec)
         self.assertIn("sync.github", self.sec)
-        self.assertIn("stub_dir", self.sec)
+        self.assertNotIn("sync.obsidian", self.sec)
 
     def test_old_sections_no_longer_written(self):
         self.assertIn("不再写 `board` / `github` 段", SKILL)

@@ -10,7 +10,7 @@ from .gitio import run_git
 
 CHANGE_STATUS_ORDER = ["draft", "confirmed", "implementing", "reviewed", "archived"]
 
-HEADING2_RE = re.compile(r"^##\s*(\d+)\.?\s*.*$")
+HEADING2_RE = re.compile(r"^##\s*§?\s*(\d+)\.?\s*.*$")
 HEADING3_RE = re.compile(r"^###\s*(.+?)\s*$")
 CHECKBOX_RE = re.compile(r"^[-*]\s+\[([ xX])\]\s*(?:([A-Za-z]+-\d+)\s*)?(.*)$")
 
@@ -92,6 +92,7 @@ def parse_ac_section(lines):
             continue
         done = m.group(1).lower() == "x"
         code, rest = m.group(2), m.group(3).strip()
+        rest = re.sub(r"^\[(?:自动|人工)[^\]]*\]\s*", "", rest)
         text, paren = strip_trailing_paren(rest)
         note, manual = None, False
         if paren:
@@ -169,16 +170,17 @@ def parse_change_file(path, worktree_path, dirname, warnings):
     status = fm.get("status") or "draft"
     if status == "done":
         status = "reviewed"  # 旧口径兼容
-    tier = fm.get("tier") or "full"
+    tier = fm.get("tier")
 
     intent_text, decisions, ac_items, todo_batches, oq_items = "", [], [], None, []
     try:
         preamble, sections = split_body_sections(body)
         intent_text, decisions = parse_intent(preamble, sections.get("1"))
         ac_items = parse_ac_section(sections.get("2", []))
-        if "3" in sections:
-            todo_batches = parse_todo_section(sections["3"])
-        oq_items = parse_oq_section(sections.get("8", []))
+        todo_src = sections.get("5") or sections.get("3")
+        if todo_src is not None:
+            todo_batches = parse_todo_section(todo_src)
+        oq_items = parse_oq_section(sections.get("6") or sections.get("8", []))
     except Exception as e:
         warnings.append(f"正文解析出错，已降级为仅 frontmatter：{path}（{e}）")
 

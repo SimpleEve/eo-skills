@@ -110,7 +110,7 @@ Goal Lens 负责发现候选缺口，决策翻转排序负责决定本轮是否�
 ### 第一步：建立上下文（静默执行）
 
 1. 读 `.eo-project.json`，扫项目管理侧（roadmap.md、phases/、docs/）理解阶段与规划
-2. 扫代码侧 `eo-doc/`（agent-handbook/、state/ 的 frontmatter，changes/INDEX.md 最近条目）理解现状
+2. 摸代码侧现状：`.codegraph/` 索引存在则 `codegraph explore` 优先召回；不存在则按目录收敛 + 源码直读。演化方向扫 `eo-doc/changes/INDEX.md` 最近条目
 3. 读 CLAUDE.md / README 理解项目定位与技术栈
 
 读完直接用于指导提问，向用户开口时从对话开始，跳过背景复述。
@@ -155,7 +155,7 @@ Goal Lens 负责发现候选缺口，决策翻转排序负责决定本轮是否�
 
 用户同意后：
 
-1. **拆 change 序列**：按已钉决策切分，每个草案含意图（引用已钉决策）+ AC 草稿 + 粗粒度 TODO；第一个 = MVP，粒度对照 [../eo-shared/granularity.md](../eo-shared/granularity.md)
+1. **拆 change 序列**：按已钉决策切分，每个草案含意图（引用已钉决策）+ AC 草稿 + 粗粒度 TODO；第一个 = MVP，粒度对照 [../eo-shared/granularity.md](../eo-shared/granularity.md)；草案依赖前序产出的在依赖列标「依赖 #N」，无依赖留空——无标注 = 串行（其 §6）
 2. 序列草案写入本次记录的「change 序列草案」节（先落纸，不直接建 change 目录）
 3. **衔接 /eo-change**：逐个进入 eo-change 流程，**已钉决策清单整体移交**（eo-change 会继承台账、跳过已钉项的重复提问）
 4. 用户不同意拆 → 走常规分流表（记 backlog / 搁置）

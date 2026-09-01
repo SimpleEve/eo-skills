@@ -3,7 +3,7 @@ title: 投影同步现状（看板 stub 与 GitHub 联动）
 type: state
 tags: [sync, board, github, obsidian, workflow]
 created: 2026-07-25
-updated: 2026-07-25
+updated: 2026-08-15
 scope: 想知道看板卡片/GitHub issue 什么时候更新、怎么手动刷新时
 status: active
 source: cli/eo-sync
@@ -15,6 +15,7 @@ conclusions:
   - eo-sync run 幂等可反复跑；--dry-run 完全只读；并发跑有文件锁保护
   - watch 同作用域单实例：重复启动同域 watch 即报错退出（提示持有者 pid/启动时间）；--all 与单项目重叠仅启动告警不禁止
   - 配置：首选 sync 段（init 新配置只写它；重跑 init 对旧段项目代写等价迁移，旧段保留）；存量 board/github 段经兼容映射仍生效，无需改 .eo-project.json
+  - v2 change 的 tier 原样保留；v3 无 tier 时 Obsidian stub 省略该字段，GitHub issue 是否含 TODO 节只看实际 TODO 项
 ---
 
 ## 投影何时更新

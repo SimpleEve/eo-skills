@@ -56,7 +56,7 @@ issue: ~                 # 可选：粘外来 GitHub issue URL（不主动 issue
 
 ### migrate（旧扁平 backlog 打散）
 
-发现 `<project_root>/backlog.md`（或 backlog/ 下的 todo.md 等旧扁平文件）时提示可迁移：未完成的 `- [ ]` 条目逐条打散成卡片（created 取条目原日期，行内 `#tag` 转入 tags）；已完成/已放弃条目留在原文件不动；迁完在原文件顶部标注「已迁移为卡片，此文件不再写入」。幂等：已存在同名卡跳过。
+发现 `<project_root>/backlog.md`（或 backlog/ 下的 todo.md 等扁平文件）时提示可迁移：未完成的 `- [ ]` 条目逐条打散成卡片（created 取条目原日期，行内 `#tag` 转入 tags）；已完成/已放弃条目留在原文件不动；迁完在原文件顶部标注「已迁移为卡片，此文件不再写入」。幂等：已存在同名卡跳过。
 
 ## 约束
 

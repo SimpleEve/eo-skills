@@ -6,7 +6,7 @@
 
 ## 目录
 
-- [运行模式：local vs vault](#运行模式local-vs-vault)
+- [项目配置](#项目配置)
 - [双侧目录：代码侧 vs 项目管理侧](#双侧目录代码侧-vs-项目管理侧)
 - [开发工作流（Dev Track）](#开发工作流dev-track)
   - [设计理念](#设计理念)
@@ -23,19 +23,12 @@
 
 ---
 
-## 运行模式：local vs vault
+## 项目配置
 
-| 模式 | 触发条件 | 项目管理侧落在哪 | 软链 |
-|------|---------|---------------|------|
-| **local**（默认） | 缺省推荐——未显式配 `default_mode: "vault"` 时 init 询问推荐它 | 仓库内 `.eo-project/`（缺省随仓库提交；明确不想提交才进 `.gitignore`） | 不建 |
-| **vault** | `~/.eo/config.json` 有 `vault_root` 且用户在 init 询问中选它 | `<vault_root>/<projects_subdir>/<project_name>/` | 默认在 `<repo>/<doc_root>/vault` 建指向 `<project_root>`（整目录单点挂，`create_symlink` 控制） |
+项目管理侧在仓库内 `.eo-project/`（roadmap / backlog / decisions / lessons），缺省随仓库提交——协作者 clone 即得完整项目记忆；明确不想提交时才进 `.gitignore`。
 
-配置约定：
-
-- **用户级**：`~/.eo/config.json`（`vault_root` / `projects_subdir` 等；同时承载 eo-platform 等生态侧状态）
 - **项目级**：`.eo-project.json`（每项目一份，提交进仓库，所有 skill 读它）
 - **项目级个人覆盖**：`.eo-project.local.json`（可选，不提交；顶层字段覆盖 `.eo-project.json`，协作时放 `project_root` / `mode` 等机器相关字段）
-- 旧路径 `~/.eo-skills.json` 由 `/eo-project-init` 首次运行时自动迁移到 `~/.eo/config.json`。
 
 完整字段见 [eo-project-init/references/config.md](../eo-project-init/references/config.md)。
 
@@ -47,13 +40,12 @@
 
 ```
 eo-doc/
-├── agent-handbook/   # 必建，代码架构（AI 地图），活文档
 ├── changes/          # 必建，change 工件流（v2：项目级扁平目录，取代 dev/<module>/）
-├── templates/        # 必建（空），eo-* 扩展点
-└── state/            # 按需，系统当前状态（首次 sync 时建），活文档
+├── agent-handbook/   # 可选，Agent 操作手册（篇目含 INDEX.md）
+└── templates/        # 必建（空），eo-* 扩展点
 ```
 
-### 项目管理侧（vault 模式在 vault 下，local 模式在 `.eo-project/`，由 `eo-project-*` 维护）
+### 项目管理侧（`.eo-project/`，由 `eo-project-*` 维护）
 
 ```
 <project_root>/
@@ -72,16 +64,16 @@ eo-doc/
 
 ## 开发工作流（Dev Track）
 
-一条以 **change 工件**为中心的代码侧开发流水线：每次变更以 `change.md`（验收清单 + TODO）独立承载，归档时更新活文档（state / agent-handbook）并冻结 change 目录——**不反写任何 spec**。
+一条以 **change 工件**为中心的代码侧开发流水线：每次变更以 `change.md`（验收清单 + TODO）独立承载，归档即冻结 change 目录——**不反写任何 spec**。
 
 ### 设计理念（v3）
 
-1. **代码是唯一真相源** — state/ 与 agent-handbook/ 是活文档，永远可从代码再生；change 是过程工件，归档即冻结
+1. **代码是唯一真相源** — change 是过程工件，归档即冻结为审计历史
 2. **四问骨架** — change.md 的第一受众是用户：§1 解决什么问题、§2 完成后我应该看到什么（AC）、§3 谁验收按什么标准、§4 不通过怎么办；工程细节折叠进 §5 技术备注
 3. **默认信任，信号升级** — 主路只有 change → implement → archive 三站；change-review / test / review 是可选闸门，风险信号命中（不可逆 / 权限资金 / 外部契约 / 大影响面）或用户点名时才挂。信号清单见 eo-shared/granularity.md §5
 4. **量化粒度** — TODO 3-7 理想 / 10 硬上限，超标拆 change 序列
 5. **fix 直接修复** — bug 口喷给 `/eo-fix`，定位后直接修；难缠 bug 自动升级深挖模式；实为需求变更才转 change
-6. **并行友好拆解** — 并行判据是「互不干扰」（文件集不相交 + 无逻辑依赖）而非依赖图：Batch 标同层并行组（`2a`/`2b`），超标拆出的 change 序列标「可与 #N 并行」；派发（worktree 隔离）与合流 checkpoint 归 eo-loop。单一来源 eo-shared/granularity.md §6
+6. **并行友好拆解** — 并行判据是「互不干扰」（文件集不相交 + 无逻辑依赖）：Batch 标同层并行组（`2a`/`2b`），派发（worktree 隔离）与合流 checkpoint 归 eo-loop；超标拆出的 change 序列标「依赖 #N」、按依赖序串行推进。单一来源 eo-shared/granularity.md §6
 
 ### 产物目录（代码侧）
 
@@ -109,10 +101,11 @@ eo-doc/changes/
 | `/eo-fix` | 发现 bug（口喷即可） | 快路**直接修复** + 落点记账；语义分歧才取证；难缠 bug 自动深挖 | 需求变更转 change |
 | `/eo-test` | 独立测试 / 补缺 / 重验证 | `test.md`（简版：结论 + 未决清单） | ✅ 可选闸门：信号命中或点名；严禁改业务代码 |
 | `/eo-review` | 实施后的**代码**审查 | `review.md`（简版 P0/P1/P2） | ✅ 可选闸门：信号命中或点名；通过则置 reviewed |
-| `/eo-archive` | 验收归档 | 四问核对门 + 触发 doc sync 更新 state/handbook + 冻结 change | 唯一硬门：阻塞项要证据或豁免；不反写 spec |
+| `/eo-archive` | 验收归档 | 四问核对门 + 冻结 change | 唯一硬门：阻塞项要证据或豁免；不反写 spec |
 | `/eo-design` | 设计系统 / 视觉方案 / 高保真 / 设计审计 | `DESIGN.md`（真相源）+ HTML 工件 + CLAUDE.md 约束注入 | init / variants / apply / audit 四模式 |
-| `/eo-recall` | 「当时怎么设计的 / 逻辑怎么实现的 / 为什么这么定」 | 只读问答：分层作答带出处；可出 mermaid / HTML 解释页 | 活文档的消费入口；吸收原 doc-manager query |
+| `/eo-recall` | 「当时怎么设计的 / 逻辑怎么实现的 / 为什么这么定」 | 只读问答：分层作答带出处；可出 mermaid / HTML 解释页 | 检索入口：codegraph 答实现，意图文档答缘由 |
 | `/eo-loop` | 把多个节点串起来循环推进到收敛（如 implement→test→review 至 P0/P1 清零） | 总控调度 + `tmp/eo/loop/<slug>/journal.md` 进度报告留痕 | ✅ 可选；无状态总控，基底可插拔（子 agent / codex / orca），worker 零回报义务（总控主动观测），调度偏好自动沉淀；并行收敛组（互不干扰的同层批 / change）多 worker 并行，worktree 隔离 + 合流校验 |
+| `/eo-doc-manager` | 维护代码侧文档体系 | changes/INDEX.md 整理 + agent-handbook/ 规范篇 + templates/ 管理 | init 一般由 /eo-project-init 触发；handbook 不从源码生成、不挂自动同步 |
 
 ### 典型流程图
 
@@ -137,8 +130,7 @@ eo-doc/changes/
             │                         未决项 → /eo-fix 循环内分支修复 → 回原闸门核销）
             ▼
 归档：      /eo-archive           →  四问核对硬门（阻塞项要证据或豁免；人工项验收单逐项核）
-                                     → commit 区间 → doc sync 更新 state/ + agent-handbook/
-                                     → 冻结 change（status: archived，不反写 spec）
+                                     → commit 区间归集 → 冻结 change（status: archived，不反写 spec）
 ```
 
 ### 关键约束
@@ -151,7 +143,7 @@ eo-doc/changes/
 | 粒度硬指标 | TODO 数与行数超软标建议拆、超硬标必须拆；数值以 `eo-shared/granularity.md` 为准 |
 | 状态流转 | 主路径 `draft → confirmed → implementing → archived`；`reviewed` 可选（仅跑了 /eo-review 才置）。显式回退边：`reviewed →(阻塞反馈) implementing`、`implementing →(回炉) draft`，见 conventions.md §3。**skill 自动流转**，用户不手改 frontmatter。看板列序另含最前端的 `backlog` 列 |
 | trivial 直改 | 满足硬判据（不改行为/接口/数据、无方案权衡、单会话）→ 不开 change，直改 + commit |
-| 归档不反写 | archive 只更新活文档 + 冻结 change；spec 概念已移除 |
+| 归档不反写 | archive 冻结 change 目录为审计历史，不合并回任何文档 |
 | 人工验收门 | 人工类 AC（「人工:」标记）只有用户能勾；implement 完成时生成人工验收单 `acceptance.md`（软门不阻塞），archive 是唯一硬门；全自动的 change 不生成不打扰（规范见 `eo-shared/acceptance.md`） |
 | 验证归属 | 自动 AC 默认由 eo-implement 批末自验勾选（证据留速报）；人工 AC 由用户在验收单勾。挂了 /eo-test 闸门的 change，自动项改由 test 的独立证据勾选（规范见 `eo-shared/ac-spec.md`） |
 | 环境不归 agent 所有 | 需要起环境的验证**假定环境已就绪**：探测复用、用完不停，只在换环境组合时重启；起停命令与代价是**项目特异知识**，记成项目 lesson 由 implement/test/fix 的 lessons 消费步骤自动送达，不写进通用 skill |
@@ -214,13 +206,14 @@ eo-doc/changes/
 
 ## 文档体系（eo-doc-manager）
 
-维护 `eo-doc/` 代码侧文档：
+维护 `eo-doc/` 代码侧文档（`changes/INDEX.md`、`agent-handbook/` 规范篇与 `templates/`）：
 
-- `sync` — 增量同步（基于 git diff，只更新变化的部分）
-- `re-sync` — 全量重建（改架构后用）
 - `init` — 初始化骨架（一般由 `eo-project-init` 触发，单独跑用于补建缺失目录）
+- `modify` — 整理 changes/INDEX.md、维护 agent-handbook/ 操作规范篇（worktree 协作 / 架构分工 / 目录约定 / UI token 用法 / agent 协作；非 SSOT 代码为准，不挂自动同步）、管理 templates/ 项目定制模板
 
-详细维护策略见各 reference 文档：[git-sync](../eo-doc-manager/references/git-sync.md) / [re-sync](../eo-doc-manager/references/re-sync.md) / [maintenance](../eo-doc-manager/references/maintenance.md) / [splitting](../eo-doc-manager/references/splitting.md) / [templates](../eo-doc-manager/references/templates.md)。
+handbook 篇目首次填内容走 `/eo-project-init`（§6.5 模板机制）：按 preset 的 manifest 信号匹配候选（私有库 `~/.eo/handbook-templates/` 同名覆盖内置），与五面扫描实证合并生成（实证 > 模板 > 待补）。
+
+详细维护策略见 reference 文档：[maintenance](../eo-doc-manager/references/maintenance.md) / [index-templates](../eo-doc-manager/references/index-templates.md)。
 
 ---
 
@@ -228,7 +221,7 @@ eo-doc/changes/
 
 投影目标（Obsidian 看板卡 / GitHub issue/PR）由 `eo-sync` 单命令统一同步——**逐流转投影已退役**，触发点收敛为三个：archive 收口自动 `eo-sync run` 一次、任意时刻手动 `eo-sync run`（`--dry-run` 看计划）、`eo-sync watch` 自动档（下述）。目标经 `.eo-project.json` 的 `sync` 段逐项目 opt-in（存量 legacy `board` / `github` 段经兼容映射仍生效，新配置由 init 只写 `sync` 段），缺省关闭；投影内容见 `eo-shared/board-github.md`（内置适配器实现说明），协议契约见 `docs/sync-adapter-protocol.md`。第三方在 PATH 放一个 `eo-sync-<name>` 可执行并在配置启用即可接入新目标。
 
-- **Obsidian 看板**（vault 模式）：`eo-sync-obsidian` 把 change frontmatter 投影为 `<project_root>/board/` 的卡片（整文件重写、幂等）；呈现层在 Obsidian 用 Bases + Kanban Bases View 配置一次（指南：`eo-project-init/references/board-setup.md`），支持多项目聚合与泳道。开启开关时由 `/eo-project-init` 调 `eo-sync run` 做历史同步。
+- **Obsidian 看板**：`eo-sync-obsidian` 把 change frontmatter 投影为 `<project_root>/board/` 的卡片（整文件重写、幂等）；呈现层在 Obsidian 用 Bases + Kanban Bases View 配置一次，支持多项目聚合与泳道。
 - **GitHub**：`eo-sync-github` 投影 change 层一对一 issue（confirmed 起建、编号回写去重、archive 兜底关）；PR 按 `sync.github.pr`（legacy `github.pr`）策略（`auto` = 非默认分支自动建，body 含 AC 勾选清单与条件性 `Closes`——AC 全勾才关 issue）。**本地文件是唯一真相源**，严格单向推送，唯一逆向通道是漂移检测告警。
 
 ### watch 自动档（eo-sync watch）

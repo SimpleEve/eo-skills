@@ -7,7 +7,7 @@ description: |
 
 # eo-test — 独立测试（按需闸门）
 
-v3 起本 skill 是**可选闸门**，不是流程节点。默认主路里 eo-implement 自验足够；只有 [../eo-shared/granularity.md](../eo-shared/granularity.md) §5 风险信号命中（且用户未豁免）或用户显式点名时才调用。价值 = **独立视角**：不是把 implement 跑过的再跑一遍，而是审计真实性 + 补 AC 没想到的输入。
+本 skill 是**可选闸门**，不是流程节点。默认主路里 eo-implement 自验足够；只有 [../eo-shared/granularity.md](../eo-shared/granularity.md) §5 风险信号命中（且用户未豁免）或用户显式点名时才调用。价值 = **独立视角**：不是把 implement 跑过的再跑一遍，而是审计真实性 + 补 AC 没想到的输入。
 
 ## 职能边界
 
@@ -67,4 +67,4 @@ v3 起本 skill 是**可选闸门**，不是流程节点。默认主路里 eo-im
 - **不修改 change 的判据**：AC/TODO 的文字不动——发现写漏/写偏记录到报告并建议回 /eo-implement 确认后补写
 - **环境不归你所有**：探测复用、用完不停；按环境组合分组跑
 - **输入不只来自 AC**：跳过「读实现取输入」= 只验 AC 想到的路径
-- **注释纪律**：测试资产同样遵守 [../eo-shared/conventions.md](../eo-shared/conventions.md) §2.6——溯源标注与「为何正确」辩护不进测试注释
+- **注释纪律**：测试资产同样遵守注释纪律（项目级完整篇：`eo-doc/agent-handbook/comments.md`，如已启用）——溯源标注与「为何正确」辩护不进测试注释

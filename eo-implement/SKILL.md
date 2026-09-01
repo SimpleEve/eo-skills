@@ -7,7 +7,7 @@ description: |
 
 # eo-implement — 代码实现
 
-按 change.md 实施代码。TODO 按 Batch 分组执行，**批末 checkpoint**：自验该批对应的 AC、勾选进度、汇报，再决定是否继续。v3 起**测试是普通工程实践**——需要就写，遵循项目既有测试约定；不再有独立 tester 前置锁定。
+按 change.md 实施代码。TODO 按 Batch 分组执行，**批末 checkpoint**：自验该批对应的 AC、勾选进度、汇报，再决定是否继续。**测试是普通工程实践**——需要就写，遵循项目既有测试约定。
 
 ## 核心原则
 
@@ -26,7 +26,7 @@ description: |
 
 1. **阅读上下文**
    - change.md（主输入：§1 意图与已钉决策、§2 AC、§5 TODO、§6 风险）
-   - `eo-doc/agent-handbook/` 中相关代码地图（经 INDEX 定位），理解入口与既有模式
+   - 相关代码定位：`.codegraph/` 索引存在则 `codegraph explore` 优先召回；不存在则按目录收敛 + 源码直读，理解入口与既有模式
    - lessons 消费：按 [../eo-shared/lessons.md](../eo-shared/lessons.md) §1 扫 INDEX 匹配 trigger，命中读「规则」节带入
    - 涉及 UI 且仓库根有 `DESIGN.md` → 读入并遵守
 
@@ -41,8 +41,8 @@ description: |
 4. **批内逐项实现**
    - 按依赖顺序编码；每完成一个 TODO **立即在 change.md 勾选**——勾选门 = 常规绿灯（编译/lint/相关测试）
    - 测试随写：逻辑密集、边界多、会被后续变更反复触碰的验证点落成测试文件（遵循项目既有目录与命名约定）；其余靠一次性执行证据。写测试不是流程义务，是工程判断
-   - 写码时**注释零溯源**：change/TODO/AC/finding 等流程标记不进注释，也不写「为何正确」的叙事注释（[../eo-shared/conventions.md](../eo-shared/conventions.md) §2.6）
-   - 遇到 change 未覆盖的技术细节：能从代码/handbook 自答的自答；真正的决策问用户（一次 1-2 问）；发现要改的是前序 change 已引入并生效的对外契约/行为 → 按 [../eo-shared/questioning.md](../eo-shared/questioning.md) §4「破坏性变更类问题」强制问直接替换还是保留兼容，**不得自答代入**，结论回补 change.md §1
+   - 写码时**注释零溯源**：change/TODO/AC/finding 等流程标记不进注释，也不写「为何正确」的叙事注释（项目级完整纪律见 `eo-doc/agent-handbook/comments.md`，如已启用）
+   - 遇到 change 未覆盖的技术细节：能从代码自答的自答；真正的决策问用户（一次 1-2 问）；发现要改的是前序 change 已引入并生效的对外契约/行为 → 按 [../eo-shared/questioning.md](../eo-shared/questioning.md) §4「破坏性变更类问题」强制问直接替换还是保留兼容，**不得自答代入**，结论回补 change.md §1
    - 发现 TODO/AC 写漏：告知用户，经确认后就地补进 change.md（意图不变的精化），再继续；补的是人工项且验收单已生成 → 同步补验收项（未勾）
 
 5. **批末 checkpoint（STOP and VALIDATE）**
@@ -50,8 +50,9 @@ description: |
    - **UI 变化留截图**：本批涉及 UI 变化时，自验当下把关键界面截图存进 change 目录 `shots/`（`<批号>-<场景>.png`），纪律见 [../eo-shared/evidence.md](../eo-shared/evidence.md)「截图纪律」
    - **人工项（「人工:」标记）不代勾**，留给验收单
    - 提交本批代码：commit message 带 `[<change-id>]` 前缀（推荐一次 change 一次 commit，分批时一批一 commit）
-   - **提交前注释自检（必做）**：对本批 diff 的新增注释行扫溯源 token（`AC-\d`、`TODO-\d`、当前 change slug）——命中按 conventions §2.6 语义判定，确属溯源标注/叙事辩护的清理后再提交
+   - **提交前注释自检（必做）**：对本批 diff 的新增注释行扫溯源 token（`AC-\d`、`TODO-\d`、当前 change slug）——命中按 注释纪律（`eo-doc/agent-handbook/comments.md`） 语义判定，确属溯源标注/叙事辩护的清理后再提交
    - **合流 checkpoint**（仅并行层）：本批是同层并行批的最后一批时，加跑合流校验（granularity §6）——合并结果常规绿灯 + 该层各批对应 AC 复核
+   - **更新 brief**：自验后收尾更新 change.md frontmatter 的 `brief`（写法见 [../eo-shared/summary.md](../eo-shared/summary.md)；写不出留空）
    - 汇报：本批完成的 TODO / 勾掉的 AC（附一句证据）/ 未过项，询问「继续下一批 / 停」
 
 6. **全部完成 → 生成交付证据面（必产）+ 人工验收单（软门，不阻塞）**
@@ -79,6 +80,6 @@ description: |
 - **并行批纪律**：同层批（字母后缀）的跨 worker 并行只发生在 eo-loop 派发的隔离 worktree 里，本 skill 内串行执行；层末合流 checkpoint 必跑（granularity §6）
 - **勾选即时**：TODO/AC 完成立即在 change.md 勾选，不攒批
 - **commit 前缀**：所有实施提交带 `[<change-id>]`（archive 靠它归集区间）
-- **注释纪律**：一切流程溯源标注严禁进代码注释（溯源走 commit 前缀）；注释只写代码表达不了的约束、一两行为限，见 conventions §2.6
+- **注释纪律**：一切流程溯源标注严禁进代码注释（溯源走 commit 前缀）；注释只写代码表达不了的约束、一两行为限；存量过时/误导注释顺手清理。项目启用 `eo-doc/agent-handbook/comments.md` 时以该篇为准
 - **status 自动流转**：confirmed→implementing 由本 skill 写入；reviewed 由 /eo-review（如被调用）通过后写入；archived 由 /eo-archive 写入
 - **不偏离 change**：方案问题上报用户；就地补 AC/TODO 仅限意图不变的精化

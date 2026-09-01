@@ -1,86 +1,20 @@
 # 维护协议
 
-## 更新工作流
+## changes/INDEX.md 整理
 
-### 新增内容
+1. 列出 `changes/` 下全部子目录，与 INDEX.md 条目比对：
+   - 孤儿条目（指向已删除目录）→ 删除该行
+   - 漏收目录 → 读其 change.md frontmatter 补行
+2. 状态/摘要列与各 change.md frontmatter 保持一致（以 frontmatter 为准）
+3. seq 列顺手查重：重号 → created 晚者让号（见 [../../eo-shared/conventions.md](../../eo-shared/conventions.md) §2）
+4. 单条目保持约 50 token，整个 INDEX 可一次性扫描
 
-1. 确定目标分类（`state/` 或 `agent-handbook/`）
-2. 检查已有 INDEX.md 中是否有相关文档
-3. 若已有相关文档：
-   - 合并后仍 < 500 行且同一主题 → 合并到已有文档
-   - 属于独立子主题 → 创建新文档
-4. 设置 `updated` 为当前日期
-5. 更新所在子目录 INDEX.md 对应条目（或新增行）
+## templates/ 管理
 
-### 修改已有内容
+- 模板由项目按需自建（如项目类型画像 `project-profile.md`），本 skill 不自动生成内容
+- 模板内容完全来自用户输入；templates/ 无 INDEX，无需同步索引
 
-1. 完整读取当前文档
-2. 应用修改，保持结构
-3. 更新 `updated` 为当前日期
-4. 若修改影响了 `summary` 或 `conclusions`，同步更新两者
-5. 若 INDEX.md 摘要列发生变化，同步更新所在子目录 INDEX.md
-6. 检查修改后是否超出 500 行阈值
+## 验证
 
-### 批量导入
-
-一次导入多篇文档时：
-
-1. 先通读所有输入材料
-2. 识别全部输入中的主题聚类
-3. 按分流规则判断每段内容归属（可能跨目录）
-4. 检查已有结构是否有冲突/重叠
-5. 向用户展示文件规划：
-   ```
-   导入计划（3 篇文档）：
-   → eo-doc/state/task-engine.md（新建）
-   → eo-doc/agent-handbook/task-engine.md（新建）
-   → eo-doc/state/auth.md（更新，与已有合并）
-
-   INDEX.md 更新：所有受影响子目录
-   ```
-6. 用户确认后执行
-
-> 若输入材料中含规划/设计内容，提示进入**项目管理侧** `<project_root>/docs/`；调研沉淀进入 `<project_root>/research/`（规范见 [../../eo-shared/research.md](../../eo-shared/research.md)）；领域术语进 `state/glossary.md`。均不进入 eo-doc/ 其他位置。
-
-## 一致性检查清单
-
-每次创建/更新操作后执行：
-
-### 标签一致性
-- 无近义重复标签：`auth` vs `authentication` → 选定一个
-- 无过于宽泛的标签：`development` → 太模糊
-- 跨目录同一概念使用相同标签
-
-### 交叉引用完整性
-- 文档中所有 `[链接](path.md)` 指向真实存在的文件
-- state↔agent-handbook 双方交叉引用完整
-- 若被引用文档发生拆分/重命名，更新所有引用
-
-### INDEX.md 同步
-- 子目录内每个 `.md` 文件（INDEX.md 除外）都有对应索引条目
-- 无孤立索引条目指向已删除的文件
-
-### state 与 agent-handbook 同源
-- 每个 state/ 中描述的模块，在 agent-handbook/ 中有对应文档
-- 两者描述的功能范围一致（state 用业务语言，agent-handbook 用代码语言）
-- 若 state 新增了模块描述，检查 agent-handbook 是否需要同步新增
-
-## 臃肿检测清单
-
-每次操作后检查被修改的文档：
-
-| 检查项 | 阈值 | 处理 |
-|--------|------|------|
-| 行数 | > 500 | 建议拆分 |
-| 标签数 | > 5 | 审查范围，可能需要拆分 |
-| 章节数 | > 8 个 `##` | 考虑按章节组拆分 |
-| 摘要准确性 | 摘要与内容不符 | 重写摘要 |
-| 结论时效性 | 结论已过时 | 更新结论 |
-
-## 归档
-
-内容过时时：
-1. frontmatter 设置 `status: archived`
-2. 顶部加说明：`> 已于 YYYY-MM-DD 归档。当前版本见 [replacement.md](replacement.md)。`
-3. 在所在子目录 INDEX.md 中移至 `## 已归档` 分组
-4. **不删除**——归档文档仍可作为历史参考
+- [ ] INDEX 条目与目录一一对应
+- [ ] 所有交叉引用指向真实存在的文件

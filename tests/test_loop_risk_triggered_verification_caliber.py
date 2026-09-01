@@ -37,24 +37,22 @@ class TestNormalRouteHasNoAudit(unittest.TestCase):
             "默认只读取",
             "frontmatter 当前状态",
             "预期工件指针",
-            "当前交付基线",
-            "最新结构化处置",
+            "报告结论",
+            "未决清单",
             "无风险即推进",
         ):
             self.assertIn(marker, self.dispatch)
-        for marker in ("不打开完整 diff", "不重跑节点命令", "不重新判断"):
+        for marker in ("不是对 worker 内容再做一轮核查", "不打开完整 diff", "不重跑节点命令"):
             self.assertIn(marker, self.dispatch)
 
     def test_first_or_cross_agent_delivery_does_not_trigger_sampling(self):
         for marker in (
             "交付来自其他 agent",
             "worker 首次参与",
-            "新的可用基底",
+            "换基底",
+            "普通节点交接",
             "不是风险信号",
-            "首次抽查",
-            "随机抽查",
-            "按比例抽查",
-            "worker 信任分层",
+            "不得因此抽查或信任分层",
         ):
             self.assertIn(marker, self.dispatch)
 
@@ -79,22 +77,21 @@ class TestObjectiveRiskSignals(unittest.TestCase):
             "可指认的风险信号",
             "互相冲突",
             "工件或字段缺失",
-            "基线过期",
+            "未提交交付改动",
             "越过角色权限",
             "计划外变化",
             "Unknown B / C",
             "阻塞或决策门",
         ):
             self.assertIn(marker, self.dispatch)
-        self.assertIn("主观不信任或“以防万一”不构成信号", self.dispatch)
+        self.assertIn("主观不信任不构成信号", self.dispatch)
 
     def test_escalation_is_targeted_and_role_owned(self):
         for marker in (
             "只处理触发信号对应的范围",
-            "不扩张为全面核查",
             "派对应有权节点",
             "停下上交用户",
-            "风险消除后回到正常路由",
+            "总控不得亲自实施、改测试、兼任审查",
         ):
             self.assertIn(marker, self.dispatch)
 

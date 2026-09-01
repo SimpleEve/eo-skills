@@ -80,8 +80,9 @@ def _todo_lines(change):
 
 def issue_body(change):
     parts = [f"意图：{change.get('summary') or ''}", "", "## 验收清单", *_ac_lines(change)]
-    if (change.get("tier") or "full") != "light":
-        parts += ["", "## TODO", *_todo_lines(change)]
+    todo = _todo_lines(change)
+    if todo:
+        parts += ["", "## TODO", *todo]
     return "\n".join(parts).rstrip() + "\n"
 
 

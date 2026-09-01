@@ -1,14 +1,17 @@
-# Agent Handbook — 代码地图索引
+# Agent Handbook — 项目操作手册
 
-> 先扫本 INDEX 定位模块，再按需读具体模块详情，不要通读。
+规范性、方向性：细节判断交运行时；非 SSOT（代码为准）；不挂自动同步。
+先扫本表定位篇目，按需读，不通读。
 
-| 模块 | 入口 | 一句话 |
-|------|------|--------|
-| [cli-eo-lib.md](cli-eo-lib.md) | `cli/eo_lib/` | 五域共享解析库（配置+local 合并/git/frontmatter/change 扫描/freshness 键 + 公开 tree_max_mtime），ConfigError 错误所有权，eo-board 与未来 eo-sync 共用 |
-| [cli-eo-sync.md](cli-eo-sync.md) | `cli/eo-sync*` | 投影同步核+双内置适配器：协议 v1、持锁编排、fail-safe 孤儿删除、identity_fields 保序回写 |
-| [cli-eo-helper.md](cli-eo-helper.md) | `cli/eo-helper` | 数字菜单薄壳唯一入口：固定 argv 映射选前回显、短命令 subprocess 回菜单、serve/watch os.exec 接管、非 TTY 对照表退出 |
-| [cli-eo-board.md](cli-eo-board.md) | `cli/eo-board` | 零依赖单文件只读看板，三形态 + 聚合双视图下钻；泳道定位搜索/列折叠记忆/列内滚动、五 tab/stage_progress/journal/mdBlock；serve 每项目单飞缓存 |
+| 篇目 | 一句话 | 何时读 |
+|------|--------|--------|
+| [worktree.md](worktree.md) | 多 worktree 并行：看板折叠/分叉口径 + codegraph 索引按目录隔离 | 开 worktree 并行开发前；看板出现分叉徽标时 |
+| [commit.md](commit.md) | commit 前缀：`[<slug>]` / `fix:` / `ui:` + 观察到的 doc 系前缀 | 每次提交前选前缀 |
+| [comments.md](comments.md) | 注释纪律：代码为真相源、顺手清理过时注释 | 编辑任何代码前 |
+| [directory.md](directory.md) | 仓内顶层目录职责边界与入库口径 | 新文件不知道放哪、判断该不该入库时 |
+| [architecture.md](architecture.md) | skill / eo-shared / cli 三层分工 + SKILL 写作纪律 | 改 skill 或 eo-shared 前 |
+| [ui.md](ui.md) | 看板 UI：Design Token（light/dark 双套 CSS 变量 + `--st-*` 状态色）与原子组件清单 | 动看板样式、新增组件或颜色前 |
 
-> 本仓库的「产品本体」是各 `eo-*/SKILL.md`（自描述，不入 handbook）；handbook 只覆盖可执行代码（`cli/`、`tests/`、`install.sh`）。
->
-> 不挂模块的测试：`tests/test_sot_default_caliber.py` 是 SoT 默认口径（init 缺省推荐 local + 管理侧随仓库提交）的文档静态断言套件，守护 `eo-project-init/SKILL.md`、`references/config.md`、`docs/GUIDE.md`、`README.md` 四文件口径一致。`tests/test_sync_consolidation_caliber.py` 同型，守护 sync 段收编口径（init 停写 board/github 旧段、1.5 迁移、文档 legacy 标注）于 `eo-project-init/SKILL.md`、`references/config.md`、`eo-shared/board-github.md`、`docs/GUIDE.md`，并断言本仓 `.eo-project.json` 狗粮迁移等价与 change 区间 `cli/` 零 diff。`tests/test_loop_retest_routing_caliber.py` 守护 Review 修复后的非对称回路、定向/完整复验、Test FAIL 强制回测、统一交付基线与 Archive 证据新鲜度门。
+## 待补
+
+- lint 规范：待补（本仓无 lint 配置）

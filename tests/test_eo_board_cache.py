@@ -218,7 +218,11 @@ class BoardCacheServeTests(unittest.TestCase):
         current_data = self.board.build_data(self.cfg)
         baseline_data["generated_at"] = current_data["generated_at"]
         self.assert_preserves(current_data, baseline_data)
-        self.assertEqual(self.board.render_terminal(current_data), baseline.render_terminal(baseline_data))
+        terminal = self.board.render_terminal(current_data)
+        self.assertNotIn("TIER", terminal)
+        for heading in ("SEQ", "SLUG", "TYPE", "AC", "TODO", "分支", "警告"):
+            self.assertIn(heading, terminal)
+        self.assertIn("fixture", terminal)
 
         self.start_server()
         served = self.get_json()

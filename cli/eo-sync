@@ -292,7 +292,7 @@ def build_snapshot(rec, default_branch):
         "title": rec.get("title"),
         "summary": rec.get("summary") or "",
         "status": rec.get("status"),
-        "tier": rec.get("tier") or "full",
+        "tier": rec.get("tier"),
         "type": rec.get("type") or "feature",
         "created": rec.get("created"),
         "base_commit": rec.get("base_commit"),

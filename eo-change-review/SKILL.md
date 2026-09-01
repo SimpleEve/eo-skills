@@ -7,7 +7,7 @@ description: |
 
 # eo-change-review — Change 方案审查（按需闸门）
 
-v3 起本 skill 是**可选闸门**：在 implement 前把牢「方向是否正确、AC 是否可验收、TODO 是否完整」。调用依据：[../eo-shared/granularity.md](../eo-shared/granularity.md) §5 风险信号命中（且用户未豁免）或用户显式点名。
+本 skill 是**可选闸门**：在 implement 前把牢「方向是否正确、AC 是否可验收、TODO 是否完整」。调用依据：[../eo-shared/granularity.md](../eo-shared/granularity.md) §5 风险信号命中（且用户未豁免）或用户显式点名。
 
 ## 核心原则
 
@@ -16,6 +16,9 @@ v3 起本 skill 是**可选闸门**：在 implement 前把牢「方向是否正�
 3. **不审实施质量**：此时代码还没写；维度 7 的前提校验落到真实代码（state 文档可能过期，读码取证不等于审码）
 4. **简版报告**：`eo-doc/changes/<change-id>/change-review.md`，复审**覆盖重写**（历史由 git 兜）
 5. **只有 P0 阻塞**：P1/P2 移交起草方裁决，不阻塞流程
+## 对抗立场
+
+**默认这份方案通不过**——审查的目标是找出让它失败的方式：构造会让 AC 失效的输入、会让 TODO 卡死的依赖、不成立的前提假设。「没发现问题」不是结论，「试图推翻它的方式都失败了」才是——报告须能列出试过的攻击面；列不出攻击面的审查视为没做。
 
 ## 前置条件
 
@@ -28,7 +31,7 @@ v3 起本 skill 是**可选闸门**：在 implement 前把牢「方向是否正�
 
 1. 读目标 change.md 全文（§1 意图 + 已钉决策、§2 AC、§5 TODO、§6 风险）
 2. 读 `eo-doc/changes/INDEX.md` 最近 3 条（避免与在途/已归档 change 冲突或重复）
-3. 读 `eo-doc/state/` 相关篇目（系统现状，校验变更前提）
+3. 系统现状定位（校验变更前提）：`.codegraph/` 索引存在则 `codegraph explore` 优先召回；不存在则按目录收敛 + 源码直读
 4. 复审轮另加：读上一版 change-review.md 的 Finding 清单（核销后再找新 finding）
 
 ### 第二步：审查（7 维度）

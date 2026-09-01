@@ -13,3 +13,6 @@ eo-doc/vault
 
 # 会话级任务草稿不提交
 tasks/
+
+# codegraph 索引不入库
+.codegraph/

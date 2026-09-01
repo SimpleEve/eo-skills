@@ -15,7 +15,7 @@
 | [filename.md](filename.md) | 标题 | `tag1` `tag2` | YYYY-MM-DD | 一句摘要 |
 ```
 
-> `eo-doc/` 各子目录（`agent-handbook/` / `state/` / `changes/`）统一使用上面的标准列。
+> `changes/INDEX.md` 使用上面的标准列。
 
 ## 分组式 INDEX（10+ 篇时使用）
 

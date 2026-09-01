@@ -1,7 +1,7 @@
-"""SoT 默认口径静态断言：新项目默认 local 且管理侧随仓库提交。
+"""SoT 口径静态断言：init 一律 local（无模式询问）且管理侧随仓库提交。
 
 只读四个口径文件（eo-project-init/SKILL.md、references/config.md、
-docs/GUIDE.md、README.md），断言新口径锚点存在、旧口径残留清零。
+docs/GUIDE.md、README.md），断言现行口径锚点存在、vault 残留清零。
 """
 
 import unittest
@@ -26,54 +26,47 @@ def line_containing(text, needle):
     return next(l for l in text.splitlines() if needle in l)
 
 
-class TestAC1LocalIsDefaultRecommendation(unittest.TestCase):
+class TestAlwaysLocalOnly(unittest.TestCase):
+    def test_no_mode_question(self):
+        self.assertNotIn("询问运行模式", SKILL)
+        self.assertNotIn("运行模式偏好", SKILL)
+
+    def test_project_root_is_repo_local(self):
+        self.assertIn("`<repo>/.eo-project/`", SKILL)
+
+    def test_config_example_writes_local_mode(self):
+        # cli 校验 mode 必填，init 照写 "local"，但不再构成选择
+        self.assertIn('"mode": "local"', SKILL)
+        self.assertIn('"mode": "local"', CONFIG)
+
+    def test_no_user_level_mode_config(self):
+        # init 不读用户级配置推断模式
+        self.assertNotIn("default_mode", SKILL)
+        self.assertNotIn("default_mode", CONFIG)
+
+
+class TestManagementSideCommitted(unittest.TestCase):
     def setUp(self):
-        self.sec2 = section(SKILL, "询问运行模式", "### 3.")
+        self.sec = section(SKILL, "### 8. 处理 `.eo-project/`", "### 9.")
 
-    def test_no_anti_local_directive(self):
-        self.assertNotIn("不要直接默认到 local", SKILL)
+    def test_section_defaults_to_committed(self):
+        self.assertNotIn("默认追加到 `.gitignore`", self.sec)
+        self.assertIn("缺省随仓库提交", self.sec)
 
-    def test_local_recommended_by_default(self):
-        self.assertIn("缺省推荐 local", self.sec2)
-        # 用户级显式配置仍作推荐项尊重
-        self.assertIn("default_mode", self.sec2)
-
-    def test_local_option_says_committed(self):
-        self.assertIn("缺省随仓库提交", self.sec2)
-
-    def test_vault_still_optional(self):
-        self.assertIn("vault 模式", self.sec2)
-        self.assertIn("local 模式", self.sec2)
-
-    def test_default_mode_not_inferred_from_vault_root_alone(self):
-        # config.md：default_mode 缺省 local，不再仅凭 vault_root 存在推断 vault
-        row = line_containing(CONFIG, "| `default_mode`")
-        self.assertNotIn("推断", row)
-        self.assertIn("local", row)
-
-
-class TestAC2NoDefaultGitignore(unittest.TestCase):
-    def setUp(self):
-        self.sec10 = section(SKILL, "### 10. 处理 `.eo-project/`", "### 11.")
-
-    def test_section10_defaults_to_committed(self):
-        self.assertNotIn("默认追加到 `.gitignore`", self.sec10)
-        self.assertIn("缺省随仓库提交", self.sec10)
-
-    def test_section10_optout_preserved(self):
+    def test_optout_preserved(self):
         # 用户明确不想提交时仍可当场选择追加 ignore
-        self.assertIn("明确", self.sec10)
-        self.assertIn(".eo-project/", self.sec10)
+        self.assertIn("明确", self.sec)
+        self.assertIn(".eo-project/", self.sec)
 
-    def test_constraints_flipped(self):
+    def test_constraints_committed(self):
         constraints = section(SKILL, "## 约束", "\x00")
         self.assertNotIn("`.eo-project/` 默认进 `.gitignore`", constraints)
         self.assertIn("缺省随仓库提交", constraints)
 
 
-class TestAC3ExistingProjectsUntouched(unittest.TestCase):
+class TestRepairBranchZeroTouch(unittest.TestCase):
     def setUp(self):
-        self.step4 = line_containing(SKILL, ".gitignore 与软链核对")
+        self.step4 = line_containing(SKILL, ".gitignore 核对")
 
     def test_repair_branch_does_not_backfill_ignore(self):
         self.assertNotIn("（local 模式）`.eo-project/`", self.step4)
@@ -83,13 +76,17 @@ class TestAC3ExistingProjectsUntouched(unittest.TestCase):
         self.assertIn("保持现状", self.step4)
 
 
-class TestAC4NoOldCaliberResidue(unittest.TestCase):
+class TestNoVaultResidue(unittest.TestCase):
     FILES = [
         ("eo-project-init/SKILL.md", SKILL),
         ("eo-project-init/references/config.md", CONFIG),
         ("docs/GUIDE.md", GUIDE),
         ("README.md", README),
     ]
+
+    def test_no_vault_mention(self):
+        for name, text in self.FILES:
+            self.assertNotIn("vault", text.lower(), name)
 
     def test_no_default_ignore_wording_near_eo_project_dir(self):
         for name, text in self.FILES:
@@ -98,21 +95,18 @@ class TestAC4NoOldCaliberResidue(unittest.TestCase):
                     self.assertNotIn("默认进", line, f"{name}:{i} 旧口径残留: {line}")
                     self.assertNotIn("默认追加", line, f"{name}:{i} 旧口径残留: {line}")
 
-    def test_config_table_new_caliber(self):
+    def test_config_states_committed(self):
         self.assertIn("缺省随仓库提交", CONFIG)
 
-    def test_guide_table_new_caliber(self):
+    def test_guide_states_committed(self):
         self.assertIn("缺省随仓库提交", GUIDE)
         self.assertNotIn("（默认进 `.gitignore`）", GUIDE)
 
-    def test_readme_collab_new_caliber(self):
+    def test_readme_collab_committed(self):
         self.assertIn("随仓库提交", README)
 
-    def test_vault_mode_untouched(self):
-        # vault 侧口径不动：软链 gitignore 与 local 覆盖文件不提交约定保持
-        self.assertIn("# eo-project vault link", SKILL)
+    def test_local_override_always_ignored(self):
         self.assertIn("`.eo-project.local.json` **始终**进 `.gitignore`", SKILL)
-        self.assertIn("<vault_root>/<projects_subdir>/<project_name>/", SKILL)
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ id: batch-export     # slug 即身份（commit 前缀/stub 文件名用它），
 seq: 14              # 显示序号（#14），补零作目录前缀 14-<slug>/；撞号自愈见 conventions.md §2
 title: 批量导出
 summary: <一句话意图，≤50 字，纯文本>   # INDEX 摘要列与看板卡面的单一来源
+brief: ~             # 验收导向摘要（≤3 句：做了什么/在哪看到/怎么验收），写不出留空；口径见 eo-shared/summary.md
 status: draft        # draft | confirmed | implementing | reviewed | archived（skill 自动流转，用户不手改；reviewed 可选）
 type: feature        # bootstrap | feature | enhance | refactor
 base_commit: ~       # eo-implement 首次执行时写入

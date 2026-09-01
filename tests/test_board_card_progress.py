@@ -143,6 +143,7 @@ if (api.__test && api.__test.openDetail) {
 process.stdout.write(JSON.stringify({
   detail: pBody.innerHTML,
   card: pBoard.innerHTML,
+  chips: pChips.innerHTML,
   tabs: (pBody.innerHTML.match(/detail-tab/g) || []).length,
 }));
 """
@@ -342,6 +343,30 @@ class BoardCardProgressFixture(unittest.TestCase):
         data = self.build()
         self.assertEqual(len(data["changes"]), 1)
         return data["changes"][0]
+    def write_v3_change(self):
+        body = (
+            "---\n"
+            "id: demo-progress\n"
+            "seq: 11\n"
+            "title: Demo Progress\n"
+            "status: implementing\n"
+            "type: feature\n"
+            "created: 2026-08-15\n"
+            "---\n\n"
+            "# Demo Progress\n\n"
+            "## §1 为什么做\n\n"
+            "意图：fixture for v3 artifacts.\n\n"
+            "## §2 完成后我应该看到什么\n\n"
+            "- [x] AC-1 [自动·阻塞] 自动验收\n"
+            "- [ ] AC-2 [人工·非阻塞] 人工验收（人工: 浏览器）\n\n"
+            "## §5 技术备注\n\n"
+            "### Batch 1\n"
+            "- [ ] TODO-1 适配解析\n\n"
+            "## §6 风险与开放问题\n\n"
+            "- OQ-1 保持双格式兼容\n"
+        )
+        (self.change_dir / "change.md").write_text(body, encoding="utf-8")
+
 
     def write_journal(self, body, slug="demo-progress"):
         jdir = self.repo / "tmp" / "eo" / "loop" / slug
@@ -418,6 +443,71 @@ class BoardCardProgressFixture(unittest.TestCase):
             body += f"## 复审记录（第 {i + 2} 轮 · 增量 · 2026-08-0{i + 2}）\n\n内容\n\n"
         body += f"## 速报\n结论：{verdict}\n下一步：修\n"
         (self.change_dir / "change-review.md").write_text(body, encoding="utf-8")
+class V3ArtifactCompatibilityTests(BoardCardProgressFixture):
+    def test_change_parser_reads_v3_sections_and_annotations(self):
+        self.write_v3_change()
+        rec = self.rec()
+        self.assertIsNone(rec["tier"])
+        self.assertEqual([item["text"] for item in rec["ac"]], ["自动验收", "人工验收"])
+        self.assertNotIn("[自动", rec["ac"][0]["text"])
+        self.assertTrue(rec["ac"][1]["manual"])
+        self.assertEqual(rec["todo"][0]["batch"], "Batch 1")
+        self.assertEqual(rec["todo"][0]["items"][0]["text"], "适配解析")
+        self.assertEqual(rec["oq"][0]["code"], "OQ-1")
+
+    def test_review_gate_reads_v3_verdict_and_finding_list(self):
+        (self.change_dir / "review.md").write_text(
+            "---\ncreated: 2026-08-15\n---\n\n"
+            "# Review\n\n"
+            "> 结论：不通过（P0 1 条）\n\n"
+            "## Finding 清单\n\n"
+            "| ID | 级别 | 摘要 | 位置 | 根因 | 状态 |\n"
+            "|----|------|------|------|------|------|\n"
+            "| P0-1 | P0 | 阻塞问题 | `x:1` | implementation | open |\n\n"
+            "### [P0-1] 阻塞问题\n",
+            encoding="utf-8",
+        )
+        rec = self.rec()
+        review = rec["gates"]["review"]
+        self.assertIn("不通过", review["verdict"])
+        self.assertEqual(review["open_p0"], 1)
+        self.assertTrue(any("P0-1 阻塞问题" in title for title in review["open_p0_titles"]))
+        self.assertIn("review P0×1", rec["blocker"])
+
+    def test_test_gate_reads_v3_unresolved_list_and_pass_clears_it(self):
+        report = (
+            "---\ncreated: 2026-08-15\n---\n\n"
+            "# Test\n\n"
+            "> 结论：不通过（失败 1 项）\n\n"
+            "## 未决清单\n\n"
+            "| 项 | 失败现象 | 位置 | 修复 commit | 状态 |\n"
+            "|----|---------|------|------------|------|\n"
+            "| F-1 | 边界失败 | `t:1` | ~ | open |\n"
+        )
+        path = self.change_dir / "test.md"
+        path.write_text(report, encoding="utf-8")
+        failing = self.rec()["gates"]["test"]
+        self.assertEqual(failing["fail_count"], 1)
+        self.assertEqual(failing["fail_titles"], ["F-1 边界失败"])
+
+        path.write_text(report.replace("不通过（失败 1 项）", "通过"), encoding="utf-8")
+        passed = self.rec()["gates"]["test"]
+        self.assertEqual(passed["fail_count"], 0)
+        self.assertEqual(passed["fail_titles"], [])
+
+    def test_missing_tier_survives_data_and_terminal_rendering(self):
+        self.write_v3_change()
+        data = self.build()
+        rec = data["changes"][0]
+        self.assertIsNone(rec["tier"])
+        stream = self.board._stream_change(rec, "card-progress", "card-progress")
+        self.assertIsNone(stream["tier"])
+        terminal = self.board.render_terminal(data)
+        self.assertNotIn("TIER", terminal)
+        self.assertIn("demo-progress", terminal)
+        self.assertIn("window.EO_PROJECT", self.board.render_html(data))
+
+
 
 
 class JournalAndFullTextTests(BoardCardProgressFixture):
@@ -737,6 +827,31 @@ class ProjectJsRenderTests(BoardCardProgressFixture):
         card = result["card"]
         self.assertIn("card-warn", card)
         self.assertNotIn("card-stage-line", card)
+
+    def test_missing_tier_omits_card_and_detail_badges(self):
+        self.write_v3_change()
+        data = self.build()
+        html = self.board.render_html(data)
+        project_js, markup = self._extract_project_assets(html)
+        runner = self.root / "detail-runner-no-tier.js"
+        runner.write_text(NODE_DETAIL_RUNNER, encoding="utf-8")
+        js_file = self.root / "project-no-tier.js"
+        js_file.write_text(project_js, encoding="utf-8")
+        data_file = self.root / "payload-no-tier.json"
+        data_file.write_text(json.dumps({"data": data}), encoding="utf-8")
+        markup_file = self.root / "markup-no-tier.html"
+        markup_file.write_text(markup, encoding="utf-8")
+        proc = subprocess.run(
+            [NODE, str(runner), str(js_file), str(data_file), str(markup_file)],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        result = json.loads(proc.stdout)
+        self.assertNotIn("error", result, result)
+        self.assertNotIn('class="tier ', result["card"])
+        self.assertNotIn('class="tier ', result["chips"])
+        self.assertIn('<span class="type">feature</span>', result["card"])
 
     def test_gates_tab_shows_current_blocker_and_open_items(self):
         """质量门 tab 顶部展示阶段/卡点/未决明细；无卡点时空态。"""

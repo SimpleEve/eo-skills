@@ -5,17 +5,16 @@
 主要消费方：
 - `eo-change` — 条件节 §6 流程图（画比说清楚时才画）
 - `eo-recall` — 回忆问答的按需出图
-- `eo-doc-manager` 自身 — state/ 中「当前稳定态」流程图的重画
 - `eo-change-review` — change 含 §6 流程图时按本文件 §5 审查清单核对
 
 ## 1. 图类型选择矩阵
 
 | 目标 | 图类型 | 用在哪 |
 |------|--------|--------|
-| 用户操作流程、业务决策分支 | `flowchart TD` | change §6、state/ 流程章节 |
+| 用户操作流程、业务决策分支 | `flowchart TD` | change §6、recall 输出 |
 | 多角色/多系统交互、时序敏感 | `sequenceDiagram` | change §6（涉及跨系统调用） |
-| 业务状态机、生命周期 | `stateDiagram-v2` | change §6、state/ 规则章节 |
-| 组件/依赖关系 | `flowchart LR/TB` | agent-handbook 依赖章节、recall 输出 |
+| 业务状态机、生命周期 | `stateDiagram-v2` | change §6、recall 输出 |
+| 组件/依赖关系 | `flowchart LR/TB` | recall 输出 |
 
 **选型原则**：能用 `flowchart` 表达就不要上 `sequenceDiagram`；用户读图的认知成本低于语法表达力。
 
@@ -44,7 +43,7 @@ classDef extern fill:#e9ecef,stroke:#6c757d,stroke-dasharray:5 5
 
 ### 归档后的去向
 
-流程图随 change 目录一起归档冻结，**无任何合并动作**；`:::new` / `:::changed` 标注原样保留——它们是该次变更的历史痕迹。state/ 里若需要「当前稳定态」流程图，由 doc-manager sync 从代码推导重画（不带 Delta 标注）。
+流程图随 change 目录一起归档冻结，**无任何合并动作**；`:::new` / `:::changed` 标注原样保留——它们是该次变更的历史痕迹。
 
 ## 3. 命名规则
 
@@ -116,7 +115,6 @@ flowchart TB
 | change 流程图有明显变更点却缺 `:::new` / `:::changed` 标注 | P2 |
 | 节点 ID 含中文或空格（违反命名规则） | P3 |
 | 图类型选错（如用 sequenceDiagram 画纯流程） | P3 |
-| state/ 的稳定态流程图残留 `:::new` / `:::changed`（重画时应清除） | P2 |
 
 ## 6. 什么时候可以不画
 

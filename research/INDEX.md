@@ -10,3 +10,5 @@
 | 2026-07-18 | [去 spec 化论战与分层判据](spec-artifact-debate.md) | sdd, 论战, 分层判据, 工件, 事后探针, 收敛 | 去 spec 化论战收敛于「按风险分档」而非单向变轻——工件唯一不失效的职能是独立验证的基准，分层靠事后探针不靠事前估计 |
 | 2026-07-18 | [issue 直派模式](issue-dispatch-model.md) | issue直派, copilot-cca, devin, 质量门, pr-review, 轻量档 | 工业级无 spec 直派省的是 TODO 不是 AC——工件从 per-change 挪到 per-repo + per-PR，代价是 44% 的工作静默蒸发 |
 | 2026-07-18 | [常驻项目上下文层](resident-context-layer.md) | 常驻上下文, claude-md, steering, memory-bank, adr, prompt-debt, 注入检索 | 常驻层从未承担单次变更意图职能且只是建议不是约束——change 变薄时抽掉的意图必须显式指定去处，P0 约束必须配确定性检查 |
+| 2026-08-21 | [agent 可观测性与 checkpoint](agent-observability-checkpoints.md) | checkpoint, 可观测性, output-styles, claude-code, devin, cursor, openhands, copilot-cca, 双模式汇报, 可打断 | 业界收敛于「默认推进+随时可打断+单事实源双层投影」——双模式输出走一处产出两处渲染，checkpoint 词义三方撞车需显式声明 |
+| 2026-08-21 | [CodeGraph 召回能力与 worktree 索引](codegraph-recall-capability.md) | codegraph, mcp, 代码索引, recall, worktree, git-log, 文档停维护 | codegraph 类工具只索引当前代码快照不含 git 历史与意图——agent-handbook/state 可停维护但 recall 须 CodeGraph+git log+意图文档三段拼；worktree 索引按目录隔离、官方刻意不共享，各自 init（秒到分钟级） |

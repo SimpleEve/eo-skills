@@ -1,13 +1,13 @@
 # eo-sync 内置适配器：Obsidian stub 与 GitHub issue/PR 投影实现说明
 
-> `eo-sync` 两个内置适配器（`eo-sync-obsidian` / `eo-sync-github`）投影 change frontmatter 的**内容契约**——本文件描述「投影成什么样」，不描述「何时触发」（触发已收敛为 archive 收口自动一次 + 手动 `eo-sync run`，逐流转投影已退役）。协议、发现与身份回写见 [../docs/sync-adapter-protocol.md](../docs/sync-adapter-protocol.md)。两适配器由 `.eo-project.json` 的 `sync` 段**opt-in**（存量 legacy `board` / `github` 段经兼容映射仍生效，新配置不再生成旧段）；未启用即不投影、零成本。
+> `eo-sync` 两个内置适配器（`eo-sync-obsidian` / `eo-sync-github`）投影 change frontmatter 的**内容契约**——本文件描述「投影成什么样」，不描述「何时触发」（触发 = archive 收口自动一次 + 手动 `eo-sync run`）。协议、发现与身份回写见 [../docs/sync-adapter-protocol.md](../docs/sync-adapter-protocol.md)。两适配器由 `.eo-project.json` 的 `sync` 段**opt-in**（存量  legacy `board` / `github` 段经兼容映射仍生效，新配置只生成 `sync` 段）；未启用即不投影、零成本。
 
 ## 通用原则
 
 - **本地文件是唯一真相源**：stub 和 GitHub issue/PR 都是 change frontmatter 的**投影**。同步严格单向（本地 → 投影），唯一逆向动作是漂移检测**告警**（只报告不回写）。
 - **幂等**：stub 整文件重写、issue 靠回写的编号去重——重复执行无副作用。
 
-## 一、Obsidian stub 适配器（`eo-sync-obsidian`；vault 模式，`sync.obsidian` 或 legacy `board.enabled`）
+## 一、Obsidian stub 适配器（`eo-sync-obsidian`；`sync.obsidian` 或 legacy `board.enabled`）
 
 生命周期起点 **draft**（全生命周期投影，看板 draft 列真实）。适配器纯投影、`identity_fields` 为空——自身不产生平台身份，`issue`/`pr` 照抄 change frontmatter。`archived` 时只改 `status`、**tags 与文件位置都不动**（`eo-change` tag 是 Bases 过滤锚点，动了卡片从所有视图消失；活跃看板隐藏 archived 由 starter 看板的 `status != "archived"` 视图级过滤解决，盘点 table 保留全史）。草稿被**放弃**（change 目录删除）→ 适配器按簿记检测孤儿、删除对应 stub，不留孤儿卡。
 
@@ -41,11 +41,10 @@ tags: [eo-change]          # eo-change 是看板过滤锚点,必含且全生命�
 `<仓库内 change.md 的相对路径>`
 ```
 
-正文只放 change 路径，且**必须是纯文本（inline code），禁止写成 markdown 链接**——change 在代码仓库内、vault 之外，Obsidian 无法解析这种链接，点了也打不开；纯文本路径供人复制到 IDE 打开。描述性信息（summary 等）一律进 frontmatter：Bases 卡面显示的是属性，正文在卡上不可见。
+正文只放 change 路径，且**必须是纯文本（inline code），禁止写成 markdown 链接**——change 在代码仓库内，Obsidian 无法解析这种链接，点了也打不开；纯文本路径供人复制到 IDE 打开。描述性信息（summary 等）一律进 frontmatter：Bases 卡面显示的是属性，正文在卡上不可见。
 
 - `todo_done/todo_total` 数 change.md §5 技术备注的 checkbox；`ac_done/ac_total` 数 §2 的 checkbox（看板一眼看验收进度）
-- **starter 看板自动创建**：开启 board 时（含历史同步），若 `<vault_root>/eo-project-board.base` **不存在**则按 [../eo-project-init/references/board-setup.md](../eo-project-init/references/board-setup.md) 的模板创建（kanban-view 主视图 + table 盘点，双条件过滤，全 vault 聚合）；**已存在则绝不触碰**——用户在 Obsidian UI 的一切调整由 Obsidian 写回该文件。kanban-view 依赖社区插件 Kanban Bases View，未装时用户可在 UI 把视图类型换官方 cards
-- stub 是投影：允许随时全量重建（`/eo-project-init` 开启开关时做历史同步就是批量执行本节写法）
+- stub 是投影：允许随时全量重建（`eo-sync run` 就是批量执行本节写法）
 
 ## 二、GitHub issue（`eo-sync-github`；`sync.github` 或 legacy `github.issue: true`）
 
@@ -76,8 +75,8 @@ PR body 自动生成：意图摘要 + AC 清单（勾选状态照抄）+ **条�
 
 `eo-project-init` 初始化（或后开时的更新分支）发现配置合并结果（`.eo-project.json` + 可选 `.eo-project.local.json` 覆盖）的 `sync` 段**缺对应适配器键**（区别于显式关闭条目 `{"enabled": false}`——那是用户已选择关闭）：
 
-1. 按 [questioning.md](questioning.md) §4 的封闭选择协议问一次（obsidian：开/关；github：issue 开/关 + pr 三选，推荐 `auto`），答案落 `sync.obsidian` / `sync.github`（新配置不写 legacy `board`/`github` 段）
+1. 按 [questioning.md](questioning.md) §4 的封闭选择协议问一次（github：issue 开/关 + pr 三选，推荐 `auto`），答案落 `sync.github`（新配置不写 legacy `board`/`github` 段）
 2. 答案写回：该顶层段已存在于 `.eo-project.local.json` → 写 local（写共享文件会被覆盖屏蔽）；否则写 `.eo-project.json`
 3. 此后 `eo-sync` 按配置静默投影，不再询问
 
-**存量迁移**（重跑 init 的 1.5 分支）：合并配置只有 legacy `board`/`github` 段、无 `sync` 键 → 提示并代写等价 `sync` 段（启用集与兼容映射派生一致，含显式关闭条目；旧段保留不删）；已有 `sync` 键 → 零动作。
+**存量迁移**（重跑 init 的 1.5 分支）：合并配置只有  legacy `board`/`github` 段、无 `sync` 键 → 提示并代写等价 `sync` 段（启用集与兼容映射派生一致，含显式关闭条目；旧段保留不删）；已有 `sync` 键 → 零动作。

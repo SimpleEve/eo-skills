@@ -33,24 +33,21 @@ class TestConditionalExecutionGuard(unittest.TestCase):
         self.assertIn("未命中条件", self.guard)
 
     def test_compiled_from_existing_sot_without_persisting(self):
-        for marker in ("change.md", "review/test 台账", "Git 基线", "用户本轮授权"):
+        for marker in ("当前 change.md", "报告", "Git 基线", "用户本轮授权"):
             self.assertIn(marker, self.guard)
         self.assertIn("每个节点派发前", self.guard)
-        self.assertIn("不写 `PROGRESS.md`", self.guard)
-        self.assertIn("不新增任何第二真相源", self.guard)
+        self.assertIn("不落盘", self.guard)
+        self.assertIn("不造第二信源", self.guard)
 
-    def test_unconfirmed_goal_cannot_dispatch_delivery_nodes(self):
-        self.assertIn("标明「未冻结」", self.guard)
-        self.assertIn(
-            "不得据此派发 eo-implement / eo-test / eo-review / eo-archive",
-            self.guard,
-        )
-        self.assertIn("confirmed change", self.guard)
+    def test_guard_does_not_invent_or_override_goal(self):
+        self.assertIn("若与已冻结的 Why / 范围 / AC 冲突", self.guard)
+        self.assertIn("必须先走用户裁决与 change 回炉", self.guard)
+        self.assertIn("控制包只投影六项，不创造新要求", self.guard)
 
     def test_runtime_authorization_cannot_move_frozen_goalposts(self):
         self.assertIn("只能收紧运行边界", self.guard)
-        self.assertIn("不得直接覆盖", self.guard)
-        self.assertIn("change revision", self.guard)
+        self.assertIn("若与已冻结的 Why / 范围 / AC 冲突", self.guard)
+        self.assertIn("用户裁决与 change 回炉", self.guard)
 
 
 class TestUnknownAuthorityAndTrade(unittest.TestCase):
@@ -77,7 +74,8 @@ class TestUnknownAuthorityAndTrade(unittest.TestCase):
         self.assertIn("B 类", self.guard)
         self.assertIn("变更前发求裁决信号", self.guard)
         self.assertIn("C 类", self.guard)
-        self.assertIn("变更前立即发求裁决信号", self.guard)
+        self.assertIn("worker 变更前立即停下", self.guard)
+        self.assertIn("总控立即上交用户", self.guard)
 
     def test_c_hard_gate_covers_every_frozen_or_hard_boundary(self):
         for marker in (
@@ -97,9 +95,10 @@ class TestUnknownAuthorityAndTrade(unittest.TestCase):
 
     def test_unknown_evidence_is_bounded_and_fail_closed(self):
         self.assertIn("只允许一次有界探测", self.guard)
-        self.assertIn("时间 / 调用预算", self.guard)
+        self.assertIn("写清问题、预算、停止条件", self.guard)
         self.assertIn("fail-closed", self.guard)
-        self.assertIn("不得写 PASS", self.guard)
+        self.assertIn("未验证 / 阻塞", self.guard)
+        self.assertIn("不得用 worker 自述补证", self.guard)
 
     def test_trade_order_is_frozen(self):
         for marker in (
@@ -110,7 +109,7 @@ class TestUnknownAuthorityAndTrade(unittest.TestCase):
             "5. 速度、成本与并行效率",
         ):
             self.assertIn(marker, self.trade)
-        self.assertIn("Trade 的默认裁决顺序", self.guard)
+        self.assertIn("取舍顺序（引 goal-contract）", self.guard)
         self.assertNotIn("硬约束 > 冻结的 Why", self.guard)
 
     def test_shared_contract_is_indexed_and_referenced(self):
@@ -136,11 +135,9 @@ class TestRiskTriggeredRouting(unittest.TestCase):
 
     def test_risk_upgrade_does_not_expand_coordinator_role(self):
         self.assertIn("可指认的风险信号", self.dispatch)
-        self.assertIn("不扩张为全面核查", self.dispatch)
-        self.assertIn("总控不得", self.dispatch)
-        for role in ("亲自实施", "执行 eo-test", "兼任 eo-review"):
-            self.assertIn(role, self.dispatch)
+        self.assertIn("只处理触发信号对应的范围", self.dispatch)
         self.assertIn("派对应有权节点", self.dispatch)
+        self.assertIn("总控不得亲自实施、改测试、兼任审查", self.dispatch)
 
     def test_substrate_template_carries_but_does_not_store_guard(self):
         dispatch = section(TEMPLATE, "## 派发", "## 等待与观测")

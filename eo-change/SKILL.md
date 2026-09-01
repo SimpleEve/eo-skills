@@ -7,7 +7,7 @@ description: |
 
 # eo-change — 发起变更
 
-发起一次变更。change 是**过程工件**：起草期承载澄清与拆解，实施期承载进度，归档即冻结为审计历史——**不合并回任何文档**（活文档 state/agent-handbook 由 doc-manager 以代码为信源另行维护）。
+发起一次变更。change 是**过程工件**：起草期承载澄清与拆解，实施期承载进度，归档即冻结为审计历史——**不合并回任何文档**。
 
 ## 核心理念
 
@@ -36,7 +36,7 @@ description: |
 
 提问之前先自答：
 
-1. 读 `eo-doc/state/` 相关篇目与 `eo-doc/agent-handbook/INDEX.md` 索引到的相关代码地图
+1. 定位相关现状与实现：`.codegraph/` 索引存在则 `codegraph explore` 优先召回；不存在则按目录收敛 + 源码直读相关段落
 2. 读 `eo-doc/changes/INDEX.md` 最近 3 条（演化方向，避免重复/冲突）
 3. **lessons 消费**：按 [../eo-shared/lessons.md](../eo-shared/lessons.md) §1 扫 INDEX 匹配 trigger/tags，命中 ≤3 条读其「规则」节带入起草；采纳的在 §1 已钉决策标注来源
 4. 涉及外部世界 → 按 [../eo-shared/research.md](../eo-shared/research.md) 消费规则查 `<project_root>/research/`
@@ -65,7 +65,7 @@ description: |
 
 ### 第七步：粒度自检（自动校验）
 
-对照 granularity.md §1：数 TODO、`wc -l` 全文。超软标建议按 AC 分组拆成 change 序列（第一个 = MVP）；超硬标**拒绝进入确认**，必须拆。可并行的后续 change 在 INDEX 摘要列附注「可与 #N 并行」。
+对照 granularity.md §1：数 TODO、`wc -l` 全文。超软标建议按 AC 分组拆成 change 序列（第一个 = MVP）；超硬标**拒绝进入确认**，必须拆。序列内后续 change 依赖前序产出的在 INDEX 摘要列标「依赖 #N」（granularity.md §6），无标注 = 串行。
 
 ### 第八步：写入 change.md + 探针对齐
 
@@ -105,7 +105,7 @@ description: |
 | 14 | [batch-export](14-batch-export/change.md) | feature | confirmed | YYYY-MM-DD | 一句话（= frontmatter summary） |
 ```
 
-存量 INDEX 含「档」列（v2 轻/全档）→ 首次更新时顺手整表去掉该列（v3 无档位），历史行的档值不保留。
+存量 INDEX 含「档」列→ 首次更新时顺手整表去掉该列，各行的档值不保留。
 
 ## 关键约束
 
@@ -117,4 +117,4 @@ description: |
 - **回炉只走回炉子流程**：先过更新 vs 新开边界；勾选失效逐条处理
 - **无 `fix` 类型**；bug 走 /eo-fix
 - **status 由 skill 流转**（见 [../eo-shared/conventions.md](../eo-shared/conventions.md)），用户不手改
-- **change 阶段不写代码**、不改活文档；归档不反写（由 eo-archive 触发 doc sync）
+- **change 阶段不写代码**；归档不反写（change 目录冻结为审计历史）

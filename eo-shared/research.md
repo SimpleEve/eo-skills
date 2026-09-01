@@ -4,7 +4,7 @@
 
 ## 目录与文件
 
-`<project_root>/research/` 下每篇一个主题，可按子目录分批（如 `research/v2/`）。frontmatter 必填：
+`<project_root>/research/` 下每篇一个主题，可按子目录分批（如 `research/auth-survey/`）。frontmatter 必填：
 
 ```markdown
 ---

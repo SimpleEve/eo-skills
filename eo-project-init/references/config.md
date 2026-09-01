@@ -1,6 +1,6 @@
 # eo-skills 配置约定
 
-所有 eo-* skill 共享的路径与模式约定。本文档是**唯一权威来源**——其它 skill 引用本文，不重复定义。
+所有 eo-* skill 共享的路径与配置约定。本文档是**唯一权威来源**——其它 skill 引用本文，不重复定义。
 
 ## 用户级数据根 `~/.eo/`
 
@@ -8,59 +8,29 @@
 
 | 路径 | 性质 | 谁维护 |
 |------|------|--------|
-| `~/.eo/config.json` | eo-skills 全局配置（旧 `~/.eo-skills.json` 的继任者） | 用户手工 / `eo-project-init` 首次运行时引导生成 |
+| `~/.eo/projects.json` | eo 生态项目注册表（`eo-board --all` / `eo-sync watch --all` 跨项目枚举） | `eo-board --register` / `--unregister` |
 | `~/.eo/platform.db` | eo-platform 本地索引缓存（SQLite） | eo-platform |
 | `~/.eo/logs/` | eo-platform 日志（按需） | eo-platform |
+| `~/.eo/handbook-templates/<preset>/` | handbook 模板私有库（同名 preset 整套覆盖内置库） | 用户手工维护 |
 
 根路径可通过环境变量 `EO_HOME` 覆盖（例如跑测试或多账号隔离时指向临时目录）。未设置时一律使用 `~/.eo/`。涉及该路径的内联命令一律写 `"${EO_HOME:-$HOME/.eo}"`。
 
-**自动迁移**：若 `~/.eo-skills.json` 存在且 `~/.eo/config.json` 不存在，`eo-project-init` 启动时**静默执行一次**：
-
-```bash
-EO_HOME="${EO_HOME:-$HOME/.eo}"
-mkdir -p "$EO_HOME"
-mv ~/.eo-skills.json "$EO_HOME/config.json"
-```
-
-迁移后在终端打印一行提示，之后不再检查旧路径。已完成迁移的机器或新机器，只读 `$EO_HOME/config.json`。
-
-## 三个配置文件
+## 两个配置文件
 
 | 文件 | 作用域 | 谁维护 | 何时读 |
 |------|--------|--------|--------|
-| `~/.eo/config.json` | 用户级 | 用户手工 / `eo-project-init` 首次运行时引导生成 | **仅 `eo-project-init` 读**（作为新项目的默认值）。eo-platform 等平台级进程可选只读消费（不写）。 |
 | `<repo>/.eo-project.json` | 项目级·团队共享 | `eo-project-init` 生成，后续 skill 只读 | **所有 eo-* skill 启动时必读** |
 | `<repo>/.eo-project.local.json` | 项目级·个人/机器覆盖（可选，**不提交**） | 协作者手工 / `eo-project-init` 协作者接入分支生成 | 与 `.eo-project.json` 同时读，顶层字段覆盖合并（local 优先） |
 
 **合并结果**（`.eo-project.json` + 可选 local 覆盖）是**自包含**的——含所有需要的绝对路径，其它 skill 不需要再去读用户级文件。
-
-## `~/.eo/config.json` schema（用户级，可选）
-
-```json
-{
-  "vault_root": "/Users/xxx/EveOS",
-  "projects_subdir": "30-我的项目",
-  "create_symlink": true,
-  "default_mode": "vault"
-}
-```
-
-| 字段 | 类型 | 默认 | 说明 |
-|------|------|------|------|
-| `vault_root` | string | — | vault 根路径（绝对）。vault 模式的前提，但仅凭它存在不改变新项目的默认推荐 |
-| `projects_subdir` | string | `"projects"` | vault 下的项目子目录（vault 模式才用到） |
-| `create_symlink` | bool | `true` | vault 模式下是否在代码仓库建 `<repo>/<doc_root>/vault` 软链指向 `<project_root>` |
-| `default_mode` | `"vault"` \| `"local"` | `"local"` | 新项目默认模式；显式配 `"vault"` 时 init 询问才推荐 vault |
-
-**整个文件可选**。完全不存在时等同于「纯本地模式，永不碰 vault」。
 
 ## `<repo>/.eo-project.json` schema（项目级，必需）
 
 ```json
 {
   "project_name": "my-project",
-  "mode": "vault",
-  "project_root": "/Users/xxx/EveOS/30-我的项目/my-project",
+  "mode": "local",
+  "project_root": "/Users/xxx/my-project/.eo-project",
   "doc_root": "eo-doc",
   "kanban_path": null,
   "sync": {
@@ -73,17 +43,18 @@ mv ~/.eo-skills.json "$EO_HOME/config.json"
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `project_name` | string | ✅ | 项目显示名 |
-| `mode` | `"vault"` \| `"local"` | ✅ | 运行模式 |
-| `project_root` | string（绝对路径） | ✅ | **项目管理侧根**。vault 模式=vault 项目目录；local 模式=`<repo>/.eo-project`。写成相对路径时（v1 遗留形态）读取层按 repo root 解析并解软链后放行 + 告警，见下「读取层归一化」 |
+| `mode` | `"local"` | ✅ | 运行模式 |
+| `project_root` | string（绝对路径） | ✅ | **项目管理侧根**，= `<repo>/.eo-project` 的绝对路径。写成相对路径时（存量形态）读取层按 repo root 解析并解软链后放行 + 告警，见下「读取层归一化」 |
 | `doc_root` | string（相对 repo root） | ✅ | **代码侧根**，默认 `"eo-doc"` |
-| `kanban_path` | null | ❌ | **已废弃**（旧手工看板体系退役）。新配置一律 `null`；存量值被所有 skill 忽略。项目级总览 = Bases 聚合各项目 roadmap.md frontmatter |
-| `board.enabled` | bool | ❌（默认 `false`） | **legacy**（新配置不再生成，仅兼容映射消费；首选写 `sync.obsidian.enabled`）。change 看板投影开关（vault 模式才有意义）。开启后 `eo-sync`（obsidian 适配器）把 stub 卡片投影到 `<project_root>/board/`，见 `eo-shared/board-github.md` 与下文 `sync` 段 |
-| `board.stub_dir` | string | ❌（默认 `"board"`） | **legacy**（首选 `sync.obsidian.stub_dir`）。stub 目录名（相对 `project_root`） |
-| `github.issue` | bool | ❌（默认 `false`） | **legacy**（首选 `sync.github.issue`）。change ↔ GitHub issue 联动开关 |
-| `github.pr` | `"auto"` \| `"always"` \| `"never"` | ❌（默认 `"never"`） | **legacy**（首选 `sync.github.pr`）。archive 时的 PR 策略：`auto` = 在非默认分支且有 remote 时自动建 PR |
-| `sync` | object \| null | ❌ | **首选**（init 新配置写本段，legacy `board`/`github` 仅存量兼容）。`eo-sync` 适配器启用制。**键存在性决定是否回落**：缺省（键不在）→ 由 `board`/`github` 兼容映射派生；键存在（含空 `{}` 或显式 `null`）→ 完全以其为准、绝不回落，其中 `{}`/`null` = 显式零目标；object 以外的类型（数字/字符串等）→ 配置错误。schema 见下 |
+| `kanban_path` | null | ❌ | 一律 `null`；存量值被所有 skill 忽略。项目级总览 = Bases 聚合各项目 roadmap.md frontmatter |
+| `board.enabled` | bool | ❌（默认 `false`） | **存量字段**（新配置不再生成，仅兼容映射消费；首选写 `sync.obsidian.enabled`）。change 看板投影开关。开启后 `eo-sync`（obsidian 适配器）把 stub 卡片投影到 `<project_root>/board/`，见 `eo-shared/board-github.md` 与下文 `sync` 段 |
+| `board.stub_dir` | string | ❌（默认 `"board"`） | **存量字段**（首选 `sync.obsidian.stub_dir`）。stub 目录名（相对 `project_root`） |
+| `github.issue` | bool | ❌（默认 `false`） | **存量字段**（首选 `sync.github.issue`）。change ↔ GitHub issue 联动开关 |
+| `github.pr` | `"auto"` \| `"always"` \| `"never"` | ❌（默认 `"never"`） | **存量字段**（首选 `sync.github.pr`）。archive 时的 PR 策略：`auto` = 在非默认分支且有 remote 时自动建 PR |
+| `sync` | object \| null | ❌ | **首选**（init 新配置写本段，存量 `board`/`github` 仅存量兼容）。`eo-sync` 适配器启用制。**键存在性决定是否回落**：缺省（键不在）→ 由 `board`/`github` 兼容映射派生；键存在（含空 `{}` 或显式 `null`）→ 完全以其为准、绝不回落，其中 `{}`/`null` = 显式零目标；object 以外的类型（数字/字符串等）→ 配置错误。schema 见下 |
+| `state` | object | ❌ | state 现状文档层启用制。键缺失 = 未表态（init 走问答）；`{"enabled": true}` 启用，`{"enabled": false}` 显式关闭不再询问。schema 见下 |
 
-缺省 `board` / `github` 字段 = 全部关闭（向后兼容 v1 生成的配置；新配置不再含这两段）。
+缺省 `board` / `github` 字段 = 全部关闭（存量项目兼容映射照常生效；新配置不含这两段）。
 
 ### `sync` 段（eo-sync 适配器启用制）
 
@@ -104,33 +75,37 @@ mv ~/.eo-skills.json "$EO_HOME/config.json"
 | `sync.<name>.enabled` | bool，仅 `true` 的适配器会被 `eo-sync run` 执行 |
 | `sync.<name>.<其它>` | 该适配器的自定义参数，`enabled` 之外的键原样透传给适配器 |
 
-**兼容映射**：以**键是否存在**判定（非「值是否非空」）——合并配置**无** `sync` 键时由存量 `board` / `github` 段等价派生启用集（`board.enabled`→`obsidian`、`github.issue`/`pr`→`github`）；`sync` 键**存在**（含空 `{}` 或显式 `null`）则完全以其为准、不与 `board`/`github` 深合并，其中 `{}`/`null` 是用户显式选择的零目标（绝不回落存量段）；`sync` 值为 object 以外的类型 → 配置校验失败（不静默降级）。存量项目无需改配置即按等价映射生效。正式收编已由 change `sync-config-consolidation` 完成：init 新配置只写 `sync` 段，重跑 init（1.5 分支）对仅有旧段的项目提示并代写等价 `sync` 段（旧段保留不删）。协议契约见 [../../docs/sync-adapter-protocol.md](../../docs/sync-adapter-protocol.md)。
+**兼容映射**：以**键是否存在**判定（非「值是否非空」）——合并配置**无** `sync` 键时由存量 `board` / `github` 段等价派生启用集（`board.enabled`→`obsidian`、`github.issue`/`pr`→`github`）；`sync` 键**存在**（含空 `{}` 或显式 `null`）则完全以其为准、不与 `board`/`github` 深合并，其中 `{}`/`null` 是用户显式选择的零目标（绝不回落存量段）；`sync` 值为 object 以外的类型 → 配置校验失败（不静默降级）。存量项目无需改配置即按等价映射生效。Init 新配置只写 `sync` 段，重跑 init（1.5 分支）对仅有旧段的项目提示并代写等价 `sync` 段（旧段保留不删）。协议契约见 [../../docs/sync-adapter-protocol.md](../../docs/sync-adapter-protocol.md)。
+### `state` 段（state 现状文档层）
+
+`eo-doc/state/` 现状篇（业务现状活文档，代码为唯一信源）是否启用，由 `state` 段显式表达：
+
+```json
+{ "state": { "enabled": true } }
+```
+
+- 键缺失 = 未表态——init（首建与 1.5 分支）按封闭选择协议问一次，结论落本段
+- `enabled: true`：`/eo-doc-manager sync` 按 cursor 增量再生 `state/` 现状篇（`eo-doc/.sync-cursor` 记录游标）；archive 收口自动联动
+- `enabled: false`：显式关闭，不再询问；存量 `state/` 目录冻结留存（不删除）
+- `enabled` 非 bool 或 `state` 值为 object 以外类型 → 配置校验失败
+- 团队共享字段（文档层偏好是团队口径），不进 `.eo-project.local.json` 的机器相关覆盖清单
 
 **设计约束**：
-- `project_root` **生成时**永远写绝对路径。vault 模式不依赖软链——软链只是给用户查看方便，skill 一律走 `project_root`。
-- **读取层归一化**（存量兼容）：合并结果的 `project_root` 是相对路径时（v1 遗留常写 `<doc_root>/vault` 这类软链相对路径），读取层按 repo root 解析并解软链，得到已存在的目录即放行并在 stderr 告警一行；解析不到已存在目录则仍按配置校验失败处理（不猜、不静默放行）。下游拿到的 `project_root` 恒为绝对路径，消费方无需感知。重跑 `/eo-project-init` 会把它回写成绝对路径（落点按 local 优先规则）。
+- `project_root` **生成时**永远写绝对路径，skill 一律走 `project_root`。
+- **读取层归一化**（存量兼容）：合并结果的 `project_root` 是相对路径时（存量常写成软链相对路径），读取层按 repo root 解析并解软链，得到已存在的目录即放行并在 stderr 告警一行；解析不到已存在目录则仍按配置校验失败处理（不猜、不静默放行）。下游拿到的 `project_root` 恒为绝对路径，消费方无需感知。重跑 `/eo-project-init` 会把它回写成绝对路径（落点按 local 优先规则）。
 - `.eo-project.json` 本身**提交到仓库**（团队共享配置）；`.eo-project.local.json` **不提交**（`eo-project-init` 默认写入 `.gitignore`）。
 - 必填校验以**合并结果**为准——单个文件不要求自包含。
 
 ## `<repo>/.eo-project.local.json`（项目级个人覆盖，可选）
 
-**动机**：`.eo-project.json` 提交进仓库，但 `project_root`（绝对路径）、`mode`、`sync`（obsidian 侧因 vault 而异）因人/机器而异——协作者 clone 后拿到的是别人的 vault 路径。local 文件承载这些机器相关字段，共享文件只留团队口径。
+**动机**：`.eo-project.json` 提交进仓库，但 `project_root`（绝对路径）、`mode`、`sync` 因人/机器而异——协作者 clone 后拿到的是别人机器上的路径。local 文件承载这些机器相关字段，共享文件只留团队口径。
 
 **规则**：
 
 - 与 `.eo-project.json` **同目录**；schema 相同，**所有字段可选**。
-- **顶层浅合并**，local 优先：local 出现的顶层字段整段覆盖共享文件的同名字段（`sync` 及 legacy `board` / `github` 是对象也**整段覆盖**，不做深合并）。
+- **顶层浅合并**，local 优先：local 出现的顶层字段整段覆盖共享文件的同名字段（`sync` 及 存量 `board` / `github` 是对象也**整段覆盖**，不做深合并）。
 - 团队仓库的 `.eo-project.json` 可只保留共享字段（`project_name` / `doc_root`），机器相关字段（`project_root` / `mode` / `sync`）由每人的 local 文件提供。
 - **字段写回**（如 sync 段后开补齐，见 `eo-shared/board-github.md`）：该顶层字段已存在于 local 文件 → 写 local（写共享文件会被覆盖屏蔽）；否则写 `.eo-project.json`。
-
-## 运行模式对比
-
-| 方面 | `vault` 模式 | `local` 模式 |
-|------|-----------|-----------|
-| 触发条件 | 有 `vault_root` 且用户在 init 询问中选 vault（`default_mode: "vault"` 时为推荐项） | 缺省推荐 |
-| `project_root` 落在哪 | `<vault_root>/<projects_subdir>/<project_name>/` | `<repo>/.eo-project/` |
-| 是否建软链 | 默认建 `<repo>/<doc_root>/vault` → `<project_root>`（整个 vault 项目目录单点挂进来；`create_symlink` 控制） | 不建 |
-| `.eo-project/`（local 模式目录）入 git | — | **缺省随仓库提交**；用户明确不想提交时才进 `.gitignore` |
 
 ## Skill 启动时的配置解析流程
 
@@ -142,14 +117,12 @@ mv ~/.eo-skills.json "$EO_HOME/config.json"
    ❌ 未找到 .eo-project.json
    请先运行 /eo-project-init 初始化项目。
    ```
-3. 找到 → 解析其内容；**同目录存在 `.eo-project.local.json` 时先做顶层字段覆盖合并（local 优先）**，后续一律用合并结果中的路径（**不读 `~/.eo/config.json`**）
+3. 找到 → 解析其内容；**同目录存在 `.eo-project.local.json` 时先做顶层字段覆盖合并（local 优先）**，后续一律用合并结果中的路径（**不读用户级文件**）
 4. 合并结果缺必填字段（`project_root` / `mode` 等）→ 报错并提示运行 `/eo-project-init`（协作者 clone 场景见其「协作者接入」分支）
 
 **`eo-project-init` 的启动行为更特殊**：
-1. **迁移检查**：若 `~/.eo-skills.json` 存在且用户级配置不存在 → 自动迁移到 `"${EO_HOME:-$HOME/.eo}"/config.json`，打印一行提示。
-2. 先看 cwd 是否已有 `.eo-project.json`（已初始化过）。
-3. 未初始化时，读 `~/.eo/config.json` 拿默认值，提示用户确认/覆盖。
-4. 用户级文件不存在 → 进入首次引导流程（见 `eo-project-init/SKILL.md`）。
+1. 先看 cwd 向上是否已有 `.eo-project.json`（已初始化过 → 走「1.5 更新/修复分支」）。
+2. 未初始化 → 进入首次创建流程（见 `eo-project-init/SKILL.md`）。
 
 ## 目录结构参考
 
@@ -159,13 +132,10 @@ mv ~/.eo-skills.json "$EO_HOME/config.json"
 
 ```
 eo-doc/
-├── agent-handbook/   # 必建，代码架构（AI）
 ├── changes/          # 必建，change 工件流
-├── templates/        # 必建（空），eo-* 扩展点
-└── state/            # 按需，系统当前状态描述（sync 时首建）
+├── agent-handbook/   # 可选，Agent 操作手册（篇目含 INDEX.md）
+└── templates/        # 必建（空），eo-* 扩展点
 ```
-
-**已移除（不再规划）**：`design/`、`doc/`、`research/`、`knowledgebase/`——`doc/` 语义迁到 `state/`；design 迁项目管理侧 `docs/`；调研沉淀归项目管理侧 `research/`；通用领域术语归 `state/glossary.md`。若将来知识规模大到检索吃力，升级路径是索引层而非目录（backlog 有远期条目）。
 
 ### 项目管理侧（`project_root/`）
 
@@ -179,12 +149,9 @@ eo-doc/
 ├── decisions/     # 按需，首次记录决策时建
 ├── lessons/       # 按需，首次记录经验时建（**项目级**，替代全局 _lessons/）
 ├── brainstorm/    # 按需，eo-brainstorming 首次产出时建
-├── board/         # 按需，change 看板 stub（sync.obsidian（或 legacy board.enabled）启用时由 eo-sync 投影维护）
+├── board/         # 按需，change 看板 stub（sync.obsidian（或存量 board.enabled）启用时由 eo-sync 投影维护）
 ├── research/      # 按需，调研沉淀（带 INDEX + frontmatter；eo-recall / eo-change 事实自查消费）
 └── docs/          # 按需，原始 PRD / 设计 / 规划
 ```
 
-vault 模式下（`create_symlink: true` 时），在代码侧建整目录软链：
-- `<repo>/<doc_root>/vault` → `<project_root>`
-
-**方向说明**：Obsidian 侧是**源**，整个项目目录作为一个软链点挂到代码侧 `<doc_root>/vault/` 下。**单点整挂**，不是按子目录一个个软链——后者在 vault 侧新建 `docs/` / `phases/` 等子目录时还要回代码侧补软链，不自动。
+`.eo-project/`（即 `project_root`）**缺省随仓库提交**——管理侧是协作者最需要的项目记忆；用户明确不想提交时才追加进 `.gitignore`。

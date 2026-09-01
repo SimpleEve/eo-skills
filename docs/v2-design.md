@@ -4,6 +4,7 @@
 > 日期：2026-07-07
 > 输入：vault/eo-skill/research/v2/（现状盘点 + 5 竞品调研）、vault/eo-skill/decisions/v2/（6 个已钉决策）
 > ⚠️ 2026-07-18 起：三档制（docs/tier-design.md）引入 change 轻/全两档；本文中「单轨 / 不设中间档 / 不引入 light change / 每 change 强制 review」相关表述已被取代，冲突处以 tier-design 为准。
+> ⚠️ 2026-08-04 起：测试资产写入权统一归 eo-test；eo-implement 在全档和轻档都只运行测试、不修改测试资产。轻档由独立 `/eo-test lock` 前置锁定后再交另一上下文 implement。下文冲突处以 eo-test / eo-implement 当前 SKILL.md 为准。
 
 ---
 
@@ -31,11 +32,11 @@
 | eo-module-init | **移除** | 模块概念取消（决策 #3）；新项目/新能力首开即 bootstrap change |
 | eo-change | **重构（核心）** | 新模板 + 内嵌提问纪律 + AC 前置 + 粒度校验 |
 | eo-brainstorming | **增强** | 保留全部机制，新增「捕获出口」：结论可直接拆成 change 序列 |
-| eo-implement | **调整** | TODO 分批 + 批间 checkpoint + commit 纪律（推荐非强制） |
+| eo-implement | **调整** | TODO 分批 + 批间 checkpoint + commit 纪律；只写业务实现，测试资产零写入 |
 | eo-fix | **重构** | 三层按需付费：快路直接修 + 落点记账（默认）；语义分歧才走证据瀑布取证（口述 > AC > state 佐证 > git 归属）；难缠 bug 深挖模式（吸收 eo-investigate 候选） |
 | eo-archive | **重构** | 不再反写 spec；改为「校验 → commit 区间 → 触发 doc sync → 冻结」 |
 | eo-doc-manager | **增强** | 移除 dev/ 概念；sync 支持 range 与脏变更三选项；归档计数 + 一致性校验 |
-| eo-test | **微调** | 测试锚点从 spec/change §6 改为 AC；其余不变 |
+| eo-test | **调整** | 测试资产唯一写入者；轻档前置 lock，全档以 AC 为锚审计、补缺并重验证 |
 | eo-review | **微调** | 检查表以 AC 为锚；清理 spec/模块引用 |
 | eo-change-review | **保留现状** | 决策 #1：暂不轻量化，预留观测（已入 backlog）；新增粒度超标检查项 |
 | eo-project-init | **调整** | 骨架与注入内容更新；待确定问题全部走封闭选择协议（questioning.md §4，runtime 中立） |
@@ -53,7 +54,7 @@
 |---|---|---|---|
 | state/ | 活文档（业务现状） | eo-doc-manager | 代码 |
 | agent-handbook/ | 活文档（代码地图） | eo-doc-manager | 代码 |
-| changes/<id>/ | 过程工件，归档冻结 | eo-change / eo-implement / eo-archive | 用户意图 + 决策台账 |
+| changes/<id>/ | 过程工件，归档冻结 | eo-change / eo-test / eo-implement / eo-review / eo-archive | 用户意图 + 决策台账 + 验证/审查证据 |
 | DESIGN.md | 项目级设计真相源（新增） | eo-design | 设计决策 |
 
 移除：`spec.md`、`spec-history.md`、`eo-doc/dev/<module>/` 整个模块维度。
@@ -67,14 +68,16 @@
                                       │
 eo-change（提问纪律 → AC 前置 → TODO 分批拆解 → 粒度校验 → 对话确认，status: confirmed）
    │
-eo-implement（按 Batch 执行，批末 checkpoint + commit；**只跑轻验证**；fix 循环归此）
+eo-implement（按 Batch 执行，批末 checkpoint + commit；**测试只跑不写**；fix 循环只修业务实现）
    │
-eo-test（AC 为锚 + 读码取输入；**重验证唯一执行者**）⇄ eo-review（AC 为检查表；强制）
+eo-test（AC 为锚 + 读码取输入；**测试资产与重验证唯一执行者**）⇄ eo-review（AC 为检查表；强制）
    │   两者先后无固定默认，agent 按 change 的风险面择一：
    │   行为面广、重验证项多 → 先 test；逻辑密集、边界多 → 先 review（不起环境、早暴露，test 只跑终版）
    │
 eo-archive（AC 全勾校验 → commit 区间 → doc-manager sync → 冻结 change）
 ```
+
+轻档旁路：`eo-change confirmed → /eo-test lock（独立 tester，status 不变）→ eo-implement（另一上下文）→ 完成门 → eo-archive`。轻档不产事后 `test.md`，但不会跳过 tester。
 
 bug 入口：eo-fix 诊断路由（→ implement 修 / 就地更新 change / 新开 change）。
 
@@ -152,10 +155,10 @@ tmp/eo/
 
 - **用户视角、可独立验证**，每条一个可勾选项，附验证方式。Success Criteria 风格要求技术无关（正例「用户 3 步内完成导出」，反例「API 200ms 返回」）。
 - 复杂行为可附 Given/When/Then 场景（可选，不强制）。
-- AC 的三重身份：implement 的完成判据（TODO 全勾 + auto-light 通过 = **实施完成**，不等于验收完成）、review 的检查表、fix 的期望行为锚点（接替 v1 的 F-spec）。
-- **三级验证归属**：分的是**「谁在哪个阶段勾」**——`auto-light`（不起环境即可验：typecheck/lint/单测/静态扫描/单次冒烟，implement 批末勾）/ `auto-heavy`（起服务·多环境组合·点击流，**eo-test** 一次跑完并勾）/ `manual`（「人工:」标记，只有用户能勾）。**light/heavy 不在起草期标注**（起草时无从预判成本），由 agent 读「验证」栏当场判、判不准按 heavy；manual 相反必须起草期标（它问的是「人能不能判」，不是「贵不贵」）。三方勾选权不重叠——解决「同一套 E2E 矩阵在 implement / test / fix 各重演一遍」，重验证一次也不少，只是不跑三遍。
+- AC 的三重身份：implement 的完成判据（TODO 全勾 + 本阶段可用已有测试/不落库探针证明的 auto-light 通过 = **实施完成**，不等于验收完成；需新增测试资产的 light 转 tester）、review 的检查表、fix 的期望行为锚点（接替 v1 的 F-spec）。
+- **三级验证归属**：分的是**「谁在哪个阶段勾」**——`auto-light` 默认由 implement 用已有测试或不落库探针批末验证，必须新增测试资产时留未勾并标「待 test（需测试资产）」转 eo-test；`auto-heavy`（起服务·多环境组合·点击流）由 **eo-test** 一次跑完并勾；`manual`（「人工:」标记）只有用户能勾。**测试资产另有更硬的单一所有权**：测试文件、fixture、mock、harness、测试配置的新增、修改、删除全部归 eo-test，implement 全程只跑不写。light/heavy 不在起草期标注，由 agent 读「验证」栏当场判、判不准按 heavy。
 - **重验证的环境纪律**：环境是共享资源，**agent 不拥有它的生命周期**——探测复用、用完不停，只在换环境组合时重启。「不停」能安全成立的前提是重验证已收敛到 eo-test 单一阶段（环境单主）；多 agent 并行争抢时该策略不成立，须先做归属分流。起停命令与单次代价属**项目特异知识**，走项目 lesson 经 implement/test/fix 的消费步骤送达，不进任何通用 skill。
-- **人工验收单 acceptance.md**：implement 完成时生成（软门不阻塞，规范见 eo-shared/acceptance.md：人话摘要 + 环境准备 + 逐项操作/预期/勾选框，**用户只勾不打字**、异常才写一句），review 通过后速报提示可验收，archive 是**唯一硬门**（核对勾选与异常行 + 已勾项一键复核，支持「带我验收」引导走查；**未勾的 auto-heavy 一并过此门**——跳过 eo-test 时它们必然未勾，不得静默放行）；解决「过度自动化导致用户不知何时/如何验收」与「验收指引易失、只有断言没有操作步骤」。
+- **人工验收单 acceptance.md**：implement 完成时生成（软门不阻塞，规范见 eo-shared/acceptance.md：人话摘要 + 环境准备 + 逐项操作/预期/勾选框，**用户只勾不打字**、异常才写一句），review 通过后速报提示可验收，archive 是**唯一硬门**（核对勾选与异常行 + 已勾项一键复核，支持「带我验收」引导走查；**未勾的 auto-heavy 与「待 test（需测试资产）」auto-light 一并过此门**，不得静默放行）；解决「过度自动化导致用户不知何时/如何验收」与「验收指引易失、只有断言没有操作步骤」。
 - AC 先于 TODO 产出——TODO 拆解必须逐条映射到 AC（每条 TODO 标注「对应 AC-x」）。
 
 ### 3.4 TODO 拆解与分批
@@ -264,11 +267,12 @@ created: 2026-07-07
 
 ### 5.1 eo-implement
 
-- 首次执行：写入 `base_commit`（当前 HEAD），status 自动 `confirmed → implementing`。
-- **按 Batch 执行**：批末 checkpoint——验证该批对应 AC、勾选 TODO、汇报、询问「继续下一批 / 停」。
+- 首次执行：全档写入 `base_commit`（当前 HEAD）；轻档消费独立 `/eo-test lock` 已写入的 `base_commit` / `test_lock_commit`，然后 status 自动 `confirmed → implementing`。
+- **按 Batch 执行**：批末 checkpoint——只运行已有测试与不落库探针来验证对应 AC、勾选 TODO、汇报、询问「继续下一批 / 停」。需要新增测试资产的 AC 保持未勾，标「待 test（需测试资产）」转 eo-test。
+- **测试资产零写入**：不得新增、修改、删除测试文件、fixture、mock、harness 或测试配置；Test/Review 中测试资产 finding 也回原 tester，不进入 implement 修复循环。
 - **commit 纪律（决策 #6，推荐非强制）**：推荐一次 change 一次 commit；TODO 分批时允许一批一 commit，message 统一带 change-id 前缀（`[batch-export] ...`——slug，绝不用 seq：commit 不可变，编号可让号），便于 archive 归集区间。
 - fix 循环：change 生命周期内（含 archived 前）的 bug 修复归 implement，不开新 change（v1 定位保留）。
-- 全部 TODO 完成 + auto AC 全过 → 生成人工验收单（有人工项时，软门不阻塞）→ 提示走 test/review；review 通过后 status 自动置 `reviewed`（= 代码审查通过，manual 项可迟至 archive 硬门确认。曾命名 `done`——但「done 列还有事没完」在看板上是误导，2026-07-14 改名，存量 done 读到视同 reviewed）。
+- 全部 TODO 完成 + implement 负责的 auto-light 全过 → 生成人工验收单（有人工项时，软门不阻塞）→ 有 heavy 或测试资产缺口时必须安排 test，再按风险决定 test/review 先后；review 通过后 status 自动置 `reviewed`（= 代码审查通过，manual 项可迟至 archive 硬门确认。曾命名 `done`——但「done 列还有事没完」在看板上是误导，2026-07-14 改名，存量 done 读到视同 reviewed）。
 
 ### 5.2 eo-fix（重构：三层按需付费）
 
@@ -322,8 +326,8 @@ created: 2026-07-07
 
 ## 7. eo-test / eo-review / eo-change-review（微调）
 
-- **eo-test**：测试用例来源从 change §6 测试标准改为 AC 逐条推导（AC → 至少一个可执行验证）；「严禁改业务代码」不变。后续增补三条：**① 重验证唯一执行者**（auto-heavy AC 在此一次跑完并勾选，implement 不跑）；**② AC 决定验什么、代码决定拿什么验**——阶段一先读 diff 从分支/默认值/空值处理取输入，只按 AC 文字正向推导只会验到「AC 想到的路径」（`""`/`null`/越界值这类输入 AC 里永远不会写，再多跑几遍矩阵也漏）；**③ 补 lessons 消费步骤**——环境的起停命令与代价是项目特异知识，只能经此送达。
-- **eo-review**：检查维度改为「AC 覆盖（逐条核对）+ 代码质量 P0/P1/P2」；清理 spec/模块引用。后续增补：**未勾的 auto-heavy / manual AC 不算缺陷**（勾选权分别归 test 与用户；review 在 test 之前跑时它们本就未勾，只核对实现是否覆盖）。
+- **eo-test**：测试资产的唯一写入者，仍严禁改业务代码。轻档实现前用 `/eo-test lock` 把 auto AC 锁成 RED / characterization / 静态检查并提交，不产 `test.md`；全档实现后从 AC 推导断言、从代码分支取边界输入，审计既有覆盖后只补缺，并作为 auto-heavy 重验证唯一执行者。Review 指向测试资产或根因为 `test-asset` 的 finding 也回 eo-test 修复。
+- **eo-review**：检查维度改为「AC 覆盖（逐条核对）+ 代码质量 P0/P1/P2」；清理 spec/模块引用。未勾的 auto-heavy / manual，以及明确转 tester 的测试资产型 auto-light，不因未勾本身判缺陷。finding 按 `implementation / test-asset / requirement` 分流，不能把测试资产问题回给 implement。
 - **eo-change-review**（决策 #1：保留现状深度）：检查维度中 spec Delta 正确性删除，替换为「AC 质量（可测、无歧义、用户视角）+ 粒度合规（§3.5 指标）+ TODO↔AC 映射完整性」。观测其使用率与价值，后续决定是否轻量化（backlog 已记）。
 
 ### 7.1 对话速报（硬性要求）
@@ -398,7 +402,7 @@ P2（可后置）：
 install.sh 是逐目录软链，跨 skill 相对路径引用不可靠。方案：新建 `eo-shared/` 目录（无 SKILL.md，不可触发），随包一起软链到 `~/.claude/skills/eo-shared`，存放单一来源的共享规范：
 
 - `questioning.md` — 提问纪律全文（eo-change / eo-brainstorming / eo-design 引用）
-- `ac-spec.md` — 验收清单规范：三级验证归属、重验证的环境纪律（eo-change / eo-implement / eo-test / eo-review / eo-fix 引用）
+- `ac-spec.md` — 验收清单规范：三级验证归属、测试资产单一所有权、轻档独立锁定、重验证环境纪律（eo-change / eo-implement / eo-test / eo-review / eo-fix 引用）
 - `granularity.md` — 粒度指标、trivial 硬判据与拆分决策表
 - `conventions.md` — 横切约定：tmp/eo/ 工件命名空间（§2.3）、change 身份（slug/seq 双层）、commit 前缀（change-id / fix: / ui:）、状态词汇总表（看板全序 + 离板状态）
 

@@ -18,13 +18,15 @@ Claude Code 会话内 Agent 工具原生可用，恒成立。模型按偏好或�
 
 ## 等待与观测
 
-后台子 agent 完成会自动唤醒总控（harness 级信号，无需 worker 配合），这是主信号。30 分钟兜底窗口：等待期挂起必须带超时（定时唤醒 / Monitor 均可）。窗口内观测**只读产物不打扰 worker**：change.md 勾选、review/test 台账增量、git log——不 SendMessage 问「进展如何」（打断即污染 worker 上下文）。到点发进度报告再续等。
+后台子 agent 完成会自动唤醒总控（harness 级信号，无需 worker 配合），这是主信号。10 分钟兜底窗口：等待期挂起必须带超时（定时唤醒 / Monitor 均可）。窗口内观测**只读产物不打扰 worker**：change.md 勾选、review/test 台账增量、git log——不 SendMessage 问「进展如何」（打断即污染 worker 上下文）。到点发进度报告再续等。
 
 ## 回收
 
 完成通知只用于唤醒总控和定位产物。正常路径按 SKILL.md ③ 读取 frontmatter 当前状态、预期工件指针、当前基线与最新结构化处置后直接路由，不打开完整 diff、不抽查或复做节点内容。只有这些事实缺失 / 冲突、出现可观察越界、计划外判据变化、Unknown B / C 或证据探测失败等客观风险信号时，才针对对应异常升级；需要实质判断就派 eo-review / eo-test，不由总控补做节点工作。
 
 ## 已知陷阱
+
+> 本节只放出厂陷阱；运行时陷阱记在 `~/.eo-skills/loop/preferences/` 的「已知陷阱」节（前缀 `[claude-subagent]`），一并读。
 
 - (2026-07-19) 子 agent 上下文独立：prompt 里不给 change 路径它就会自己猜——路径必给
 - (2026-07-19) 用词锚定：prompt 写「看看 / 检查一下」会弱化执行强度——用节点本义动词（审查 / 实施 / 验证）

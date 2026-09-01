@@ -46,7 +46,8 @@ def build_stub(change, project_name, updated_value):
     fm.append(f"project: {project_name}")
     fm.append(f"status: {change.get('status')}")
     fm.append(f"type: {change.get('type') or 'feature'}")
-    fm.append(f"tier: {change.get('tier') or 'full'}")
+    if change.get("tier"):
+        fm.append(f"tier: {change['tier']}")
     fm.append(f"summary: {change.get('summary') or ''}")
     if change.get("branch"):
         fm.append(f"branch: {change['branch']}")
