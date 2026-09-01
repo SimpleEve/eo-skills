@@ -11,7 +11,7 @@ if "%~1"=="-h" (
 )
 
 set "SCRIPT_DIR=%~dp0"
-if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1}"
+if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
 
 set "SHARED_DIR=%USERPROFILE%\.agents\skills"
 set "FOUND=0"
