@@ -112,6 +112,14 @@ class TestFixAbsorbsInLoopRepair(unittest.TestCase):
         self.assertIn("修复回原 impl worker", reuse)
         self.assertIn("跨角色必须隔离", reuse)
         self.assertIn("review / test 绝不复用 impl worker", reuse)
+
+    def test_worker_reuse_scoped_to_single_change(self):
+        reuse = section(LOOP, "**worker 复用纪律**", "## 可观测性")
+        self.assertIn("复用边界 = 单个 change", reuse)
+        self.assertIn("跨 change 续用即视为上下文污染", reuse)
+        self.assertIn("闸门结论（如 change-review）不可跨 change 继承", reuse)
+        orca = read("eo-loop/references/substrates/orca-orchestration.md")
+        self.assertIn("同一 change 内的同角色新任务", orca)
         branch = section(FIX, "## 循环内分支（implement-test-review 反馈修复）", "### 卡点检查子流程")
         self.assertIn("根因为 `test-asset`", branch)
         self.assertIn("交 `/eo-test`", branch)
