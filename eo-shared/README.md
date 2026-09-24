@@ -16,6 +16,7 @@
 | [board-github.md](board-github.md) | eo-sync 内置 Obsidian/GitHub 适配器的投影内容实现说明（opt-in） | eo-sync 内置适配器 / eo-archive 收口 / eo-project-init |
 | [research.md](research.md) | 调研沉淀的格式、INDEX 与消费规则 | 任意调研产出方（产）/ eo-recall / eo-change（消费） |
 | [lessons.md](lessons.md) | lessons 生产格式（结论前置 + trigger/summary 锚点）与消费流程（INDEX 匹配） | eo-project-record（产）/ eo-change / eo-implement / eo-test / eo-fix（消费） |
+| [jev-gate.md](jev-gate.md) | jev（TypeSafe System One 判定模型）决策辅助规范：通用纪律、两个挂钩点（风险信号复判 / 卡点根因预判）与明确不挂点 | eo-change / eo-change-review / eo-fix |
 
 各 skill 以相对路径引用（`../eo-shared/<file>`，相对 skill 自身目录，软链与仓库内均可解析）。
 
