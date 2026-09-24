@@ -28,6 +28,6 @@ Codex 侧无完成自动唤醒时，总控主动轮询**产物**（frontmatter�
 
 ## 已知陷阱
 
-> 本节只放出厂陷阱；运行时陷阱记在 `~/.eo-skills/loop/preferences/` 的「已知陷阱」节（前缀 `[codex-subagent]`），一并读。
+> 本节只放出厂陷阱；运行时陷阱记在 `~/.eo-skills/loop/traps/codex-subagent.md`（跨项目全局唯一），一并读。
 
 - `$` / `/` 前缀混写是派发高频错误，派发前自查一遍

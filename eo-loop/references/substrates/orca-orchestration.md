@@ -34,7 +34,7 @@ updated: 2026-07-28
 
 ## 已知陷阱
 
-> 本节只放出厂陷阱；运行时陷阱记在 `~/.eo-skills/loop/preferences/` 的「已知陷阱」节（前缀 `[orca-orchestration]`），一并读。
+> 本节只放出厂陷阱；运行时陷阱记在 `~/.eo-skills/loop/traps/orca-orchestration.md`（跨项目全局唯一），一并读。
 
 - (2026-07-19) 终端有输出 ≠ 完成，不要据此杀 worker 重派；长任务 15-60 分钟是常态
 - (2026-07-19) terminal handle 重启后会变，报 `terminal_handle_stale` 时用 `terminal list` 重解析；绝不用 handle 对比判归属

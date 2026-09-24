@@ -26,7 +26,7 @@ Claude Code 会话内 Agent 工具原生可用，恒成立。模型按偏好或�
 
 ## 已知陷阱
 
-> 本节只放出厂陷阱；运行时陷阱记在 `~/.eo-skills/loop/preferences/` 的「已知陷阱」节（前缀 `[claude-subagent]`），一并读。
+> 本节只放出厂陷阱；运行时陷阱记在 `~/.eo-skills/loop/traps/claude-subagent.md`（跨项目全局唯一），一并读。
 
 - (2026-07-19) 子 agent 上下文独立：prompt 里不给 change 路径它就会自己猜——路径必给
 - (2026-07-19) 用词锚定：prompt 写「看看 / 检查一下」会弱化执行强度——用节点本义动词（审查 / 实施 / 验证）
